@@ -115,6 +115,53 @@ curl http://localhost:3000/health
 
 3. Point your MCP client to the `/mcp` endpoint (`http://localhost:3000/mcp` by default). CORS is enabled for all origins so you can call it from a browser-based client as well.
 
+### Docker
+
+You can run the Draw.io MCP server in a Docker container for isolated, reproducible deployments.
+
+#### Building the Docker Image
+
+```sh
+docker build -t drawio-mcp-server .
+```
+
+#### Running the Container
+
+The container exposes two ports:
+- **3333**: WebSocket for browser extension communication
+- **3000**: HTTP for MCP clients (Streamable HTTP at `/mcp`)
+
+```sh
+docker run -d --name drawio-mcp-server -p 3333:3333 -p 3000:3000 drawio-mcp-server
+```
+
+Verify it's running:
+
+```sh
+curl http://localhost:3000/health
+# { "status": "ok" }
+```
+
+#### Using Docker Compose
+
+For convenience, a `docker-compose.yml` file is provided:
+
+```sh
+docker compose up -d
+```
+
+To stop the container:
+
+```sh
+docker compose down
+```
+
+To rebuild after code changes:
+
+```sh
+docker compose up -d --build
+```
+
 ## Installation
 
 ### Connecting with Claude Desktop

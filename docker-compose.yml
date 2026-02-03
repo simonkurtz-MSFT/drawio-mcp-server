@@ -1,0 +1,12 @@
+services:
+  drawio-mcp-server:
+    build: .
+    container_name: drawio-mcp-server
+    ports:
+      # WebSocket for browser extension
+      - "3333:3333"
+      # HTTP for MCP clients (Streamable HTTP at /mcp)
+      - "3000:3000"
+    restart: unless-stopped
+    # Override default CMD to enable both transports if needed
+    # command: ["--transport", "stdio,http"]

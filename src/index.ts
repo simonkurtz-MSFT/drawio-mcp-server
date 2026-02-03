@@ -27,6 +27,10 @@ import {
   create_logger as create_server_logger,
   validLogLevels,
 } from "./mcp_server_logger.js";
+import { standaloneHandlers } from "./standalone_tools.js";
+
+// Flag to track if we're in standalone mode (set in main())
+let isStandaloneMode = false;
 
 const VERSION = "1.6.1";
 
@@ -41,12 +45,14 @@ Usage: drawio-mcp-server [options]
 
 Options:
   --extension-port, -p <number>  WebSocket server port for browser extension (default: 3333)
+  --standalone                   Run in standalone mode (no browser extension required)
   --help, -h                     Show this help message
 
 Examples:
   drawio-mcp-server                           # Use default extension port 3333
   drawio-mcp-server --extension-port 8080     # Use custom extension port 8080
   drawio-mcp-server -p 8080                   # Short form
+  drawio-mcp-server --standalone              # Standalone mode (generates XML directly)
   `);
   process.exit(0);
 }
@@ -186,12 +192,32 @@ const context: Context = {
   log,
 };
 
+/**
+ * Helper to create a tool handler that uses standalone mode or bridge mode
+ */
+function createToolHandler(toolName: string) {
+  return async (args: any) => {
+    if (isStandaloneMode) {
+      const handler = standaloneHandlers[toolName as keyof typeof standaloneHandlers];
+      if (handler) {
+        return handler(args);
+      }
+      return {
+        content: [{ type: "text" as const, text: JSON.stringify({ error: `Tool ${toolName} not available in standalone mode` }) }],
+        isError: true,
+      };
+    }
+    // Use bridge mode (original behavior)
+    return default_tool(toolName, context)(args, {} as any);
+  };
+}
+
 const TOOL_get_selected_cell = "get-selected-cell";
 server.tool(
   TOOL_get_selected_cell,
   "This tool allows you to retrieve selected cell (whether vertex or edge) on the current page of a Draw.io diagram. The response is a JSON containing attributes of the cell.",
   {},
-  default_tool(TOOL_get_selected_cell, context),
+  createToolHandler(TOOL_get_selected_cell),
 );
 
 const TOOL_add_rectangle = "add-rectangle";
@@ -232,7 +258,7 @@ server.tool(
       )
       .default("whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;"),
   },
-  default_tool(TOOL_add_rectangle, context),
+  createToolHandler(TOOL_add_rectangle),
 );
 
 const TOOL_add_edge = "add-edge";
@@ -260,7 +286,7 @@ server.tool(
         "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;",
       ),
   },
-  default_tool(TOOL_add_edge, context),
+  createToolHandler(TOOL_add_edge),
 );
 
 const TOOL_delete_cell_by_id = "delete-cell-by-id";
@@ -274,7 +300,7 @@ server.tool(
         "The ID of a cell to delete. The cell can be either vertex or edge. The ID is located in `id` attribute.",
       ),
   },
-  default_tool(TOOL_delete_cell_by_id, context),
+  createToolHandler(TOOL_delete_cell_by_id),
 );
 
 const TOOL_get_shape_categories = "get-shape-categories";
@@ -282,7 +308,7 @@ server.tool(
   TOOL_get_shape_categories,
   "Retrieves available shape categories from the diagram's library. Library is split into multiple categories.",
   {},
-  default_tool(TOOL_get_shape_categories, context),
+  createToolHandler(TOOL_get_shape_categories),
 );
 
 const TOOL_get_shapes_in_category = "get-shapes-in-category";
@@ -296,7 +322,7 @@ server.tool(
         "Identifier (ID / key) of the category from which all the shapes should be retrieved.",
       ),
   },
-  default_tool(TOOL_get_shapes_in_category, context),
+  createToolHandler(TOOL_get_shapes_in_category),
 );
 
 const TOOL_get_shape_by_name = "get-shape-by-name";
@@ -310,7 +336,7 @@ server.tool(
         "Name of the shape to retrieve from the shape library of the current diagram.",
       ),
   },
-  default_tool(TOOL_get_shape_by_name, context),
+  createToolHandler(TOOL_get_shape_by_name),
 );
 
 const TOOL_add_cell_of_shape = "add-cell-of-shape";
@@ -354,7 +380,7 @@ server.tool(
         "Semi-colon separated list of Draw.io visual styles, in the form of `key=value`. Example: `whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;`",
       ),
   },
-  default_tool(TOOL_add_cell_of_shape, context),
+  createToolHandler(TOOL_add_cell_of_shape),
 );
 
 const TOOL_set_cell_shape = "set-cell-shape";
@@ -373,7 +399,7 @@ server.tool(
         "Name of the library shape whose style should be applied to the existing cell.",
       ),
   },
-  default_tool(TOOL_set_cell_shape, context),
+  createToolHandler(TOOL_set_cell_shape),
 );
 
 const TOOL_set_cell_data = "set-cell-data";
@@ -393,7 +419,7 @@ server.tool(
         "Value to store for the attribute. Non-string values are stringified before storage.",
       ),
   },
-  default_tool(TOOL_set_cell_data, context),
+  createToolHandler(TOOL_set_cell_data),
 );
 
 const TOOL_edit_cell = "edit-cell";
@@ -427,7 +453,7 @@ server.tool(
         "Replace the cell's style string (semi-colon separated `key=value` pairs).",
       ),
   },
-  default_tool(TOOL_edit_cell, context),
+  createToolHandler(TOOL_edit_cell),
 );
 
 const TOOL_edit_edge = "edit-edge";
@@ -456,7 +482,7 @@ server.tool(
         "Replace the edge's style string (semi-colon separated `key=value` pairs).",
       ),
   },
-  default_tool(TOOL_edit_edge, context),
+  createToolHandler(TOOL_edit_edge),
 );
 
 const Attributes: z.ZodType<any> = z.lazy(() =>
@@ -508,7 +534,7 @@ server.tool(
       .describe("Optional filter criteria to apply to cells before pagination")
       .default({}),
   },
-  default_tool(TOOL_list_paged_model, context),
+  createToolHandler(TOOL_list_paged_model),
 );
 
 const TOOL_list_layers = "list-layers";
@@ -516,7 +542,7 @@ server.tool(
   TOOL_list_layers,
   "Lists all available layers in the diagram with their IDs and names.",
   {},
-  default_tool(TOOL_list_layers, context),
+  createToolHandler(TOOL_list_layers),
 );
 
 const TOOL_set_active_layer = "set-active-layer";
@@ -526,7 +552,7 @@ server.tool(
   {
     layer_id: z.string().describe("ID of the layer to set as active"),
   },
-  default_tool(TOOL_set_active_layer, context),
+  createToolHandler(TOOL_set_active_layer),
 );
 
 const TOOL_move_cell_to_layer = "move-cell-to-layer";
@@ -539,7 +565,7 @@ server.tool(
       .string()
       .describe("ID of the target layer where the cell will be moved"),
   },
-  default_tool(TOOL_move_cell_to_layer, context),
+  createToolHandler(TOOL_move_cell_to_layer),
 );
 
 const TOOL_get_active_layer = "get-active-layer";
@@ -547,7 +573,7 @@ server.tool(
   TOOL_get_active_layer,
   "Gets the currently active layer information.",
   {},
-  default_tool(TOOL_get_active_layer, context),
+  createToolHandler(TOOL_get_active_layer),
 );
 
 const TOOL_create_layer = "create-layer";
@@ -557,7 +583,24 @@ server.tool(
   {
     name: z.string().describe("Name for the new layer"),
   },
-  default_tool(TOOL_create_layer, context),
+  createToolHandler(TOOL_create_layer),
+);
+
+// Standalone-only tools
+const TOOL_export_diagram = "export-diagram";
+server.tool(
+  TOOL_export_diagram,
+  "Exports the current diagram as Draw.io XML format. Use this to get the complete diagram markup that can be saved to a .drawio file.",
+  {},
+  createToolHandler(TOOL_export_diagram),
+);
+
+const TOOL_clear_diagram = "clear-diagram";
+server.tool(
+  TOOL_clear_diagram,
+  "Clears all cells from the diagram and resets it to an empty state.",
+  {},
+  createToolHandler(TOOL_clear_diagram),
 );
 
 async function start_stdio_transport() {
@@ -624,7 +667,16 @@ async function main() {
 
   const config: ServerConfig = configResult;
 
-  await start_websocket_server(config.extensionPort);
+  // Set standalone mode flag
+  isStandaloneMode = config.standalone;
+
+  // Only start WebSocket server if not in standalone mode
+  if (!isStandaloneMode) {
+    await start_websocket_server(config.extensionPort);
+  } else {
+    log.debug(`Draw.io MCP Server running in STANDALONE mode (no browser extension required)`);
+  }
+
   if (config.transports.indexOf("stdio") > -1) {
     await start_stdio_transport();
   }

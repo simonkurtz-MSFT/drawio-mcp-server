@@ -5,6 +5,7 @@ export interface ServerConfig {
   readonly extensionPort: number;
   readonly httpPort: number;
   readonly transports: TransportType[];
+  readonly standalone: boolean;
 }
 
 export type TransportType = "stdio" | "http";
@@ -16,6 +17,7 @@ const DEFAULT_CONFIG: ServerConfig = {
   extensionPort: 3333,
   httpPort: 3000,
   transports: ["stdio"],
+  standalone: false,
 } as const;
 
 /**
@@ -146,6 +148,7 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
   let httpPortValue: string | undefined;
   let parsedHttpPort: number | undefined;
   let transportValues: string[] | undefined;
+  let standalone = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
@@ -177,6 +180,8 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
 
       transportValues = [nextValue];
       i += 1;
+    } else if (arg === "--standalone") {
+      standalone = true;
     }
   }
 
@@ -206,6 +211,7 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
       httpPort:
         parsedHttpPort !== undefined ? parsedHttpPort : DEFAULT_CONFIG.httpPort,
       transports,
+      standalone,
     };
   }
 
@@ -219,6 +225,7 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
       ...DEFAULT_CONFIG,
       httpPort: parsedHttpPort as number,
       transports,
+      standalone,
     };
   }
 
@@ -231,6 +238,7 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
   return {
     ...DEFAULT_CONFIG,
     transports,
+    standalone,
   };
 };
 

@@ -1,0 +1,38 @@
+# Dependencies
+node_modules
+
+# Build output
+build
+coverage
+
+# Git
+.git
+.gitignore
+.github
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+.prettierrc
+
+# Docs
+*.md
+docs
+LICENSE
+*.png
+
+# Test files
+*.test.ts
+jest.config.js
+
+# Development files
+.eslintcache
+*.log
+inspector.json
+*.drawio
+
+# Docker files (not needed in container)
+Dockerfile
+docker-compose*.yml
