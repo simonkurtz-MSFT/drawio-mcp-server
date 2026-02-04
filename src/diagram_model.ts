@@ -246,6 +246,65 @@ ${cellsXml}
     this.cells.clear();
     this.nextId = 2;
   }
+
+  /**
+   * Batch add multiple cells (vertices and edges) in a single operation.
+   * Returns an array of results with created cells or errors.
+   */
+  batchAddCells(items: Array<{
+    type: "vertex" | "edge";
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    text?: string;
+    style?: string;
+    sourceId?: string;
+    targetId?: string;
+    tempId?: string; // Temporary ID for referencing in edges before real ID is assigned
+  }>): Array<{ success: boolean; cell?: Cell; error?: string; tempId?: string }> {
+    const results: Array<{ success: boolean; cell?: Cell; error?: string; tempId?: string }> = [];
+    const tempIdMap = new Map<string, string>(); // Maps tempId to real cell id
+
+    for (const item of items) {
+      if (item.type === "vertex") {
+        const cell = this.addRectangle({
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          text: item.text,
+          style: item.style,
+        });
+        if (item.tempId) {
+          tempIdMap.set(item.tempId, cell.id);
+        }
+        results.push({ success: true, cell, tempId: item.tempId });
+      } else if (item.type === "edge") {
+        // Resolve tempIds to real IDs
+        const sourceId = item.sourceId ? (tempIdMap.get(item.sourceId) ?? item.sourceId) : "";
+        const targetId = item.targetId ? (tempIdMap.get(item.targetId) ?? item.targetId) : "";
+        
+        const result = this.addEdge({
+          sourceId,
+          targetId,
+          text: item.text,
+          style: item.style,
+        });
+        
+        if ("error" in result) {
+          results.push({ success: false, error: result.error, tempId: item.tempId });
+        } else {
+          if (item.tempId) {
+            tempIdMap.set(item.tempId, result.id);
+          }
+          results.push({ success: true, cell: result, tempId: item.tempId });
+        }
+      }
+    }
+
+    return results;
+  }
 }
 
 // Singleton instance for the standalone diagram

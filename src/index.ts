@@ -215,7 +215,7 @@ function createToolHandler(toolName: string) {
 const TOOL_get_selected_cell = "get-selected-cell";
 server.tool(
   TOOL_get_selected_cell,
-  "This tool allows you to retrieve selected cell (whether vertex or edge) on the current page of a Draw.io diagram. The response is a JSON containing attributes of the cell.",
+  "[Bridge only] Retrieve the currently selected cell (vertex or edge) from the Draw.io UI. Returns JSON with cell attributes. In standalone mode, use list-paged-model instead.",
   {},
   createToolHandler(TOOL_get_selected_cell),
 );
@@ -223,7 +223,7 @@ server.tool(
 const TOOL_add_rectangle = "add-rectangle";
 server.tool(
   TOOL_add_rectangle,
-  "This tool allows you to add new Rectangle vertex cell (object) on the current page of a Draw.io diagram. It accepts multiple optional input parameter.",
+  "[Standalone+Bridge] Add a new rectangle vertex cell to the diagram. For adding multiple cells at once, use batch-add-cells instead.",
   {
     x: z
       .number()
@@ -264,7 +264,7 @@ server.tool(
 const TOOL_add_edge = "add-edge";
 server.tool(
   TOOL_add_edge,
-  "This tool creates an edge, sometimes called also a relation, between two vertexes (cells).",
+  "[Standalone+Bridge] Create an edge (connection/relation) between two vertex cells. For adding multiple edges at once, use batch-add-cells instead.",
   {
     source_id: z
       .string()
@@ -292,7 +292,7 @@ server.tool(
 const TOOL_delete_cell_by_id = "delete-cell-by-id";
 server.tool(
   TOOL_delete_cell_by_id,
-  "Deletes a cell, whether it is a vertex or edge.",
+  "[Standalone+Bridge] Delete a cell (vertex or edge) by its ID.",
   {
     cell_id: z
       .string()
@@ -306,7 +306,7 @@ server.tool(
 const TOOL_get_shape_categories = "get-shape-categories";
 server.tool(
   TOOL_get_shape_categories,
-  "Retrieves available shape categories from the diagram's library. Library is split into multiple categories.",
+  "[Standalone+Bridge] Get available shape categories (General, Flowchart, Azure icons). Use search-shapes for faster fuzzy lookup.",
   {},
   createToolHandler(TOOL_get_shape_categories),
 );
@@ -314,7 +314,7 @@ server.tool(
 const TOOL_get_shapes_in_category = "get-shapes-in-category";
 server.tool(
   TOOL_get_shapes_in_category,
-  "Retrieve all shapes in the provided category from the diagram's library. A shape primarily contains `style` based on which you can create new vertex cells.",
+  "[Standalone+Bridge] List all shapes in a category. Returns shape names and styles for use with add-cell-of-shape.",
   {
     category_id: z
       .string()
@@ -328,7 +328,7 @@ server.tool(
 const TOOL_get_shape_by_name = "get-shape-by-name";
 server.tool(
   TOOL_get_shape_by_name,
-  "Retrieve a specific shape by its name from all available shapes in the diagram's library. It returns the shape and also the category it belongs.",
+  "[Standalone+Bridge] Get a shape by exact name. For fuzzy matching, use search-shapes instead.",
   {
     shape_name: z
       .string()
@@ -342,7 +342,7 @@ server.tool(
 const TOOL_add_cell_of_shape = "add-cell-of-shape";
 server.tool(
   TOOL_add_cell_of_shape,
-  "This tool allows you to add new vertex cell (object) on the current page of a Draw.io diagram by its shape name. It accepts multiple optional input parameter.",
+  "[Standalone+Bridge] Add a vertex cell using a shape from the library (e.g., Azure icons). Use search-shapes to find shape names.",
   {
     shape_name: z
       .string()
@@ -386,7 +386,7 @@ server.tool(
 const TOOL_set_cell_shape = "set-cell-shape";
 server.tool(
   TOOL_set_cell_shape,
-  "Updates the visual style of an existing vertex cell to match a library shape by name.",
+  "[Standalone+Bridge] Update a cell's visual style to match a library shape. Use search-shapes to find shape names.",
   {
     cell_id: z
       .string()
@@ -405,7 +405,7 @@ server.tool(
 const TOOL_set_cell_data = "set-cell-data";
 server.tool(
   TOOL_set_cell_data,
-  "Sets or updates a custom attribute on an existing cell.",
+  "[Standalone+Bridge] Set a custom data attribute on a cell. Note: In standalone mode, data is not persisted to XML.",
   {
     cell_id: z
       .string()
@@ -425,7 +425,7 @@ server.tool(
 const TOOL_edit_cell = "edit-cell";
 server.tool(
   TOOL_edit_cell,
-  "Update properties of an existing vertex/shape cell by its ID. Only provided fields are modified; unspecified properties remain unchanged.",
+  "[Standalone+Bridge] Update a vertex cell's properties (position, size, text, style). Only specified fields change.",
   {
     cell_id: z
       .string()
@@ -459,7 +459,7 @@ server.tool(
 const TOOL_edit_edge = "edit-edge";
 server.tool(
   TOOL_edit_edge,
-  "Update properties of an existing edge by its ID. Only provided fields are modified; unspecified properties remain unchanged.",
+  "[Standalone+Bridge] Update an edge's properties (text, source, target, style). Only specified fields change.",
   {
     cell_id: z
       .string()
@@ -502,7 +502,7 @@ const Attributes: z.ZodType<any> = z.lazy(() =>
 const TOOL_list_paged_model = "list-paged-model";
 server.tool(
   TOOL_list_paged_model,
-  "Retrieves a paginated view of all cells (vertices and edges) in the current Draw.io diagram. This tool provides access to the complete model data with essential fields only, sanitized to remove circular dependencies and excessive data. It allows to filter based on multiple criteria and attribute boolean logic. Useful for programmatic inspection of diagram structure without overwhelming response sizes.",
+  "[Standalone+Bridge] Get a paginated list of all cells with filtering. Use this to inspect diagram structure or find cells by type/attributes.",
   {
     page: z
       .number()
@@ -540,7 +540,7 @@ server.tool(
 const TOOL_list_layers = "list-layers";
 server.tool(
   TOOL_list_layers,
-  "Lists all available layers in the diagram with their IDs and names.",
+  "[Standalone+Bridge] List all layers in the diagram with IDs and names.",
   {},
   createToolHandler(TOOL_list_layers),
 );
@@ -548,7 +548,7 @@ server.tool(
 const TOOL_set_active_layer = "set-active-layer";
 server.tool(
   TOOL_set_active_layer,
-  "Sets the active layer for creating new elements. All subsequent element creation will happen in this layer.",
+  "[Standalone+Bridge] Set the active layer for new elements.",
   {
     layer_id: z.string().describe("ID of the layer to set as active"),
   },
@@ -558,7 +558,7 @@ server.tool(
 const TOOL_move_cell_to_layer = "move-cell-to-layer";
 server.tool(
   TOOL_move_cell_to_layer,
-  "Moves a cell from its current layer to a target layer.",
+  "[Standalone+Bridge] Move a cell to a different layer.",
   {
     cell_id: z.string().describe("ID of the cell to move"),
     target_layer_id: z
@@ -571,7 +571,7 @@ server.tool(
 const TOOL_get_active_layer = "get-active-layer";
 server.tool(
   TOOL_get_active_layer,
-  "Gets the currently active layer information.",
+  "[Standalone+Bridge] Get the currently active layer.",
   {},
   createToolHandler(TOOL_get_active_layer),
 );
@@ -579,7 +579,7 @@ server.tool(
 const TOOL_create_layer = "create-layer";
 server.tool(
   TOOL_create_layer,
-  "Creates a new layer in the diagram.",
+  "[Standalone+Bridge] Create a new layer in the diagram.",
   {
     name: z.string().describe("Name for the new layer"),
   },
@@ -590,7 +590,7 @@ server.tool(
 const TOOL_export_diagram = "export-diagram";
 server.tool(
   TOOL_export_diagram,
-  "Exports the current diagram as Draw.io XML format. Use this to get the complete diagram markup that can be saved to a .drawio file.",
+  "[Standalone only] Export the diagram as Draw.io XML. Save output to a .drawio file.",
   {},
   createToolHandler(TOOL_export_diagram),
 );
@@ -598,9 +598,52 @@ server.tool(
 const TOOL_clear_diagram = "clear-diagram";
 server.tool(
   TOOL_clear_diagram,
-  "Clears all cells from the diagram and resets it to an empty state.",
+  "[Standalone only] Clear all cells and reset the diagram.",
   {},
   createToolHandler(TOOL_clear_diagram),
+);
+
+// Tier 1: Speed - Batch operations
+const TOOL_batch_add_cells = "batch-add-cells";
+server.tool(
+  TOOL_batch_add_cells,
+  "[Standalone only] Add multiple cells in one call. Use temp_id to reference cells within the batch. Much faster than individual add-rectangle/add-edge calls.",
+  {
+    cells: z.array(z.object({
+      type: z.enum(["vertex", "edge"]).describe("Cell type: 'vertex' for shapes, 'edge' for connections"),
+      x: z.number().optional().describe("X position (vertices only)"),
+      y: z.number().optional().describe("Y position (vertices only)"),
+      width: z.number().optional().describe("Width (vertices only)"),
+      height: z.number().optional().describe("Height (vertices only)"),
+      text: z.string().optional().describe("Text label"),
+      style: z.string().optional().describe("Draw.io style string"),
+      source_id: z.string().optional().describe("Source cell ID for edges (can use temp_id from same batch)"),
+      target_id: z.string().optional().describe("Target cell ID for edges (can use temp_id from same batch)"),
+      temp_id: z.string().optional().describe("Temporary ID to reference this cell within the batch"),
+    })).describe("Array of cells to create"),
+  },
+  createToolHandler(TOOL_batch_add_cells),
+);
+
+// Tier 1: Speed - Style presets
+const TOOL_get_style_presets = "get-style-presets";
+server.tool(
+  TOOL_get_style_presets,
+  "[Standalone only] Get style presets (Azure colors, flowchart shapes, edges) for consistent styling.",
+  {},
+  createToolHandler(TOOL_get_style_presets),
+);
+
+// Tier 1: Speed - Shape search
+const TOOL_search_shapes = "search-shapes";
+server.tool(
+  TOOL_search_shapes,
+  "[Standalone only] Fuzzy search for shapes (700+ Azure icons). Returns names for use with add-cell-of-shape.",
+  {
+    query: z.string().describe("Search query (e.g., 'virtual machine', 'storage', 'function')"),
+    limit: z.number().optional().default(10).describe("Maximum results to return"),
+  },
+  createToolHandler(TOOL_search_shapes),
 );
 
 async function start_stdio_transport() {

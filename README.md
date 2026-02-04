@@ -127,12 +127,11 @@ docker build -t drawio-mcp-server .
 
 #### Running the Container
 
-The container exposes two ports:
-- **3333**: WebSocket for browser extension communication
+The container exposes one port since we are running in `standalone` mode and are not connected to the browser extension (meaning no websocket 3333 port is needed):
 - **3000**: HTTP for MCP clients (Streamable HTTP at `/mcp`)
 
 ```sh
-docker run -d --name drawio-mcp-server -p 3333:3333 -p 3000:3000 drawio-mcp-server
+docker run -d --name drawio-mcp-server -p 3000:3000 drawio-mcp-server
 ```
 
 Verify it's running:
@@ -144,7 +143,47 @@ curl http://localhost:3000/health
 
 #### Using Docker Compose
 
-For convenience, a `docker-compose.yml` file is provided:
+For convenience, a `docker-compose.yml` file is provided with image versioning support.
+
+##### Environment Configuration
+
+Copy the example `.env` file to configure the registry and image version:
+
+```sh
+cp .env.example .env
+```
+
+Update `.env` with your container registry and version:
+
+```env
+REGISTRY=docker.io/simonkurtzmsft
+IMAGE_VERSION=1.0.0
+```
+
+- **REGISTRY**: Docker registry URL (e.g., `docker.io/myusername`, `myregistry.azurecr.io`)
+- **IMAGE_VERSION**: Semantic version for image tags (e.g., `1.0.0`, `1.0.1`)
+
+##### Building and Pushing Images
+
+Build the image with version tags:
+
+```sh
+docker compose build
+```
+
+Push to your registry (after authenticating with `docker login`):
+
+```sh
+docker compose push
+```
+
+This creates and pushes versioned tags:
+- `docker.io/simonkurtzmsft/drawio-mcp-server-standalone:latest`
+- `docker.io/simonkurtzmsft/drawio-mcp-server-standalone:1.0.0`
+
+##### Running with Docker Compose
+
+Start the container:
 
 ```sh
 docker compose up -d
@@ -161,6 +200,43 @@ To rebuild after code changes:
 ```sh
 docker compose up -d --build
 ```
+
+#### Deploying to Azure Container Instances
+
+To deploy this container to Azure, use the provided Bicep template with a bicepparam file.
+
+##### Using Bicep Parameters
+
+Copy the example bicepparam file:
+
+```sh
+cp aci.bicepparam.example aci.bicepparam
+```
+
+Update `aci.bicepparam` with your deployment settings:
+
+```bicep
+param containerImage = 'docker.io/simonkurtzmsft/drawio-mcp-server-standalone:latest'
+param dnsLabel = 'drawio-mcp-dev'
+param orgName = 'myorg'
+param environment = 'dev'
+```
+
+##### Deploy to Azure
+
+```sh
+az deployment group create \
+  --name aci-deploy \
+  --resource-group my-resource-group \
+  --template-file infra/aci.bicep \
+  --parameters aci.bicepparam
+```
+
+The Bicep template uses Cloud Adoption Framework (CAF) naming conventions and provides:
+- Customizable CPU cores and memory
+- Public IP with DNS label
+- Container port configuration
+- Environment-based tagging
 
 ## Installation
 

@@ -6,21 +6,21 @@ RUN corepack enable && corepack prepare pnpm@10.8.1 --activate
 
 WORKDIR /app
 
-# Copy package files first for better caching
+# Copy package files for dependency installation
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# Install all dependencies (including devDependencies for build)
-RUN pnpm install --frozen-lockfile
+# Install all dependencies with optimizations
+RUN pnpm install --frozen-lockfile && \
+    pnpm store prune
 
 # Copy source files
 COPY tsconfig.json ./
 COPY src ./src
 
-# Build the TypeScript project
-RUN pnpm run build
-
-# Prune dev dependencies
-RUN pnpm prune --prod
+# Build and prune dev dependencies in single layer
+RUN pnpm run build && \
+    pnpm prune --prod && \
+    pnpm store prune
 
 # ---------------------------------------------------------------
 
@@ -33,10 +33,10 @@ RUN addgroup -g 1001 -S nodejs && \
 
 WORKDIR /app
 
-# Copy only production artifacts
-COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nodejs:nodejs /app/build ./build
-COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
+# Copy production artifacts from builder
+# Distroless runs as nonroot user by default
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/build ./build
 
 USER nodejs
 
@@ -44,5 +44,4 @@ USER nodejs
 EXPOSE 3000
 
 ENTRYPOINT ["node", "build/index.js"]
-# Standalone server with HTTP transport on port 3000
 CMD ["--standalone", "--transport", "http", "--http-port", "3000"]

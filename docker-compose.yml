@@ -1,12 +1,32 @@
 services:
-  drawio-mcp-server:
-    build: .
-    container_name: drawio-mcp-server
+  standalone:
+    # Build
+    build:
+      context: .
+      dockerfile: Dockerfile.standalone
+      tags:
+        - ${REGISTRY}/drawio-mcp-server-standalone:latest
+        - ${REGISTRY}/drawio-mcp-server-standalone:${IMAGE_VERSION:-latest}
+    image: ${REGISTRY}/drawio-mcp-server-standalone:${IMAGE_VERSION:-latest}
     ports:
-      # WebSocket for browser extension
-      - "3333:3333"
-      # HTTP for MCP clients (Streamable HTTP at /mcp)
+      # HTTP for standalone MCP server
       - "3000:3000"
     restart: unless-stopped
-    # Override default CMD to enable both transports if needed
-    # command: ["--transport", "stdio,http"]
+
+    # Resource limits - SWAG starting point - should be evaluated for accuracy
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1024M
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

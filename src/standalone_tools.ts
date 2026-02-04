@@ -6,10 +6,12 @@
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { diagram } from "./diagram_model.js";
 import { 
-  getAzureCategories, 
-  getAzureShapesInCategory, 
+  getAzureCategories,
+  getShapesInCategory,
   getAzureShapeByName,
-} from "./azure_shapes.js";
+  searchAzureIcons,
+  getAzureIconLibrary,
+} from "./azure_icon_library.js";
 
 function successResult(data: any): CallToolResult {
   return {
@@ -192,11 +194,14 @@ export const standaloneHandlers = {
       { id: "general", name: "General" },
       { id: "flowchart", name: "Flowchart" },
     ];
-    const azureCategories = getAzureCategories();
+    const azureCategories = getAzureCategories().map((cat) => ({
+      id: cat.toLowerCase().replace(/\s+/g, "-"),
+      name: cat,
+    }));
     
     return successResult({
       categories: [...basicCategories, ...azureCategories],
-      info: "Standalone mode - includes basic shapes and Azure architecture icons.",
+      info: "Includes basic shapes and 700+ Azure architecture icons from dwarfered/azure-architecture-icons-for-drawio.",
     });
   },
 
@@ -205,17 +210,26 @@ export const standaloneHandlers = {
   }): Promise<CallToolResult> => {
     const categoryId = args.category_id.toLowerCase();
     
-    // Check if it's an Azure category
-    const azureShapes = getAzureShapesInCategory(categoryId);
-    if (azureShapes && azureShapes.length > 0) {
+    // Check if it's an Azure category by searching the library
+    const normalizedCategoryId = categoryId.replace(/-/g, " ");
+    const azureCategories = getAzureCategories();
+    
+    // Find matching Azure category (case-insensitive)
+    const matchingCategory = azureCategories.find(
+      (cat) => cat.toLowerCase().replace(/\s+/g, "-") === categoryId
+    );
+    
+    if (matchingCategory) {
+      const shapes = getShapesInCategory(matchingCategory);
       return successResult({
         category: categoryId,
-        shapes: azureShapes.map(shape => ({
-          name: shape.name,
-          style: shape.style,
-          width: shape.defaultWidth,
-          height: shape.defaultHeight,
+        shapes: shapes.map((shape) => ({
+          name: shape.title,
+          id: shape.id,
+          width: shape.width,
+          height: shape.height,
         })),
+        total: shapes.length,
       });
     }
     
@@ -274,11 +288,24 @@ export const standaloneHandlers = {
     if (azureShape) {
       return successResult({
         shape: {
-          name: azureShape.name,
-          category: azureShape.category,
-          style: azureShape.style,
-          width: azureShape.defaultWidth,
-          height: azureShape.defaultHeight,
+          name: azureShape.title,
+          id: azureShape.id,
+          width: azureShape.width,
+          height: azureShape.height,
+        },
+      });
+    }
+    
+    // Also try search in case it's a partial match
+    const searchResults = searchAzureIcons(args.shape_name, 1);
+    if (searchResults.length > 0) {
+      const shape = searchResults[0];
+      return successResult({
+        shape: {
+          name: shape.title,
+          id: shape.id,
+          width: shape.width,
+          height: shape.height,
         },
       });
     }
@@ -324,14 +351,34 @@ export const standaloneHandlers = {
       const cell = diagram.addRectangle({
         x: args.x,
         y: args.y,
-        width: args.width ?? azureShape.defaultWidth,
-        height: args.height ?? azureShape.defaultHeight,
-        text: args.text ?? "",
+        width: args.width ?? azureShape.width,
+        height: args.height ?? azureShape.height,
+        text: args.text ?? azureShape.title,
         style: args.style ?? azureShape.style,
       });
       return successResult({ 
         success: true, 
         cell,
+        info: `Added Azure icon: ${azureShape.title}`,
+      });
+    }
+    
+    // Also try search in case it's a partial match
+    const searchResults = searchAzureIcons(args.shape_name, 1);
+    if (searchResults.length > 0) {
+      const shape = searchResults[0];
+      const cell = diagram.addRectangle({
+        x: args.x,
+        y: args.y,
+        width: args.width ?? shape.width,
+        height: args.height ?? shape.height,
+        text: args.text ?? shape.title,
+        style: args.style ?? shape.style,
+      });
+      return successResult({ 
+        success: true, 
+        cell,
+        info: `Added Azure icon (matched from search): ${shape.title}`,
       });
     }
     
@@ -350,7 +397,7 @@ export const standaloneHandlers = {
 
     const style = shapeStyles[args.shape_name.toLowerCase()];
     if (!style) {
-      return errorResult(`Unknown shape '${args.shape_name}'.`);
+      return errorResult(`Unknown shape '${args.shape_name}'. Try searching for 'container', 'front door', or 'app' to find relevant Azure icons.`);
     }
 
     const cell = diagram.addRectangle({
@@ -419,6 +466,93 @@ export const standaloneHandlers = {
       cell_id: args.cell_id,
       key: args.key,
       value: args.value,
+    });
+  },
+
+  "batch-add-cells": async (args: {
+    cells: Array<{
+      type: "vertex" | "edge";
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      text?: string;
+      style?: string;
+      source_id?: string;
+      target_id?: string;
+      temp_id?: string;
+    }>;
+  }): Promise<CallToolResult> => {
+    const items = args.cells.map(c => ({
+      type: c.type,
+      x: c.x,
+      y: c.y,
+      width: c.width,
+      height: c.height,
+      text: c.text,
+      style: c.style,
+      sourceId: c.source_id,
+      targetId: c.target_id,
+      tempId: c.temp_id,
+    }));
+    const results = diagram.batchAddCells(items);
+    const successCount = results.filter(r => r.success).length;
+    const errorCount = results.filter(r => !r.success).length;
+    return successResult({
+      success: errorCount === 0,
+      summary: { total: results.length, succeeded: successCount, failed: errorCount },
+      results,
+    });
+  },
+
+  "get-style-presets": async (): Promise<CallToolResult> => {
+    const presets = {
+      azure: {
+        primary: "fillColor=#0078D4;strokeColor=#0078D4;fontColor=#ffffff;",
+        secondary: "fillColor=#50E6FF;strokeColor=#0078D4;fontColor=#000000;",
+        container: "fillColor=#E6F2FA;strokeColor=#0078D4;rounded=1;dashed=1;",
+      },
+      flowchart: {
+        process: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
+        decision: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
+        start: "ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;",
+        end: "ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;",
+        data: "shape=parallelogram;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;",
+      },
+      general: {
+        blue: "fillColor=#dae8fc;strokeColor=#6c8ebf;",
+        green: "fillColor=#d5e8d4;strokeColor=#82b366;",
+        orange: "fillColor=#ffe6cc;strokeColor=#d79b00;",
+        red: "fillColor=#f8cecc;strokeColor=#b85450;",
+        purple: "fillColor=#e1d5e7;strokeColor=#9673a6;",
+        yellow: "fillColor=#fff2cc;strokeColor=#d6b656;",
+        gray: "fillColor=#f5f5f5;strokeColor=#666666;",
+      },
+      edges: {
+        solid: "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;",
+        dashed: "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;",
+        curved: "edgeStyle=entityRelationEdgeStyle;rounded=1;html=1;",
+        arrow: "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;",
+      },
+    };
+    return successResult({ presets });
+  },
+
+  "search-shapes": async (args: {
+    query: string;
+    limit?: number;
+  }): Promise<CallToolResult> => {
+    const limit = args.limit ?? 10;
+    const results = searchAzureIcons(args.query, limit);
+    return successResult({
+      query: args.query,
+      matches: results.map(r => ({
+        name: r.title,
+        id: r.id,
+        width: r.width,
+        height: r.height,
+      })),
+      total: results.length,
     });
   },
 };
