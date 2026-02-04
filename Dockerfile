@@ -40,10 +40,9 @@ COPY --from=builder --chown=nodejs:nodejs /app/package.json ./
 
 USER nodejs
 
-# 3333: WebSocket for browser extension
-# 3000: HTTP for MCP clients (Streamable HTTP at /mcp)
-EXPOSE 3333 3000
+# 3000: HTTP for standalone MCP server
+EXPOSE 3000
 
 ENTRYPOINT ["node", "build/index.js"]
-# Enable HTTP transport by default for containerized deployments
-CMD ["--transport", "http"]
+# Standalone server with HTTP transport on port 3000
+CMD ["--standalone", "--transport", "http", "--http-port", "3000"]

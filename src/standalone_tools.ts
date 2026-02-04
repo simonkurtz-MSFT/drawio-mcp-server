@@ -5,6 +5,11 @@
 
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { diagram } from "./diagram_model.js";
+import { 
+  getAzureCategories, 
+  getAzureShapesInCategory, 
+  getAzureShapeByName,
+} from "./azure_shapes.js";
 
 function successResult(data: any): CallToolResult {
   return {
@@ -176,7 +181,6 @@ export const standaloneHandlers = {
     return successResult({ success: true, message: "Diagram cleared" });
   },
 
-  // These tools don't make sense in standalone mode, return helpful messages
   "get-selected-cell": async (): Promise<CallToolResult> => {
     return successResult({
       info: "Standalone mode - no UI selection available. Use list-paged-model to see all cells.",
@@ -184,31 +188,125 @@ export const standaloneHandlers = {
   },
 
   "get-shape-categories": async (): Promise<CallToolResult> => {
+    const basicCategories = [
+      { id: "general", name: "General" },
+      { id: "flowchart", name: "Flowchart" },
+    ];
+    const azureCategories = getAzureCategories();
+    
     return successResult({
-      categories: [
-        { id: "general", name: "General" },
-        { id: "flowchart", name: "Flowchart" },
-      ],
-      info: "Standalone mode - limited shape library. Use style parameter directly.",
+      categories: [...basicCategories, ...azureCategories],
+      info: "Standalone mode - includes basic shapes and Azure architecture icons.",
     });
   },
 
-  "get-shapes-in-category": async (): Promise<CallToolResult> => {
-    return successResult({
-      info: "Standalone mode - use style parameter directly with add-rectangle.",
-      exampleStyles: {
-        rectangle: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-        rounded: "whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;",
-        ellipse: "ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;",
-        diamond: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
+  "get-shapes-in-category": async (args: {
+    category_id: string;
+  }): Promise<CallToolResult> => {
+    const categoryId = args.category_id.toLowerCase();
+    
+    // Check if it's an Azure category
+    const azureShapes = getAzureShapesInCategory(categoryId);
+    if (azureShapes && azureShapes.length > 0) {
+      return successResult({
+        category: categoryId,
+        shapes: azureShapes.map(shape => ({
+          name: shape.name,
+          style: shape.style,
+          width: shape.defaultWidth,
+          height: shape.defaultHeight,
+        })),
+      });
+    }
+    
+    // Return basic shapes for general/flowchart categories
+    const basicShapes: Record<string, any> = {
+      general: {
+        rectangle: {
+          name: "rectangle",
+          style: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
+        },
+        rounded: {
+          name: "rounded",
+          style: "whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;",
+        },
+        ellipse: {
+          name: "ellipse",
+          style: "ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;",
+        },
       },
-    });
+      flowchart: {
+        process: {
+          name: "process",
+          style: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
+        },
+        decision: {
+          name: "decision",
+          style: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
+        },
+        start: {
+          name: "start",
+          style: "ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;",
+        },
+        end: {
+          name: "end",
+          style: "ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;",
+        },
+      },
+    };
+    
+    const shapes = basicShapes[categoryId];
+    if (shapes) {
+      return successResult({
+        category: categoryId,
+        shapes: Object.values(shapes),
+      });
+    }
+    
+    return errorResult(`Category '${args.category_id}' not found.`);
   },
 
-  "get-shape-by-name": async (): Promise<CallToolResult> => {
-    return successResult({
-      info: "Standalone mode - use style parameter directly.",
-    });
+  "get-shape-by-name": async (args: {
+    shape_name: string;
+  }): Promise<CallToolResult> => {
+    // Try to find an Azure shape first
+    const azureShape = getAzureShapeByName(args.shape_name);
+    if (azureShape) {
+      return successResult({
+        shape: {
+          name: azureShape.name,
+          category: azureShape.category,
+          style: azureShape.style,
+          width: azureShape.defaultWidth,
+          height: azureShape.defaultHeight,
+        },
+      });
+    }
+    
+    // Fall back to basic shapes
+    const basicShapes: Record<string, string> = {
+      rectangle: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
+      rounded: "whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;",
+      ellipse: "ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;",
+      diamond: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
+      circle: "ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#f8cecc;strokeColor=#b85450;",
+      process: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
+      decision: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
+      start: "ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;",
+      end: "ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;",
+    };
+    
+    const style = basicShapes[args.shape_name.toLowerCase()];
+    if (style) {
+      return successResult({
+        shape: {
+          name: args.shape_name,
+          style,
+        },
+      });
+    }
+    
+    return errorResult(`Shape '${args.shape_name}' not found.`);
   },
 
   "add-cell-of-shape": async (args: {
@@ -220,6 +318,23 @@ export const standaloneHandlers = {
     text?: string;
     style?: string;
   }): Promise<CallToolResult> => {
+    // First check if it's an Azure shape
+    const azureShape = getAzureShapeByName(args.shape_name);
+    if (azureShape) {
+      const cell = diagram.addRectangle({
+        x: args.x,
+        y: args.y,
+        width: args.width ?? azureShape.defaultWidth,
+        height: args.height ?? azureShape.defaultHeight,
+        text: args.text ?? "",
+        style: args.style ?? azureShape.style,
+      });
+      return successResult({ 
+        success: true, 
+        cell,
+      });
+    }
+    
     // Map shape names to styles
     const shapeStyles: Record<string, string> = {
       rectangle: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
@@ -233,14 +348,18 @@ export const standaloneHandlers = {
       end: "ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;",
     };
 
-    const style = args.style ?? shapeStyles[args.shape_name.toLowerCase()] ?? shapeStyles.rectangle;
+    const style = shapeStyles[args.shape_name.toLowerCase()];
+    if (!style) {
+      return errorResult(`Unknown shape '${args.shape_name}'.`);
+    }
+
     const cell = diagram.addRectangle({
       x: args.x,
       y: args.y,
       width: args.width,
       height: args.height,
-      text: args.text ?? args.shape_name,
-      style,
+      text: args.text,
+      style: args.style ?? style,
     });
     return successResult({ success: true, cell });
   },
@@ -249,11 +368,30 @@ export const standaloneHandlers = {
     cell_id: string;
     shape_name: string;
   }): Promise<CallToolResult> => {
+    // First check if it's an Azure shape
+    const azureShape = getAzureShapeByName(args.shape_name);
+    if (azureShape) {
+      const result = diagram.editCell(args.cell_id, { style: azureShape.style });
+      if ("error" in result) {
+        return errorResult(result.error);
+      }
+      return successResult({ 
+        success: true, 
+        cell: result,
+      });
+    }
+
+    // Check basic shapes
     const shapeStyles: Record<string, string> = {
       rectangle: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
       rounded: "whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;",
       ellipse: "ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;",
       diamond: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
+      circle: "ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#f8cecc;strokeColor=#b85450;",
+      process: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
+      decision: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
+      start: "ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;",
+      end: "ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;",
     };
 
     const style = shapeStyles[args.shape_name.toLowerCase()];
