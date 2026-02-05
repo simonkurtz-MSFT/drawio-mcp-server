@@ -290,14 +290,14 @@ ${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
         // Resolve tempIds to real IDs
         const sourceId = item.sourceId ? (tempIdMap.get(item.sourceId) ?? item.sourceId) : "";
         const targetId = item.targetId ? (tempIdMap.get(item.targetId) ?? item.targetId) : "";
-        
+
         const result = this.addEdge({
           sourceId,
           targetId,
           text: item.text,
           style: item.style,
         });
-        
+
         if ("error" in result) {
           results.push({ success: false, error: result.error, tempId: item.tempId });
         } else {
