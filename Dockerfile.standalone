@@ -37,6 +37,7 @@ WORKDIR /app
 # Distroless runs as nonroot user by default
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/build ./build
+COPY assets ./assets
 
 USER nodejs
 
