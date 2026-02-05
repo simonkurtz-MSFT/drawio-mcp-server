@@ -10,8 +10,8 @@ import {
   getShapesInCategory,
   getAzureShapeByName,
   searchAzureIcons,
-  getAzureIconLibrary,
 } from "./azure_icon_library.js";
+import { BASIC_SHAPES, BASIC_SHAPE_CATEGORIES, getBasicShape } from "./basic_shapes.js";
 
 function successResult(data: any): CallToolResult {
   return {
@@ -210,11 +210,18 @@ export const standaloneHandlers = {
   }): Promise<CallToolResult> => {
     const categoryId = args.category_id.toLowerCase();
 
-    // Check if it's an Azure category by searching the library
-    const normalizedCategoryId = categoryId.replace(/-/g, " ");
-    const azureCategories = getAzureCategories();
+    // Check basic shape categories first
+    const basicShapeNames = BASIC_SHAPE_CATEGORIES[categoryId];
+    if (basicShapeNames) {
+      const shapes = basicShapeNames
+        .map((name) => BASIC_SHAPES[name])
+        .filter(Boolean)
+        .map((s) => ({ name: s.name, style: s.style, width: s.defaultWidth, height: s.defaultHeight }));
+      return successResult({ category: categoryId, shapes, total: shapes.length });
+    }
 
-    // Find matching Azure category (case-insensitive)
+    // Check Azure categories
+    const azureCategories = getAzureCategories();
     const matchingCategory = azureCategories.find(
       (cat) => cat.toLowerCase().replace(/\s+/g, "-") === categoryId
     );
@@ -233,107 +240,38 @@ export const standaloneHandlers = {
       });
     }
 
-    // Return basic shapes for general/flowchart categories
-    const basicShapes: Record<string, any> = {
-      general: {
-        rectangle: {
-          name: "rectangle",
-          style: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-        },
-        rounded: {
-          name: "rounded",
-          style: "whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;",
-        },
-        ellipse: {
-          name: "ellipse",
-          style: "ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;",
-        },
-      },
-      flowchart: {
-        process: {
-          name: "process",
-          style: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-        },
-        decision: {
-          name: "decision",
-          style: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
-        },
-        start: {
-          name: "start",
-          style: "ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;",
-        },
-        end: {
-          name: "end",
-          style: "ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;",
-        },
-      },
-    };
-
-    const shapes = basicShapes[categoryId];
-    if (shapes) {
-      return successResult({
-        category: categoryId,
-        shapes: Object.values(shapes),
-      });
-    }
-
-    return errorResult(`Category '${args.category_id}' not found.`);
+    return errorResult(`Category '${args.category_id}' not found. Use get-shape-categories to list available categories.`);
   },
 
   "get-shape-by-name": async (args: {
     shape_name: string;
   }): Promise<CallToolResult> => {
-    // Try to find an Azure shape first
-    const azureShape = getAzureShapeByName(args.shape_name);
-    if (azureShape) {
+    // Check basic shapes first (prevents fuzzy search from hijacking names like 'start', 'end')
+    const basic = getBasicShape(args.shape_name);
+    if (basic) {
       return successResult({
-        shape: {
-          name: azureShape.title,
-          id: azureShape.id,
-          width: azureShape.width,
-          height: azureShape.height,
-        },
+        shape: { name: basic.name, style: basic.style, width: basic.defaultWidth, height: basic.defaultHeight },
       });
     }
 
-    // Also try search in case it's a partial match
+    // Try Azure exact match
+    const azureShape = getAzureShapeByName(args.shape_name);
+    if (azureShape) {
+      return successResult({
+        shape: { name: azureShape.title, id: azureShape.id, width: azureShape.width, height: azureShape.height },
+      });
+    }
+
+    // Try Azure fuzzy search as last resort
     const searchResults = searchAzureIcons(args.shape_name, 1);
     if (searchResults.length > 0) {
       const shape = searchResults[0];
       return successResult({
-        shape: {
-          name: shape.title,
-          id: shape.id,
-          width: shape.width,
-          height: shape.height,
-        },
+        shape: { name: shape.title, id: shape.id, width: shape.width, height: shape.height },
       });
     }
 
-    // Fall back to basic shapes
-    const basicShapes: Record<string, string> = {
-      rectangle: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-      rounded: "whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;",
-      ellipse: "ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;",
-      diamond: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
-      circle: "ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#f8cecc;strokeColor=#b85450;",
-      process: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-      decision: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
-      start: "ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;",
-      end: "ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;",
-    };
-
-    const style = basicShapes[args.shape_name.toLowerCase()];
-    if (style) {
-      return successResult({
-        shape: {
-          name: args.shape_name,
-          style,
-        },
-      });
-    }
-
-    return errorResult(`Shape '${args.shape_name}' not found.`);
+    return errorResult(`Shape '${args.shape_name}' not found. Use search-shapes to find available shapes.`);
   },
 
   "add-cell-of-shape": async (args: {
@@ -345,7 +283,21 @@ export const standaloneHandlers = {
     text?: string;
     style?: string;
   }): Promise<CallToolResult> => {
-    // First check if it's an Azure shape
+    // Check basic shapes first (prevents fuzzy search from hijacking names like 'start', 'end')
+    const basic = getBasicShape(args.shape_name);
+    if (basic) {
+      const cell = diagram.addRectangle({
+        x: args.x,
+        y: args.y,
+        width: args.width ?? basic.defaultWidth,
+        height: args.height ?? basic.defaultHeight,
+        text: args.text,
+        style: args.style ?? basic.style,
+      });
+      return successResult({ success: true, cell });
+    }
+
+    // Try Azure exact match
     const azureShape = getAzureShapeByName(args.shape_name);
     if (azureShape) {
       const cell = diagram.addRectangle({
@@ -363,7 +315,7 @@ export const standaloneHandlers = {
       });
     }
 
-    // Also try search in case it's a partial match
+    // Try Azure fuzzy search as last resort
     const searchResults = searchAzureIcons(args.shape_name, 1);
     if (searchResults.length > 0) {
       const shape = searchResults[0];
@@ -382,33 +334,88 @@ export const standaloneHandlers = {
       });
     }
 
-    // Map shape names to styles
-    const shapeStyles: Record<string, string> = {
-      rectangle: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-      rounded: "whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;",
-      ellipse: "ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;",
-      diamond: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
-      circle: "ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#f8cecc;strokeColor=#b85450;",
-      process: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-      decision: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
-      start: "ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;",
-      end: "ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;",
-    };
+    return errorResult(`Unknown shape '${args.shape_name}'. Use search-shapes to find available shapes, or try basic names like 'rectangle', 'ellipse', 'decision'.`);
+  },
 
-    const style = shapeStyles[args.shape_name.toLowerCase()];
-    if (!style) {
-      return errorResult(`Unknown shape '${args.shape_name}'. Try searching for 'container', 'front door', or 'app' to find relevant Azure icons.`);
+  "batch-add-cells-of-shape": async (args: {
+    cells: Array<{
+      shape_name: string;
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      text?: string;
+      style?: string;
+      temp_id?: string;
+    }>;
+  }): Promise<CallToolResult> => {
+    if (!args.cells || args.cells.length === 0) {
+      return errorResult("Must provide a non-empty 'cells' array");
     }
 
-    const cell = diagram.addRectangle({
-      x: args.x,
-      y: args.y,
-      width: args.width,
-      height: args.height,
-      text: args.text,
-      style: args.style ?? style,
+    const results = args.cells.map((item) => {
+      // Check basic shapes first (prevents fuzzy search from hijacking names like 'start', 'end')
+      const basic = getBasicShape(item.shape_name);
+      if (basic) {
+        const cell = diagram.addRectangle({
+          x: item.x,
+          y: item.y,
+          width: item.width ?? basic.defaultWidth,
+          height: item.height ?? basic.defaultHeight,
+          text: item.text,
+          style: item.style ?? basic.style,
+        });
+        return { success: true, cell, temp_id: item.temp_id };
+      }
+
+      // Try Azure exact match
+      let shape = getAzureShapeByName(item.shape_name);
+
+      // Try Azure fuzzy search as last resort
+      if (!shape) {
+        const searchResults = searchAzureIcons(item.shape_name, 1);
+        if (searchResults.length > 0) {
+          shape = searchResults[0];
+        }
+      }
+
+      if (shape) {
+        const cell = diagram.addRectangle({
+          x: item.x,
+          y: item.y,
+          width: item.width ?? shape.width,
+          height: item.height ?? shape.height,
+          text: item.text ?? shape.title,
+          style: item.style ?? shape.style,
+        });
+        return {
+          success: true,
+          cell,
+          temp_id: item.temp_id,
+          info: `Added Azure icon: ${shape.title}`,
+        };
+      }
+
+      return {
+        success: false,
+        temp_id: item.temp_id,
+        shape_name: item.shape_name,
+        error: `Unknown shape '${item.shape_name}'. Use search-shapes to find available shapes.`,
+      };
     });
-    return successResult({ success: true, cell });
+
+    const successCount = results.filter((r) => r.success).length;
+    const errorCount = results.filter((r) => !r.success).length;
+
+    return successResult({
+      success: errorCount === 0,
+      summary: {
+        total: results.length,
+        succeeded: successCount,
+        failed: errorCount,
+      },
+      results,
+    });
   },
 
   "set-cell-shape": async (args: {
@@ -433,26 +440,15 @@ export const standaloneHandlers = {
 
     // Helper function to get style for a shape name
     const getShapeStyle = (shapeName: string): string | null => {
-      // First check if it's an Azure shape
+      // Check basic shapes first (prevents fuzzy search from hijacking names like 'start', 'end')
+      const basic = getBasicShape(shapeName);
+      if (basic) return basic.style;
+
+      // Then check Azure shapes
       const azureShape = getAzureShapeByName(shapeName);
-      if (azureShape) {
-        return azureShape.style ?? null;
-      }
+      if (azureShape) return azureShape.style ?? null;
 
-      // Check basic shapes
-      const shapeStyles: Record<string, string> = {
-        rectangle: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-        rounded: "whiteSpace=wrap;html=1;rounded=1;fillColor=#d5e8d4;strokeColor=#82b366;",
-        ellipse: "ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;",
-        diamond: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
-        circle: "ellipse;whiteSpace=wrap;html=1;aspect=fixed;fillColor=#f8cecc;strokeColor=#b85450;",
-        process: "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-        decision: "rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
-        start: "ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;",
-        end: "ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;",
-      };
-
-      return shapeStyles[shapeName.toLowerCase()] || null;
+      return null;
     };
 
     // Handle single operation (backward compatible)
@@ -526,11 +522,10 @@ export const standaloneHandlers = {
     key: string;
     value: string | number | boolean;
   }): Promise<CallToolResult> => {
-    // In standalone mode, we don't have custom data support yet
-    // Just acknowledge the request
+    // Standalone mode does not support custom data attributes on cells
     return successResult({
-      success: true,
-      info: "Custom data stored (note: not persisted in XML in standalone mode)",
+      acknowledged: true,
+      info: "Standalone mode does not persist custom data attributes to XML. Use edit-cell to modify cell properties (text, position, size, style) instead.",
       cell_id: args.cell_id,
       key: args.key,
       value: args.value,

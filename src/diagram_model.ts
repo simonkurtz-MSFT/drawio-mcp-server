@@ -203,6 +203,12 @@ export class DiagramModel {
    * Export the diagram as Draw.io XML format
    */
   toXml(): string {
+    // Emit custom layer cells (skip the default layer id="1" which is always present)
+    const layerCellsXml = this.layers
+      .filter(l => l.id !== "1")
+      .map(l => `                <mxCell id="${this.escapeXml(l.id)}" value="${this.escapeXml(l.name)}" style="" parent="0"/>`)
+      .join("\n");
+
     const cellsXml = Array.from(this.cells.values())
       .map(cell => {
         if (cell.type === "vertex") {
@@ -223,7 +229,7 @@ export class DiagramModel {
             <root>
                 <mxCell id="0"/>
                 <mxCell id="1" parent="0"/>
-${cellsXml}
+${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
             </root>
         </mxGraphModel>
     </diagram>

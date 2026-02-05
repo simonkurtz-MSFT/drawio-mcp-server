@@ -156,7 +156,7 @@ cp .env.example .env
 Update `.env` with your container registry and version:
 
 ```env
-REGISTRY=docker.io/simonkurtzmsft
+REGISTRY=<your registry>
 IMAGE_VERSION=1.0.0
 ```
 
@@ -178,8 +178,8 @@ docker compose push
 ```
 
 This creates and pushes versioned tags:
-- `docker.io/simonkurtzmsft/drawio-mcp-server-standalone:latest`
-- `docker.io/simonkurtzmsft/drawio-mcp-server-standalone:1.0.0`
+- `<registry>/<repository>/drawio-mcp-server-standalone:latest`
+- `<registry>/<repository>/drawio-mcp-server-standalone:1.0.0`
 
 ##### Running with Docker Compose
 
@@ -200,43 +200,6 @@ To rebuild after code changes:
 ```sh
 docker compose up -d --build
 ```
-
-#### Deploying to Azure Container Instances
-
-To deploy this container to Azure, use the provided Bicep template with a bicepparam file.
-
-##### Using Bicep Parameters
-
-Copy the example bicepparam file:
-
-```sh
-cp aci.bicepparam.example aci.bicepparam
-```
-
-Update `aci.bicepparam` with your deployment settings:
-
-```bicep
-param containerImage = 'docker.io/simonkurtzmsft/drawio-mcp-server-standalone:latest'
-param dnsLabel = 'drawio-mcp-dev'
-param orgName = 'myorg'
-param environment = 'dev'
-```
-
-##### Deploy to Azure
-
-```sh
-az deployment group create \
-  --name aci-deploy \
-  --resource-group my-resource-group \
-  --template-file infra/aci.bicep \
-  --parameters aci.bicepparam
-```
-
-The Bicep template uses Cloud Adoption Framework (CAF) naming conventions and provides:
-- Customizable CPU cores and memory
-- Public IP with DNS label
-- Container port configuration
-- Environment-based tagging
 
 ## Installation
 
@@ -526,10 +489,36 @@ ladislav@blink.sv
 
 The Draw.io MCP server provides the following tools for programmatic diagram interaction:
 
+Tip: For better performance, prefer batch tools and array parameters when creating or updating multiple items.
+
+### Best Practices (Performance)
+- Prefer `batch-add-cells` for creating many vertices and edges in one call.
+- Use `temp_id` inside `batch-add-cells` to wire edges without separate lookups.
+- Favor array parameters (`queries`, `cells`) over repeated single-call usage.
+
+Example (Standalone mode):
+
+```json
+{
+  "cells": [
+    { "type": "vertex", "temp_id": "web", "x": 100, "y": 100, "width": 60, "height": 60, "text": "Web", "style": "aspect=fixed;html=1;image;image=img/lib/azure2/compute/Container_Instances.svg;" },
+    { "type": "vertex", "temp_id": "api", "x": 220, "y": 100, "width": 60, "height": 60, "text": "API", "style": "aspect=fixed;html=1;image;image=img/lib/azure2/compute/Container_Instances.svg;" },
+    { "type": "edge", "source_id": "web", "target_id": "api", "text": "HTTPS" }
+  ]
+}
+```
+
 ### Diagram Inspection Tools
 - **`get-selected-cell`**
   Retrieves the currently selected cell in Draw.io with all its attributes
   *Returns*: JSON object containing cell properties (ID, geometry, style, value, etc.)
+
+- **`search-shapes`** (Standalone only)
+  Fuzzy search for shapes (including 700+ Azure icons). Supports batch queries for efficiency.
+  *Parameters*:
+    - `query`: Single search query
+    - `queries`: Array of search queries (preferred for batch lookup)
+    - `limit`: Max results per query
 
 - **`get-shape-categories`**
   Retrieves available shape categories from the diagram's library
@@ -557,6 +546,7 @@ The Draw.io MCP server provides the following tools for programmatic diagram int
   - Dimensions (`width`, `height`)
   - Text content
   - Visual style (fill color, stroke, etc. using Draw.io style syntax)
+  *Tip*: Prefer `batch-add-cells` when adding multiple rectangles.
 
 - **`add-edge`**
   Creates a connection between two cells (vertexes)
@@ -565,6 +555,12 @@ The Draw.io MCP server provides the following tools for programmatic diagram int
     - `target_id`: ID of the target cell
     - `text`: Optional text label for the edge
     - `style`: Optional style properties for the edge
+  *Tip*: Prefer `batch-add-cells` when adding multiple edges.
+
+- **`batch-add-cells`** (Standalone only)
+  Adds multiple cells in a single call. This is the most efficient way to create many shapes and edges.
+  *Parameters*:
+    - `cells`: Array of vertex/edge definitions (supports `temp_id` for within-batch references)
 
 - **`delete-cell-by-id`**
   Removes a specified cell from the diagram
@@ -579,12 +575,14 @@ The Draw.io MCP server provides the following tools for programmatic diagram int
     - `width`, `height`: Dimensions (optional)
     - `text`: Optional text content
     - `style`: Optional additional style properties
+  *Tip*: Prefer `batch-add-cells` when adding multiple shaped cells.
 
 - **`set-cell-shape`**
   Applies a library shape's style to an existing cell
   *Parameters*:
     - `cell_id`: ID of the cell whose appearance should change
     - `shape_name`: Name of the library shape whose style should be applied
+    - `cells`: Array of `{ cell_id, shape_name }` pairs for batch updates (preferred)
 
 - **`set-cell-data`**
   Stores or updates a custom attribute on a cell

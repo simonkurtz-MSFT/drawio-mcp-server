@@ -8,6 +8,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
+import FuzzySearch from "fuzzy-search";
 
 // Define __dirname for ESM compatibility
 const __filename = fileURLToPath(import.meta.url);
@@ -101,38 +102,58 @@ function extractStyle(xml: string): string | undefined {
 }
 
 /**
- * Categorize icons based on their title patterns
+ * Categorize icons based on their title patterns.
+ * Titles from the XML library are prefixed with numbering and "icon-service-"
+ * (e.g., "00030-icon-service-Machine-Learning-Studio-(Classic)-Web-Services"),
+ * so we strip that prefix and normalize hyphens before applying regex rules.
  */
 function categorizeShapes(shapes: AzureIconShape[]): Map<string, AzureIconShape[]> {
   const categories = new Map<string, AzureIconShape[]>();
 
   const categoryKeywords: Record<string, RegExp> = {
-    "AI + Machine Learning": /^(cognitive|bot|openai|machine learning|text|speech|vision|anomaly)/i,
-    Analytics: /^(synapse|databricks|data factory|stream analytics|event hub)/i,
-    "App Services": /^(app service|web app|api app|function)/i,
-    Blockchain: /^(blockchain|cosmos db ledger)/i,
-    Compute: /^(virtual machine|vm|batch|app service|function|container instance|aks)/i,
-    Containers: /^(container|aks|kubernetes|registry)/i,
-    Databases: /^(sql|mysql|postgresql|cosmos|cache|redis|database)/i,
-    DevOps: /^(azure devops|pipelines|repos|artifacts)/i,
-    General: /^(resource group|subscription|management group|azure)/i,
-    "Hybrid + Multicloud": /^(azure stack|hybrid|arc)/i,
-    Identity: /^(active directory|entra|access|authentication|identity)/i,
-    Integration: /^(service bus|logic app|api management|event grid)/i,
-    IoT: /^(iot|device|edge)/i,
-    "Management + Governance": /^(monitor|log analytics|automation|policy|backup)/i,
-    Networking: /^(virtual network|load balancer|application gateway|vpn|firewall|dns|front door|cdn|traffic|network)/i,
-    "New Icons": /^(new|latest)/i,
-    Security: /^(security|key vault|sentinel|defender)/i,
-    Storage: /^(storage|blob|file|disk|queue|table)/i,
-    Web: /^(web|app service|static web)/i,
+    "AI + Machine Learning": /^(cognitive|bot|openai|azure openai|machine learning|text|speech|vision|anomaly|ai |ai$|language|qna|translator|immersive|form recognizer|personalizer|content moderator|content safety|bonsai|azure applied ai|azure experimentation|azure object understanding|metrics advisor|serverless search|genomic|computer vision|custom vision|face api)/i,
+    Analytics: /^(synapse|azure synapse|databricks|azure databricks|data factory|data factories|stream analytics|event hub|analysis service|data lake|data catalog|azure data catalog|data share|data virtualization|power bi|hd insight|hdi aks|time series|azure data explorer|endpoint analytics|internet analyzer)/i,
+    "Blockchain": /^(blockchain|consortium|azure blockchain)/i,
+    Compute: /^(virtual machine|vm |vm$|batch|cloud service|availability set|host group|host pool|hosts$|compute fleet|spot vm|auto scale|automanaged|capacity reservation|image|os image|disk|ssd|proximity placement|restore point|scale set|azure compute galler|community image|bare metal|modular data center|avs vm|server farm|shared image)/i,
+    Containers: /^(container|aks|kubernetes|registry|docker|azure red hat openshift|azure spring|worker container)/i,
+    Databases: /^(sql|azure sql|mysql|mariadb|postgresql|cosmos|azure cosmos|cache|redis|azure managed redis|database|azure database|elastic pool|elastic job|managed instance|managed database|instance pool|oracle|production ready|virtual cluster|dedicated hsm)/i,
+    "Developer Tools": /^(app configuration|connection$|connections$|extension$|extensions$|on premises data|service provider|service fabric|managed service fabric|software as a service)/i,
+    DevOps: /^(azure devops|devops|devtest|pipeline|repo|artifact|backlog|branch|build|bug|commit|code$|code |test base|lab account|lab service|cloudtest|managed devops|microsoft dev box|azure deployment environment|azure dev tunnel|tfs vc|workspace gateway|workspaces$|load test)/i,
+    General: /^(resource|subscription|management group|management portal|all resource|tag|template|quickstart|help|learn|marketplace|advisor|dashboard|portal|launch|recent|download|free service|information|guide|gear|toolbox|powershell|azure a$|azure workbook|workbook|location|search$|search |preview|feature|user setting|user privacy|user subscription|tenant|offer|plan$|plans$|region management|azure cloud shell|azure token|azure sustainability|azure consumption|azure lighthouse|my customer|education|ebook|heart|power$|power |power up|solutions|sonic dash|troubleshoot|versions|workflow|service catalog|service group|abs member|030777508|ceres|breeze|fiji|mindaro|aquila|planetary|process explorer|input output|cubes|counter|controls|browser|dev console|error$|globe|folder|file$|files$|ftp|module|log streaming|alerts$|metrics$|frd qa|journey hub|azurite|promethus)/i,
+    "Health": /^(fhir|azure api for fhir|medtech|genomic account)/i,
+    "Hybrid + Multicloud": /^(azure stack|stack hci|hybrid|arc |arc$|machinesazurearc|azure arc|landing zone|mission landing|azure hybrid|azure vmware|scvmm|wac$|wac |azure edge hardware|edge action|edge management)/i,
+    Identity: /^(active directory|entra|access|conditional access|identity|app registration|enterprise app|external id|managed identit|multi.?factor|multi tenancy|administrative unit|groups$|users$|azure ad|verifiable credential|verification as|exchange access|exchange on premises)/i,
+    Integration: /^(service bus|azure service bus|logic app|api management|api connection|api center|api proxy|event grid|integration|relay|notification hub|sendgrid|signalr|biz talk|collaborative|data collection|system topic|partner namespace|partner registration|partner topic|open supply chain|business process|engage center|azure communication|azure programmable)/i,
+    "Intune + Endpoint Management": /^(intune|client app|software update)/i,
+    IoT: /^(iot|device provisioning|device update|digital twin|azure sphere|connected vehicle|industrial iot|azure iot|rtos|connected cache|defender (cm|dcs|distribut|engineering|external|freezer|hmi|historian|industrial|marquee|meter|plc|pneumatic|programable|rtu|relay|robot|sensor|slot|web guiding)|device compliance|device configuration|device enrollment|device security|devices$)/i,
+    "Management + Governance": /^(monitor|azure monitor|log analytics|automation|policy|backup|recovery|cost|blueprint|compliance|app compliance|diagnostic|activity log|change analysis|service health|update|maintenance|azure chaos|azure backup|resource guard|resource mover|resource graph|managed desktop|managed application|operation log|azure support|savings|scheduler|reservation|reserved|azure quota|purview|azure purview|governance|azure managed grafana|targets management|toolchain|workload orchestration|osconfig|icm|infrastructure backup|application insight|applens|azure load testing)/i,
+    Media: /^(media|video|azure media|azure video)/i,
+    Migration: /^(azure migrate|migration|import export|storsimple|azure storage mover|ssis lift)/i,
+    "Mixed Reality": /^(spatial anchor|remote rendering|mesh application)/i,
+    Mobile: /^(mobile|app center)/i,
+    Networking: /^(virtual network|load balancer|application gateway|vpn|firewall|azure firewall|dns|front door|cdn|traffic|network|bastion|expressroute|express route|local network|nat$|nat |ip address|ip group|ip prefix|public ip|private endpoint|private link|peering|route|subnet|ddos|virtual wan|virtual router|web application firewall|custom ip|outbound|atm multistack|azure network function|service endpoint polic)/i,
+    "Operator": /^(azure operator|azure orbital)/i,
+    "Power Platform": /^(power platform)/i,
+    "SAP on Azure": /^(azure center for sap|central service instance|virtual instance for sap|azure monitors? for sap)/i,
+    Security: /^(security|key vault|keys$|ssh key|sentinel|azure sentinel|defender(?! (cm|dcs|distribut|engineering|external|freezer|hmi|historian|industrial|marquee|meter|plc|pneumatic|programable|rtu|relay|robot|sensor|slot|web guiding))|microsoft defender|confidential|detonation|customer lockbox|azure information protection|azure(?: )?attestation|extended.?security|application security)/i,
+    Storage: /^(storage|blob|file share|managed file|azure fileshare|azure netapp|data box|azure databox|disk pool|elastic san|edge storage|azure hcp cache|table$|capacity$)/i,
+    "Virtual Desktop": /^(azure virtual desktop|virtual visits|virtual enclaves|application group)/i,
+    Web: /^(web |app service|static app|function app|app space|web app|web job|web slot|web test|website|universal print|windows10|windows notification)/i,
+    "Maps + Spatial": /^(azure maps)/i,
+    "Azure HPC": /^(azure hpc)/i,
   };
 
   shapes.forEach((shape) => {
+    // Strip the numeric prefix and "icon-service-" to get the meaningful name
+    const cleanTitle = shape.title
+      .replace(/^\d+-icon-service-/, "")
+      .replace(/-/g, " ")
+      .trim();
+
     let categorized = false;
 
     for (const [category, pattern] of Object.entries(categoryKeywords)) {
-      if (pattern.test(shape.title)) {
+      if (pattern.test(cleanTitle)) {
         if (!categories.has(category)) {
           categories.set(category, []);
         }
@@ -212,6 +233,12 @@ export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
  * Get library from cache (singleton pattern)
  */
 let cachedLibrary: AzureIconLibrary | null = null;
+let cachedSearchIndex: FuzzySearch<SearchableShape> | null = null;
+
+type SearchableShape = AzureIconShape & {
+  searchTitle: string;
+  searchId: string;
+};
 
 export function getAzureIconLibrary(): AzureIconLibrary {
   if (!cachedLibrary) {
@@ -221,15 +248,52 @@ export function getAzureIconLibrary(): AzureIconLibrary {
 }
 
 /**
- * Search for icons by title or keyword
+ * Normalize text for fuzzy matching by removing boilerplate and punctuation.
+ */
+function normalizeForSearch(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/^\d+-icon-service-/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/[()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getSearchIndex(): FuzzySearch<SearchableShape> {
+  if (!cachedSearchIndex) {
+    const library = getAzureIconLibrary();
+    const searchableShapes: SearchableShape[] = library.shapes.map((shape) => ({
+      ...shape,
+      searchTitle: normalizeForSearch(shape.title),
+      searchId: normalizeForSearch(shape.id),
+    }));
+
+    cachedSearchIndex = new FuzzySearch(searchableShapes, [
+      "searchTitle",
+      "searchId",
+      "title",
+      "id",
+    ], {
+      caseSensitive: false,
+      sort: true,
+    });
+  }
+
+  return cachedSearchIndex;
+}
+
+/**
+ * Search for icons by title or keyword with fuzzy matching.
  */
 export function searchAzureIcons(query: string, limit = 10): AzureIconShape[] {
-  const library = getAzureIconLibrary();
-  const lowerQuery = query.toLowerCase();
+  const searcher = getSearchIndex();
+  const results = searcher.search(query).slice(0, limit);
 
-  return library.shapes
-    .filter((shape) => shape.title.toLowerCase().includes(lowerQuery) || shape.id.toLowerCase().includes(lowerQuery))
-    .slice(0, limit);
+  return results.map((item) => {
+    const { searchTitle, searchId, ...shape } = item;
+    return shape;
+  });
 }
 
 /**
