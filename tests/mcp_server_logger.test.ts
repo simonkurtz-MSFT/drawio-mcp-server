@@ -1,5 +1,5 @@
 import { jest } from "@jest/globals";
-import { create_logger } from "./mcp_server_logger.js";
+import { create_logger } from "../src/mcp_server_logger.js";
 
 describe("create_logger", () => {
   let mock_send_logging_message: jest.Mock;

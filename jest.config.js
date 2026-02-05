@@ -14,14 +14,13 @@ export default {
       },
     ],
   },
-  testMatch: ["**/*.test.ts"],
+  roots: ["<rootDir>/tests"],
+  testMatch: ["**/tests/**/*.test.ts"],
   collectCoverageFrom: [
     "src/**/*.ts",
     // exclude as it contains boundary injection logic mainly
     "!src/index.ts",
     "!src/**/*.d.ts",
-    "!src/**/__tests__/**",
-    "!src/**/*.test.ts",
   ],
   coverageThreshold: {
     global: {

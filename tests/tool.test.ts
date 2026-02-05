@@ -1,13 +1,13 @@
 import { jest } from "@jest/globals";
-import { build_channel, default_tool, Handler } from "./tool.js";
-import { Bus, BusListener, Context, IdGenerator, Logger } from "./types.js";
+import { build_channel, default_tool, Handler } from "../src/tool.js";
+import { Bus, BusListener, Context, IdGenerator, Logger } from "../src/types.js";
 import {
   CallToolResult,
   ServerNotification,
   ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { create_logger } from "./standard_console_logger.js";
+import { create_logger } from "../src/standard_console_logger.js";
 
 describe("build_channel", () => {
   let mockBus: jest.Mocked<Bus>;

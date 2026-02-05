@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { nanoid_id_generator } from "./nanoid_id_generator.js";
+import { nanoid_id_generator } from "../src/nanoid_id_generator.js";
 
 describe("nanoid_id_generator", () => {
   it("should return an object with a generate function", () => {

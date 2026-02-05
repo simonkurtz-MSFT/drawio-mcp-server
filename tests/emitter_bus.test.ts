@@ -1,8 +1,8 @@
 import { describe, it, expect, jest } from "@jest/globals";
 import { EventEmitter } from "node:events";
-import { create_bus } from "./emitter_bus.js";
-import { bus_request_stream, bus_reply_stream, Bus } from "./types.js";
-import { create_logger } from "./standard_console_logger.js";
+import { create_bus } from "../src/emitter_bus.js";
+import { bus_request_stream, bus_reply_stream, Bus } from "../src/types.js";
+import { create_logger } from "../src/standard_console_logger.js";
 
 describe("create_bus", () => {
   let emitter: EventEmitter;

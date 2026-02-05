@@ -7,7 +7,7 @@ import {
   parseConfig,
   buildConfig,
   parseTransports,
-} from "./config.js";
+} from "../src/config.js";
 
 describe("parseExtensionPortValue", () => {
   test("valid port returns number", () => {
@@ -154,6 +154,7 @@ describe("parseConfig", () => {
     expect(parseConfig([])).toEqual({
       extensionPort: 3333,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -162,6 +163,7 @@ describe("parseConfig", () => {
     expect(parseConfig(["--extension-port", "8080"])).toEqual({
       extensionPort: 8080,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -170,6 +172,7 @@ describe("parseConfig", () => {
     expect(parseConfig(["-p", "8080"])).toEqual({
       extensionPort: 8080,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -178,6 +181,7 @@ describe("parseConfig", () => {
     expect(parseConfig(["--http-port", "4242"])).toEqual({
       extensionPort: 3333,
       httpPort: 4242,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -188,6 +192,7 @@ describe("parseConfig", () => {
     ).toEqual({
       extensionPort: 8080,
       httpPort: 4242,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -196,6 +201,7 @@ describe("parseConfig", () => {
     expect(parseConfig(["--help"])).toEqual({
       extensionPort: 3333,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -234,6 +240,7 @@ describe("parseConfig", () => {
     ).toEqual({
       extensionPort: 9090,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -242,6 +249,7 @@ describe("parseConfig", () => {
     expect(parseConfig(["--extension-port", "8080", "-p", "9090"])).toEqual({
       extensionPort: 9090,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -251,6 +259,7 @@ describe("parseConfig", () => {
       {
         extensionPort: 3333,
         httpPort: 5000,
+        standalone: false,
         transports: ["stdio"],
       },
     );
@@ -260,6 +269,7 @@ describe("parseConfig", () => {
     expect(parseConfig(["--transport", "stdio"])).toEqual({
       extensionPort: 3333,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -268,6 +278,7 @@ describe("parseConfig", () => {
     expect(parseConfig(["--transport", "stdio,http"])).toEqual({
       extensionPort: 3333,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio", "http"],
     });
   });
@@ -291,6 +302,7 @@ describe("buildConfig", () => {
     expect(result).toEqual({
       extensionPort: 3333,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -301,6 +313,7 @@ describe("buildConfig", () => {
     expect(result).toEqual({
       extensionPort: 8080,
       httpPort: 3000,
+      standalone: false,
       transports: ["stdio"],
     });
   });
@@ -311,6 +324,7 @@ describe("buildConfig", () => {
     expect(result).toEqual({
       extensionPort: 3333,
       httpPort: 4242,
+      standalone: false,
       transports: ["stdio"],
     });
   });

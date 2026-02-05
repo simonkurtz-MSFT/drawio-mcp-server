@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@jest/globals";
-import { strip_internal_fields } from "./events.js";
+import { strip_internal_fields } from "../src/events.js";
 
 describe("strip_internal_fields", () => {
   describe("when object contains internal fields (starting with __)", () => {

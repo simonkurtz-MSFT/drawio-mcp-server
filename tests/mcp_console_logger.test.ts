@@ -1,5 +1,5 @@
 import { jest } from "@jest/globals";
-import { create_logger } from "./mcp_console_logger.js";
+import { create_logger } from "../src/mcp_console_logger.js";
 
 describe("create_logger", () => {
   let originalConsoleError: typeof console.error;
