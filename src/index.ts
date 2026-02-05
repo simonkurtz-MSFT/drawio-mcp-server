@@ -386,17 +386,30 @@ server.tool(
 const TOOL_set_cell_shape = "set-cell-shape";
 server.tool(
   TOOL_set_cell_shape,
-  "[Standalone+Bridge] Update a cell's visual style to match a library shape. Use search-shapes to find shape names.",
+  "[Standalone+Bridge] Update a cell's visual style to match a library shape. Use search-shapes to find shape names. Supports single or batch operations.",
   {
     cell_id: z
       .string()
+      .optional()
       .describe(
         "Identifier (`id` attribute) of the cell whose shape should change.",
       ),
     shape_name: z
       .string()
+      .optional()
       .describe(
         "Name of the library shape whose style should be applied to the existing cell.",
+      ),
+    cells: z
+      .array(
+        z.object({
+          cell_id: z.string().describe("Cell ID to update"),
+          shape_name: z.string().describe("Shape name to apply"),
+        }),
+      )
+      .optional()
+      .describe(
+        "Array of cell-shape pairs for batch operations. Cannot be used with cell_id/shape_name.",
       ),
   },
   createToolHandler(TOOL_set_cell_shape),
@@ -638,10 +651,11 @@ server.tool(
 const TOOL_search_shapes = "search-shapes";
 server.tool(
   TOOL_search_shapes,
-  "[Standalone only] Fuzzy search for shapes (700+ Azure icons). Returns names for use with add-cell-of-shape.",
+  "[Standalone only] Fuzzy search for shapes (700+ Azure icons). Returns names for use with add-cell-of-shape. Supports single or batch queries.",
   {
-    query: z.string().describe("Search query (e.g., 'virtual machine', 'storage', 'function')"),
-    limit: z.number().optional().default(10).describe("Maximum results to return"),
+    query: z.string().optional().describe("Single search query (e.g., 'virtual machine', 'storage', 'function')"),
+    queries: z.array(z.string()).optional().describe("Array of search queries for batch searching. Cannot be used with 'query'."),
+    limit: z.number().optional().default(10).describe("Maximum results to return per query"),
   },
   createToolHandler(TOOL_search_shapes),
 );

@@ -6,6 +6,12 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { fileURLToPath } from "url";
+import { dirname } from "path";
+
+// Define __dirname for ESM compatibility
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 export interface AzureIconShape {
   id: string;
@@ -77,11 +83,19 @@ function parseLibraryXml(xmlContent: string): AzureIconShape[] {
 
 /**
  * Extract style string from embedded SVG data URL in the XML
+ * The XML contains image attributes with base64-encoded SVG data
  */
 function extractStyle(xml: string): string | undefined {
-  const match = xml.match(/style="([^"]*image=data:image\/svg\+xml[^"]*?)"/);
+  // Look for image data in the style attribute
+  // Pattern: style="...image=data:image/svg+xml,[encoded]..."
+  const match = xml.match(/image=(data:image\/svg\+xml[^;")]*)/);
+
   if (match) {
-    return match[1];
+    const imageData = match[1];
+    // Build a style string that includes the image as a data URL
+    // with proper escaping for use in Draw.io
+    const style = `shape=image;verticalLabelPosition=bottom;verticalAlign=top;imageAspect=0;aspect=fixed;image=${imageData}`;
+    return style;
   }
   return undefined;
 }
@@ -143,17 +157,30 @@ function categorizeShapes(shapes: AzureIconShape[]): Map<string, AzureIconShape[
  * Load and parse the Azure icon library
  */
 export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
-  const defaultPath = path.join(__dirname, "..", "assets", "azure-public-service-icons", "000 all azure public service icons.xml");
-  const filePath = libraryPath || defaultPath;
+  // Try multiple possible paths to locate the icon library
+  const possiblePaths = [
+    // ESM __dirname based path (from src/)
+    path.join(__dirname, "..", "assets", "azure-public-service-icons", "000 all azure public service icons.xml"),
+    // From build/ directory
+    path.join(__dirname, "..", "..", "assets", "azure-public-service-icons", "000 all azure public service icons.xml"),
+    // From project root (cwd)
+    path.join(process.cwd(), "assets", "azure-public-service-icons", "000 all azure public service icons.xml"),
+  ];
 
-  if (!fs.existsSync(filePath)) {
-    console.warn(`Azure icon library not found at ${filePath}`);
+  const filePath = libraryPath || possiblePaths.find(p => fs.existsSync(p));
+
+  if (!filePath || !fs.existsSync(filePath)) {
+    console.warn(`Azure icon library not found. Tried paths:`, possiblePaths);
+    console.warn(`Current working directory: ${process.cwd()}`);
+    console.warn(`__dirname: ${__dirname}`);
     return {
       shapes: [],
       categories: new Map(),
       indexByTitle: new Map(),
     };
   }
+
+  console.log(`Loading Azure icon library from: ${filePath}`);
 
   try {
     const content = fs.readFileSync(filePath, "utf-8");
