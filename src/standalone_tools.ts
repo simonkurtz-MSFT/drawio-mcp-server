@@ -436,7 +436,7 @@ export const standaloneHandlers = {
       // First check if it's an Azure shape
       const azureShape = getAzureShapeByName(shapeName);
       if (azureShape) {
-        return azureShape.style;
+        return azureShape.style ?? null;
       }
 
       // Check basic shapes
