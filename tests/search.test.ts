@@ -1,4 +1,4 @@
-import { searchAzureIcons, getAzureIconLibrary } from "../src/azure_icon_library.js";
+import { searchAzureIcons, getAzureIconLibrary } from "../src/shapes/azure_icon_library.js";
 
 const testQueries = [
   "container",

@@ -68,14 +68,38 @@ export const BASIC_SHAPES: Record<string, BasicShape> = {
     defaultWidth: 120,
     defaultHeight: 80,
   },
+  parallelogram: {
+    name: "parallelogram",
+    style: "shape=parallelogram;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;",
+    defaultWidth: 200,
+    defaultHeight: 100,
+  },
+  hexagon: {
+    name: "hexagon",
+    style: "shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;",
+    defaultWidth: 120,
+    defaultHeight: 80,
+  },
+  cylinder: {
+    name: "cylinder",
+    style: "shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;",
+    defaultWidth: 80,
+    defaultHeight: 100,
+  },
+  triangle: {
+    name: "triangle",
+    style: "triangle;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;",
+    defaultWidth: 80,
+    defaultHeight: 100,
+  },
 };
 
 /**
  * Shape categories for discoverability via get-shapes-in-category.
  */
 export const BASIC_SHAPE_CATEGORIES: Record<string, string[]> = {
-  general: ["rectangle", "rounded", "ellipse", "diamond", "circle"],
-  flowchart: ["process", "decision", "start", "end"],
+  general: ["rectangle", "rounded", "ellipse", "diamond", "circle", "hexagon", "cylinder", "triangle"],
+  flowchart: ["process", "decision", "start", "end", "parallelogram"],
 };
 
 /**

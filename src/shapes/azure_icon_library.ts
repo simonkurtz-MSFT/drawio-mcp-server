@@ -180,10 +180,10 @@ function categorizeShapes(shapes: AzureIconShape[]): Map<string, AzureIconShape[
 export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
   // Try multiple possible paths to locate the icon library
   const possiblePaths = [
-    // ESM __dirname based path (from src/)
-    path.join(__dirname, "..", "assets", "azure-public-service-icons", "000 all azure public service icons.xml"),
-    // From build/ directory
+    // ESM __dirname based path (from src/shapes/)
     path.join(__dirname, "..", "..", "assets", "azure-public-service-icons", "000 all azure public service icons.xml"),
+    // From build/ directory
+    path.join(__dirname, "..", "..", "..", "assets", "azure-public-service-icons", "000 all azure public service icons.xml"),
     // From project root (cwd)
     path.join(process.cwd(), "assets", "azure-public-service-icons", "000 all azure public service icons.xml"),
   ];
@@ -296,7 +296,7 @@ export interface SearchResult extends AzureIconShape {
 export function searchAzureIcons(
   query: string,
   limit = 10,
-  options?: { caseSensitive?: boolean }
+  _options?: { caseSensitive?: boolean }
 ): SearchResult[] {
   const searcher = getSearchIndex();
   let results = searcher.search(query).slice(0, limit);

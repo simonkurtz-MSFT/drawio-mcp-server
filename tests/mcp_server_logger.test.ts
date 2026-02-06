@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { create_logger } from "../src/mcp_server_logger.js";
+import { create_logger } from "../src/loggers/mcp_server_logger.js";
 
 describe("create_logger", () => {
   let mock_send_logging_message: ReturnType<typeof vi.fn>;

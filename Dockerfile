@@ -44,4 +44,4 @@ USER nodejs
 EXPOSE 8080
 
 ENTRYPOINT ["node", "build/index.js"]
-CMD ["--standalone", "--transport", "http", "--http-port", "8080"]
+CMD ["--transport", "http", "--http-port", "8080"]

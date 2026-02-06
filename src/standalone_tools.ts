@@ -10,8 +10,68 @@ import {
   getShapesInCategory,
   getAzureShapeByName,
   searchAzureIcons,
-} from "./azure_icon_library.js";
-import { BASIC_SHAPES, BASIC_SHAPE_CATEGORIES, getBasicShape } from "./basic_shapes.js";
+} from "./shapes/azure_icon_library.js";
+import { BASIC_SHAPES, BASIC_SHAPE_CATEGORIES, getBasicShape } from "./shapes/basic_shapes.js";
+
+/**
+ * Resolved shape with unified dimensions and style, regardless of source (basic or Azure).
+ */
+interface ResolvedShape {
+  name: string;
+  style: string;
+  width: number;
+  height: number;
+  source: "basic" | "azure-exact" | "azure-fuzzy";
+}
+
+/**
+ * Resolve a shape name to its definition by checking:
+ * 1. Basic shapes (exact match, case-insensitive)
+ * 2. Azure icon library (exact match by title/ID)
+ * 3. Azure icon library (fuzzy search, top result)
+ *
+ * Returns undefined if no match is found.
+ */
+function resolveShape(shapeName: string): ResolvedShape | undefined {
+  // 1. Basic shapes first (prevents fuzzy search from hijacking names like 'start', 'end')
+  const basic = getBasicShape(shapeName);
+  if (basic) {
+    return {
+      name: basic.name,
+      style: basic.style,
+      width: basic.defaultWidth,
+      height: basic.defaultHeight,
+      source: "basic",
+    };
+  }
+
+  // 2. Azure exact match by title or ID
+  const azureExact = getAzureShapeByName(shapeName);
+  if (azureExact) {
+    return {
+      name: azureExact.title,
+      style: azureExact.style ?? "",
+      width: azureExact.width,
+      height: azureExact.height,
+      source: "azure-exact",
+    };
+  }
+
+  // 3. Azure fuzzy search as last resort
+  const searchResults = searchAzureIcons(shapeName, 1);
+  if (searchResults.length > 0) {
+    const shape = searchResults[0];
+    return {
+      name: shape.title,
+      style: shape.style ?? "",
+      width: shape.width,
+      height: shape.height,
+      source: "azure-fuzzy",
+    };
+  }
+
+  return undefined;
+}
 
 function successResult(data: any): CallToolResult {
   return {
@@ -194,12 +254,6 @@ export const standaloneHandlers = {
     return successResult({ message: "Diagram cleared" });
   },
 
-  "get-selected-cell": async (): Promise<CallToolResult> => {
-    return successResult({
-      info: "Standalone mode - no UI selection available. Use list-paged-model to see all cells.",
-    });
-  },
-
   "get-shape-categories": async (): Promise<CallToolResult> => {
     const basicCategories = [
       { id: "general", name: "General" },
@@ -257,31 +311,12 @@ export const standaloneHandlers = {
   "get-shape-by-name": async (args: {
     shape_name: string;
   }): Promise<CallToolResult> => {
-    // Check basic shapes first (prevents fuzzy search from hijacking names like 'start', 'end')
-    const basic = getBasicShape(args.shape_name);
-    if (basic) {
+    const resolved = resolveShape(args.shape_name);
+    if (resolved) {
       return successResult({
-        shape: { name: basic.name, style: basic.style, width: basic.defaultWidth, height: basic.defaultHeight },
+        shape: { name: resolved.name, style: resolved.style, width: resolved.width, height: resolved.height },
       });
     }
-
-    // Try Azure exact match
-    const azureShape = getAzureShapeByName(args.shape_name);
-    if (azureShape) {
-      return successResult({
-        shape: { name: azureShape.title, id: azureShape.id, width: azureShape.width, height: azureShape.height },
-      });
-    }
-
-    // Try Azure fuzzy search as last resort
-    const searchResults = searchAzureIcons(args.shape_name, 1);
-    if (searchResults.length > 0) {
-      const shape = searchResults[0];
-      return successResult({
-        shape: { name: shape.title, id: shape.id, width: shape.width, height: shape.height },
-      });
-    }
-
     return errorResult(`Shape '${args.shape_name}' not found. Use search-shapes to find available shapes.`);
   },
 
@@ -294,58 +329,27 @@ export const standaloneHandlers = {
     text?: string;
     style?: string;
   }): Promise<CallToolResult> => {
-    // Check basic shapes first (prevents fuzzy search from hijacking names like 'start', 'end')
-    const basic = getBasicShape(args.shape_name);
-    if (basic) {
-      const cell = diagram.addRectangle({
-        x: args.x,
-        y: args.y,
-        width: args.width ?? basic.defaultWidth,
-        height: args.height ?? basic.defaultHeight,
-        text: args.text,
-        style: args.style ?? basic.style,
-      });
-      return successResult({ success: true, cell });
+    const resolved = resolveShape(args.shape_name);
+    if (!resolved) {
+      return errorResult(`Unknown shape '${args.shape_name}'. Use search-shapes to find available shapes, or try basic names like 'rectangle', 'ellipse', 'decision'.`);
     }
 
-    // Try Azure exact match
-    const azureShape = getAzureShapeByName(args.shape_name);
-    if (azureShape) {
-      const cell = diagram.addRectangle({
-        x: args.x,
-        y: args.y,
-        width: args.width ?? azureShape.width,
-        height: args.height ?? azureShape.height,
-        text: args.text ?? azureShape.title,
-        style: args.style ?? azureShape.style,
-      });
-      return successResult({
-        success: true,
-        cell,
-        info: `Added Azure icon: ${azureShape.title}`,
-      });
-    }
+    const cell = diagram.addRectangle({
+      x: args.x,
+      y: args.y,
+      width: args.width ?? resolved.width,
+      height: args.height ?? resolved.height,
+      text: args.text ?? (resolved.source !== "basic" ? resolved.name : undefined),
+      style: args.style ?? resolved.style,
+    });
 
-    // Try Azure fuzzy search as last resort
-    const searchResults = searchAzureIcons(args.shape_name, 1);
-    if (searchResults.length > 0) {
-      const shape = searchResults[0];
-      const cell = diagram.addRectangle({
-        x: args.x,
-        y: args.y,
-        width: args.width ?? shape.width,
-        height: args.height ?? shape.height,
-        text: args.text ?? shape.title,
-        style: args.style ?? shape.style,
-      });
-      return successResult({
-        success: true,
-        cell,
-        info: `Added Azure icon (matched from search): ${shape.title}`,
-      });
-    }
+    const info = resolved.source === "azure-fuzzy"
+      ? `Added Azure icon (matched from search): ${resolved.name}`
+      : resolved.source === "azure-exact"
+        ? `Added Azure icon: ${resolved.name}`
+        : undefined;
 
-    return errorResult(`Unknown shape '${args.shape_name}'. Use search-shapes to find available shapes, or try basic names like 'rectangle', 'ellipse', 'decision'.`);
+    return successResult({ success: true, cell, ...(info && { info }) });
   },
 
   "batch-add-cells-of-shape": async (args: {
@@ -365,53 +369,30 @@ export const standaloneHandlers = {
     }
 
     const results = args.cells.map((item) => {
-      // Check basic shapes first (prevents fuzzy search from hijacking names like 'start', 'end')
-      const basic = getBasicShape(item.shape_name);
-      if (basic) {
-        const cell = diagram.addRectangle({
-          x: item.x,
-          y: item.y,
-          width: item.width ?? basic.defaultWidth,
-          height: item.height ?? basic.defaultHeight,
-          text: item.text,
-          style: item.style ?? basic.style,
-        });
-        return { success: true, cell, temp_id: item.temp_id };
-      }
-
-      // Try Azure exact match
-      let shape = getAzureShapeByName(item.shape_name);
-
-      // Try Azure fuzzy search as last resort
-      if (!shape) {
-        const searchResults = searchAzureIcons(item.shape_name, 1);
-        if (searchResults.length > 0) {
-          shape = searchResults[0];
-        }
-      }
-
-      if (shape) {
-        const cell = diagram.addRectangle({
-          x: item.x,
-          y: item.y,
-          width: item.width ?? shape.width,
-          height: item.height ?? shape.height,
-          text: item.text ?? shape.title,
-          style: item.style ?? shape.style,
-        });
+      const resolved = resolveShape(item.shape_name);
+      if (!resolved) {
         return {
-          success: true,
-          cell,
+          success: false,
           temp_id: item.temp_id,
-          info: `Added Azure icon: ${shape.title}`,
+          shape_name: item.shape_name,
+          error: `Unknown shape '${item.shape_name}'. Use search-shapes to find available shapes.`,
         };
       }
 
+      const cell = diagram.addRectangle({
+        x: item.x,
+        y: item.y,
+        width: item.width ?? resolved.width,
+        height: item.height ?? resolved.height,
+        text: item.text ?? (resolved.source !== "basic" ? resolved.name : undefined),
+        style: item.style ?? resolved.style,
+      });
+
       return {
-        success: false,
+        success: true,
+        cell,
         temp_id: item.temp_id,
-        shape_name: item.shape_name,
-        error: `Unknown shape '${item.shape_name}'. Use search-shapes to find available shapes.`,
+        ...(resolved.source !== "basic" && { info: `Added Azure icon: ${resolved.name}` }),
       };
     });
 
@@ -451,15 +432,8 @@ export const standaloneHandlers = {
 
     // Helper function to get style for a shape name
     const getShapeStyle = (shapeName: string): string | null => {
-      // Check basic shapes first (prevents fuzzy search from hijacking names like 'start', 'end')
-      const basic = getBasicShape(shapeName);
-      if (basic) return basic.style;
-
-      // Then check Azure shapes
-      const azureShape = getAzureShapeByName(shapeName);
-      if (azureShape) return azureShape.style ?? null;
-
-      return null;
+      const resolved = resolveShape(shapeName);
+      return resolved ? resolved.style : null;
     };
 
     // Handle single operation (backward compatible)
@@ -526,21 +500,6 @@ export const standaloneHandlers = {
 
     // Should never reach here
     return errorResult("Invalid set-cell-shape arguments");
-  },
-
-  "set-cell-data": async (args: {
-    cell_id: string;
-    key: string;
-    value: string | number | boolean;
-  }): Promise<CallToolResult> => {
-    // Standalone mode does not support custom data attributes on cells
-    return successResult({
-      acknowledged: true,
-      info: "Standalone mode does not persist custom data attributes to XML. Use edit-cell to modify cell properties (text, position, size, style) instead.",
-      cell_id: args.cell_id,
-      key: args.key,
-      value: args.value,
-    });
   },
 
   "batch-add-cells": async (args: {

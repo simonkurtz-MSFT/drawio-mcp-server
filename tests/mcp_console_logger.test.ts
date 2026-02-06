@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { create_logger } from "../src/mcp_console_logger.js";
+import { create_logger } from "../src/loggers/mcp_console_logger.js";
 
 describe("create_logger", () => {
   let originalConsoleError: typeof console.error;

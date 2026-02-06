@@ -1,9 +1,9 @@
-import { BASIC_SHAPES, BASIC_SHAPE_CATEGORIES, getBasicShape } from "../src/basic_shapes.js";
+import { BASIC_SHAPES, BASIC_SHAPE_CATEGORIES, getBasicShape } from "../src/shapes/basic_shapes.js";
 
 describe("basic_shapes", () => {
   describe("BASIC_SHAPES", () => {
-    it("should define all 9 basic shapes", () => {
-      const expected = ["rectangle", "rounded", "ellipse", "diamond", "circle", "process", "decision", "start", "end"];
+    it("should define all 13 basic shapes", () => {
+      const expected = ["rectangle", "rounded", "ellipse", "diamond", "circle", "process", "decision", "start", "end", "parallelogram", "hexagon", "cylinder", "triangle"];
       expect(Object.keys(BASIC_SHAPES).sort()).toEqual(expected.sort());
     });
 

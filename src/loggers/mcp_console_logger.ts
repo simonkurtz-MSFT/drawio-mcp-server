@@ -1,4 +1,7 @@
-import { Logger } from "./types.js";
+export type Logger = {
+  log: (level: string, message?: any, ...data: any[]) => void;
+  debug: (message?: any, ...data: any[]) => void;
+};
 
 export function create_logger(): Logger {
   return {

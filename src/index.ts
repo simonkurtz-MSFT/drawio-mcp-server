@@ -2,21 +2,21 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
+import { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
 import { serve } from "@hono/node-server";
 import { z } from "zod";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
-import { buildConfig, shouldShowHelp, type ServerConfig } from "./config.js";
+import { buildConfig, shouldShowHelp, VERSION, type ServerConfig } from "./config.js";
 import {
-  create_logger as create_console_logger } from "./mcp_console_logger.js";
+  create_logger as create_console_logger } from "./loggers/mcp_console_logger.js";
 import {
   create_logger as create_server_logger,
   validLogLevels,
-} from "./mcp_server_logger.js";
+} from "./loggers/mcp_server_logger.js";
 import { standaloneHandlers } from "./standalone_tools.js";
-
-const VERSION = "1.6.1";
 
 /**
  * Display help message and exit
@@ -28,13 +28,13 @@ Draw.io MCP Server (${VERSION}) - Standalone Mode
 Usage: drawio-mcp-server [options]
 
 Options:
-  --http-port <number>     HTTP server port for MCP clients (default: 3000)
+  --http-port <number>     HTTP server port for MCP clients (default: 8080)
   --transport <type>       Transport type: stdio, http, or stdio,http (default: stdio)
   --help, -h              Show this help message
 
 Examples:
   drawio-mcp-server                           # Use stdio transport
-  drawio-mcp-server --transport http          # Use HTTP transport on port 3000
+  drawio-mcp-server --transport http          # Use HTTP transport on port 8080
   drawio-mcp-server --http-port 4000          # Use HTTP on port 4000
   drawio-mcp-server --transport stdio,http    # Use both transports
   `);
@@ -73,29 +73,35 @@ const log =
     : create_console_logger();
 
 /**
- * Tool handler for standalone mode
+ * Creates a tool handler that logs session/request metadata and delegates to standaloneHandlers.
+ * Works for both tools WITH inputSchema (args + extra) and WITHOUT (extra only).
  */
-function createToolHandler(toolName: string) {
-  return async (args: any) => {
+function createToolHandler(toolName: string, hasArgs: true): (args: any, extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => Promise<any>;
+function createToolHandler(toolName: string, hasArgs?: false): (extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => Promise<any>;
+function createToolHandler(toolName: string, hasArgs = false) {
+  return async (...params: any[]) => {
+    const extra: RequestHandlerExtra<ServerRequest, ServerNotification> = hasArgs ? params[1] : params[0];
+    const args = hasArgs ? params[0] : {};
+    const sessionId = extra.sessionId ?? "no-session";
+    const requestId = extra.requestId;
+    log.debug(`[tool:${toolName}] called (session=${sessionId}, req=${requestId})`);
+
     const handler = standaloneHandlers[toolName as keyof typeof standaloneHandlers];
     if (handler) {
-      return handler(args);
+      const start = Date.now();
+      const result = await handler(args);
+      const duration = Date.now() - start;
+      const isError = result.isError ?? false;
+      log.debug(`[tool:${toolName}] ${isError ? "error" : "ok"} in ${duration}ms (session=${sessionId}, req=${requestId})`);
+      return result;
     }
+    log.debug(`[tool:${toolName}] not found (session=${sessionId}, req=${requestId})`);
     return {
       content: [{ type: "text" as const, text: JSON.stringify({ error: `Tool ${toolName} not available` }) }],
       isError: true,
     };
   };
 }
-
-const TOOL_get_selected_cell = "get-selected-cell";
-server.registerTool(
-  TOOL_get_selected_cell,
-  {
-    description: "[Deprecated] This tool is not available in standalone mode. Use list-paged-model instead.",
-  },
-  createToolHandler(TOOL_get_selected_cell),
-);
 
 const TOOL_add_rectangle = "add-rectangle";
 server.registerTool(
@@ -137,7 +143,7 @@ server.registerTool(
         .default("whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;"),
     },
   },
-  createToolHandler(TOOL_add_rectangle),
+  createToolHandler(TOOL_add_rectangle, true),
 );
 
 const TOOL_add_edge = "add-edge";
@@ -167,7 +173,7 @@ server.registerTool(
         ),
     },
   },
-  createToolHandler(TOOL_add_edge),
+  createToolHandler(TOOL_add_edge, true),
 );
 
 const TOOL_delete_cell_by_id = "delete-cell-by-id";
@@ -183,7 +189,7 @@ server.registerTool(
         ),
     },
   },
-  createToolHandler(TOOL_delete_cell_by_id),
+  createToolHandler(TOOL_delete_cell_by_id, true),
 );
 
 const TOOL_get_shape_categories = "get-shape-categories";
@@ -208,7 +214,7 @@ server.registerTool(
         ),
     },
   },
-  createToolHandler(TOOL_get_shapes_in_category),
+  createToolHandler(TOOL_get_shapes_in_category, true),
 );
 
 const TOOL_get_shape_by_name = "get-shape-by-name";
@@ -224,7 +230,7 @@ server.registerTool(
         ),
     },
   },
-  createToolHandler(TOOL_get_shape_by_name),
+  createToolHandler(TOOL_get_shape_by_name, true),
 );
 
 const TOOL_add_cell_of_shape = "add-cell-of-shape";
@@ -268,7 +274,7 @@ server.registerTool(
         ),
     },
   },
-  createToolHandler(TOOL_add_cell_of_shape),
+  createToolHandler(TOOL_add_cell_of_shape, true),
 );
 
 const TOOL_batch_add_cells_of_shape = "batch-add-cells-of-shape";
@@ -289,14 +295,14 @@ server.registerTool(
       })).describe("Array of shape cells to create"),
     },
   },
-  createToolHandler(TOOL_batch_add_cells_of_shape),
+  createToolHandler(TOOL_batch_add_cells_of_shape, true),
 );
 
 const TOOL_set_cell_shape = "set-cell-shape";
 server.registerTool(
   TOOL_set_cell_shape,
   {
-    description: "[Standalone+Bridge] Update a cell's visual style to match a library shape. Use search-shapes to find shape names. Prefer the 'cells' array for batch updates. Example: {cells: [{cell_id: 'cell-1', shape_name: 'Virtual Machines'}, {cell_id: 'cell-2', shape_name: 'Storage Accounts'}]}",
+    description: "Update a cell's visual style to match a library shape. Use search-shapes to find shape names. Prefer the 'cells' array for batch updates. Example: {cells: [{cell_id: 'cell-1', shape_name: 'Virtual Machines'}, {cell_id: 'cell-2', shape_name: 'Storage Accounts'}]}",
     inputSchema: {
       cell_id: z
         .string()
@@ -323,29 +329,7 @@ server.registerTool(
         ),
     },
   },
-  createToolHandler(TOOL_set_cell_shape),
-);
-
-const TOOL_set_cell_data = "set-cell-data";
-server.registerTool(
-  TOOL_set_cell_data,
-  {
-    description: "Set a custom data attribute on a cell. Note: Data is not persisted to XML.",
-    inputSchema: {
-      cell_id: z
-        .string()
-        .describe(
-          "Identifier (`id` attribute) of the cell to update with custom data.",
-        ),
-      key: z.string().describe("Name of the attribute to set on the cell."),
-      value: z
-        .union([z.string(), z.number(), z.boolean()])
-        .describe(
-          "Value to store for the attribute. Non-string values are stringified before storage.",
-        ),
-    },
-  },
-  createToolHandler(TOOL_set_cell_data),
+  createToolHandler(TOOL_set_cell_shape, true),
 );
 
 const TOOL_edit_cell = "edit-cell";
@@ -381,7 +365,7 @@ server.registerTool(
         ),
     },
   },
-  createToolHandler(TOOL_edit_cell),
+  createToolHandler(TOOL_edit_cell, true),
 );
 
 const TOOL_edit_edge = "edit-edge";
@@ -412,7 +396,7 @@ server.registerTool(
         ),
     },
   },
-  createToolHandler(TOOL_edit_edge),
+  createToolHandler(TOOL_edit_edge, true),
 );
 
 const Attributes: z.ZodType<any> = z.lazy(() =>
@@ -466,7 +450,7 @@ server.registerTool(
         .default({}),
     },
   },
-  createToolHandler(TOOL_list_paged_model),
+  createToolHandler(TOOL_list_paged_model, true),
 );
 
 const TOOL_list_layers = "list-layers";
@@ -487,7 +471,7 @@ server.registerTool(
       layer_id: z.string().describe("ID of the layer to set as active"),
     },
   },
-  createToolHandler(TOOL_set_active_layer),
+  createToolHandler(TOOL_set_active_layer, true),
 );
 
 const TOOL_move_cell_to_layer = "move-cell-to-layer";
@@ -502,7 +486,7 @@ server.registerTool(
         .describe("ID of the target layer where the cell will be moved"),
     },
   },
-  createToolHandler(TOOL_move_cell_to_layer),
+  createToolHandler(TOOL_move_cell_to_layer, true),
 );
 
 const TOOL_get_active_layer = "get-active-layer";
@@ -523,7 +507,7 @@ server.registerTool(
       name: z.string().describe("Name for the new layer"),
     },
   },
-  createToolHandler(TOOL_create_layer),
+  createToolHandler(TOOL_create_layer, true),
 );
 
 // Core tools
@@ -576,7 +560,7 @@ server.registerTool(
       dry_run: z.boolean().optional().describe("If true, validates the batch without persisting changes. Use to check for errors before committing."),
     },
   },
-  createToolHandler(TOOL_batch_add_cells),
+  createToolHandler(TOOL_batch_add_cells, true),
 );
 
 const TOOL_batch_edit_cells = "batch-edit-cells";
@@ -596,7 +580,7 @@ server.registerTool(
       })).describe("Array of cell updates. Example: [{cell_id: 'cell-1', x: 200, y: 150}, {cell_id: 'cell-2', text: 'Updated'}]"),
     },
   },
-  createToolHandler(TOOL_batch_edit_cells),
+  createToolHandler(TOOL_batch_edit_cells, true),
 );
 
 // Tier 1: Speed - Style presets
@@ -621,7 +605,7 @@ server.registerTool(
       limit: z.number().min(1).max(50).optional().default(10).describe("Maximum results to return per query (1-50)"),
     },
   },
-  createToolHandler(TOOL_search_shapes),
+  createToolHandler(TOOL_search_shapes, true),
 );
 
 async function start_stdio_transport() {
@@ -688,16 +672,17 @@ async function main() {
 
   const config: ServerConfig = configResult;
 
-  log.debug(`Draw.io MCP Server running in STANDALONE mode`);
+  log.debug(`Draw.io MCP Server v${VERSION} starting in STANDALONE mode`);
+  log.debug(`Transports: ${config.transports.join(", ")}`);
 
   if (config.transports.indexOf("stdio") > -1) {
     await start_stdio_transport();
   }
   if (config.transports.indexOf("http") > -1) {
-    start_streamable_http_transport(config.httpPort);
+    await start_streamable_http_transport(config.httpPort);
   }
 
-  log.debug(`Draw.io MCP Server running on ${config.transports}`);
+  log.debug(`Draw.io MCP Server v${VERSION} is ready`);
 }
 
 main().catch((error) => {

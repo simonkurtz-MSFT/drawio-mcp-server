@@ -52,6 +52,29 @@ export class DiagramModel {
     text?: string;
     style?: string;
   }): Cell {
+    const width = params.width ?? 200;
+    const height = params.height ?? 100;
+
+    if (width <= 0 || height <= 0) {
+      // Clamp to minimum 1 to avoid invisible cells
+      const clampedWidth = Math.max(1, width);
+      const clampedHeight = Math.max(1, height);
+      const id = this.generateId();
+      const cell: Cell = {
+        id,
+        type: "vertex",
+        value: params.text ?? "New Cell",
+        x: params.x ?? 100,
+        y: params.y ?? 100,
+        width: clampedWidth,
+        height: clampedHeight,
+        style: params.style ?? "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
+        parent: this.activeLayerId,
+      };
+      this.cells.set(id, cell);
+      return cell;
+    }
+
     const id = this.generateId();
     const cell: Cell = {
       id,
@@ -59,8 +82,8 @@ export class DiagramModel {
       value: params.text ?? "New Cell",
       x: params.x ?? 100,
       y: params.y ?? 100,
-      width: params.width ?? 200,
-      height: params.height ?? 100,
+      width,
+      height,
       style: params.style ?? "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
       parent: this.activeLayerId,
     };
@@ -111,6 +134,22 @@ export class DiagramModel {
   }
 
   deleteCell(cellId: string): boolean {
+    const cell = this.cells.get(cellId);
+    if (!cell) return false;
+
+    // If deleting a vertex, also remove any edges that reference it
+    if (cell.type === "vertex") {
+      const danglingEdgeIds: string[] = [];
+      for (const [id, c] of this.cells) {
+        if (c.type === "edge" && (c.sourceId === cellId || c.targetId === cellId)) {
+          danglingEdgeIds.push(id);
+        }
+      }
+      for (const id of danglingEdgeIds) {
+        this.cells.delete(id);
+      }
+    }
+
     return this.cells.delete(cellId);
   }
 

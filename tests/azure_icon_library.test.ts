@@ -5,8 +5,8 @@ import {
   getAzureCategories,
   getShapesInCategory,
   getAzureShapeByName,
-} from "../src/azure_icon_library.js";
-import type { AzureIconLibrary } from "../src/azure_icon_library.js";
+} from "../src/shapes/azure_icon_library.js";
+import type { AzureIconLibrary } from "../src/shapes/azure_icon_library.js";
 
 // Load library once for all tests
 let library: AzureIconLibrary;

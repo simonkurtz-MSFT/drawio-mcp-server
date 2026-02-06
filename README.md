@@ -1,159 +1,148 @@
+# Draw.io MCP Server
 
-# Draw.io MCP server
+A standalone [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for programmatic diagram generation using [Draw.io](https://www.drawio.com/) (Diagrams.net). This server generates Draw.io XML directly — no browser extension or Draw.io instance required.
 
-Let's do some Vibe Diagramming with the most wide-spread diagramming tool called Draw.io (Diagrams.net).
+[![Build project](https://github.com/lgazo/drawio-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/lgazo/drawio-mcp-server/actions/workflows/ci.yml)
 
-[![Discord channel](https://shields.io/static/v1?logo=discord&message=draw.io%20mcp&label=chat&color=5865F2&logoColor=white)](https://discord.gg/dM4PWdf42q) [![Build project](https://github.com/lgazo/drawio-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/lgazo/drawio-mcp-server/actions/workflows/ci.yml) [![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/5fc2b7fe-8ceb-4683-97bd-6d31e07b5888)
+## Features
 
-## Introduction
-
-The Draw.io MCP server is a standalone [Model Context Protocol (MCP)](https://modelcontextprotocol.io) implementation that brings powerful diagramming capabilities to AI agentic systems. This integration enables:
-
-- **Programmatic Diagram Generation**: Create, modify, and manage diagram content through MCP commands
-- **Intelligent Diagram Creation**: Generate diagrams programmatically with AI agents
-- **XML Export**: Export diagrams as standard Draw.io XML format for use in Draw.io applications
-- **Agentic System Development**: Build sophisticated AI workflows that incorporate visual modeling and diagram automation
-
-As an MCP-compliant tool, it follows the standard protocol for tool integration, making it compatible with any MCP client. This implementation is particularly valuable for creating AI systems that need to:
-- Generate architectural diagrams
-- Visualize complex relationships
-- Annotate technical documentation
-- Create flowcharts and process maps programmatically
-
-This server operates in **standalone mode**, generating Draw.io XML directly without requiring a browser extension or Draw.io instance.
+- **700+ Azure Architecture Icons** — Official Microsoft icons with embedded SVG data, organized into ~20 categories (Compute, Networking, Storage, Databases, AI + ML, Security, and more)
+- **Basic Shapes** — Rectangles, ellipses, diamonds, parallelograms, and other flowchart primitives
+- **Fuzzy Search** — Find shapes by partial name across the entire icon library
+- **Batch Operations** — Create and update multiple cells in a single call for better performance
+- **Layer Management** — Create, list, and organize cells across layers
+- **Style Presets** — Built-in Azure, flowchart, and general color presets
+- **Multiple Transports** — stdio (default) and streamable HTTP
+- **XML Export** — Standard Draw.io XML format compatible with Draw.io desktop and web
 
 ## Requirements
 
-To use the Draw.io MCP server, you'll need:
+- **Node.js** v24 or higher
+- **pnpm** (recommended) or npm
 
-### Core Components
-- **Node.js** (v20 or higher) - Runtime environment for the MCP server
+## Quick Start
 
-### MCP Ecosystem
-- **MCP Client** (e.g., [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector)) - For testing and debugging the integration
-- **LLM with Tools Support** - Any language model capable of handling MCP tool calls (e.g., GPT-4, Claude 3, etc.)
+### Using npx
 
-### Optional for Development
-- **pnpm** - Preferred package manager
-
-Note: The server generates Draw.io XML files that can be opened in Draw.io desktop app or web version.
-
-## Running Locally
-
-### Development Setup
-
-To run the Draw.io MCP server locally for development:
-
-1. **Clone the repository**:
-   ```sh
-   git clone https://github.com/lgazo/drawio-mcp-server.git
-   cd drawio-mcp-server
-   ```
-
-2. **Install dependencies**:
-   ```sh
-   pnpm install
-   # or
-   npm install
-   ```
-
-3. **Build the project**:
-   ```sh
-   pnpm run build
-   # or
-   npm run build
-   ```
-
-4. **Run the server**:
-   ```sh
-   node build/index.js
-   ```
-
-   With custom HTTP port:
-   ```sh
-   node build/index.js --transport http --http-port 4000
-   ```
-
-5. **Development mode** (auto-rebuild on changes):
-   ```sh
-   pnpm run dev
-   # or
-   npm run dev
-   ```
-
-### MCP Configuration for Local Development
-
-When running the server locally from your development directory, configure your MCP client to point to the built server file:
-
-#### Claude Desktop Configuration
-
-Update your `claude_desktop_config.json`:
-
-**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/drawio-mcp-server/build/index.js"
-      ]
-    }
-  }
-}
-```
-
-With custom HTTP port:
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "node",
-      "args": [
-        "/absolute/path/to/drawio-mcp-server/build/index.js",
-        "--transport",
-        "http",
-        "--http-port",
-        "4000"
-      ]
-    }
-  }
-}
-```
-
-#### MCP Inspector Configuration
-
-For testing with the MCP Inspector, create or update `inspector.json` in your project root:
-
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "node",
-      "args": [
-        "./build/index.js"
-      ]
-    }
-  }
-}
-```
-
-Then run the inspector:
 ```sh
-pnpm run inspect
-# or
-npx @modelcontextprotocol/inspector --config ./inspector.json --server drawio
+npx -y drawio-mcp-server
 ```
 
-**Note**: Replace `/absolute/path/to/drawio-mcp-server` with the actual absolute path to your cloned repository.
+### MCP Client Configuration
+
+Configure your MCP client (Claude Desktop, VS Code, Codex, etc.) to use the server:
+
+<details>
+<summary><b>Claude Desktop</b></summary>
+
+Edit `claude_desktop_config.json`:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "drawio-mcp-server"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>VS Code</b></summary>
+
+Add to your VS Code settings or `.vscode/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "drawio-mcp-server"]
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Zed</b></summary>
+
+In the Assistant settings, add a Context Server:
+
+```json
+{
+  "drawio": {
+    "command": "npx",
+    "args": ["-y", "drawio-mcp-server"],
+    "env": {}
+  }
+}
+```
+</details>
+
+<details>
+<summary><b>Codex</b></summary>
+
+Edit `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.drawio]
+command = "npx"
+args = ["-y", "drawio-mcp-server"]
+```
+
+For a locally running HTTP transport:
+
+```toml
+[mcp_servers.drawio]
+url = "http://localhost:8080/mcp"
+```
+</details>
+
+<details>
+<summary><b>oterm (Ollama)</b></summary>
+
+Edit `~/.local/share/oterm/config.json`:
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "drawio-mcp-server"]
+    }
+  }
+}
+```
+</details>
+
+> **Tip**: Replace `npx` / `"-y"` with `pnpm` / `"dlx"` if you prefer pnpm.
 
 ## Configuration
 
-### HTTP Transport Port
+### Transport Selection
 
-The server can expose a streamable HTTP MCP transport on port 8080 by default. Change this using the `--http-port` flag:
+The `--transport` flag controls which transports to start. Default is `stdio`.
+
+| Flag | Description |
+|---|---|
+| `--transport stdio` | stdio only (default) |
+| `--transport http` | HTTP only |
+| `--transport stdio,http` | Both transports |
+
+### HTTP Transport
+
+The HTTP transport exposes a streamable HTTP endpoint at `/mcp` (default port 8080).
+
+```sh
+npx -y drawio-mcp-server --transport http --http-port 4000
+```
+
+MCP client configuration for HTTP:
 
 ```json
 {
@@ -166,428 +155,78 @@ The server can expose a streamable HTTP MCP transport on port 8080 by default. C
 }
 ```
 
-### Transport Selection
-
-By default only the stdio transport starts. Limit or combine transports with the `--transport` flag:
-
-- `--transport stdio` – start only stdio (CLI-friendly, default)
-- `--transport http` – start only the HTTP transport (for remote clients)
-- `--transport stdio,http` – start both transports
-
-**Default behavior** (stdio only):
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["-y", "drawio-mcp-server"]
-    }
-  }
-}
-```
-
-### Running the streamable HTTP transport
-
-Use the streamable HTTP transport when you need to reach the MCP server over the network (for example from a remote agent runtime).
-
-1. Start the server with HTTP enabled (optionally alongside stdio):
-
-```sh
-npx -y drawio-mcp-server --transport http --http-port 8080
-# or both: npx -y drawio-mcp-server --transport stdio,http --http-port 8080
-```
-
-2. Verify the health endpoint:
-
-```sh
-curl http://localhost:8080/health
-# { "status": "ok" }
-```
-
-3. Point your MCP client to the `/mcp` endpoint (`http://localhost:8080/mcp` by default). CORS is enabled for all origins so you can call it from a browser-based client as well.
+Health check: `curl http://localhost:8080/health`
 
 ### Docker
 
-You can run the Draw.io MCP server in a Docker container for isolated, reproducible deployments.
-
-#### Building the Docker Image
-
 ```sh
+# Build
 docker build -t drawio-mcp-server .
-```
 
-#### Running the Container
-
-The container exposes one port for HTTP MCP clients:
-- **8080**: HTTP for MCP clients (Streamable HTTP at `/mcp`)
-
-```sh
+# Run (exposes HTTP on port 8080)
 docker run -d --name drawio-mcp-server -p 8080:8080 drawio-mcp-server
 ```
 
-Verify it's running:
+#### Docker Compose
 
 ```sh
-curl http://localhost:8080/health
-# { "status": "ok" }
-```
-
-#### Using Docker Compose
-
-For convenience, a `docker-compose.yml` file is provided with image versioning support.
-
-##### Environment Configuration
-
-Copy the example `.env` file to configure the registry and image version:
-
-```sh
-cp .env.example .env
-```
-
-Update `.env` with your container registry and version:
-
-```env
-REGISTRY=<your registry>
-IMAGE_VERSION=1.0.0
-```
-
-- **REGISTRY**: Docker registry URL (e.g., `docker.io/myusername`, `myregistry.azurecr.io`)
-- **IMAGE_VERSION**: Semantic version for image tags (e.g., `1.0.0`, `1.0.1`)
-
-##### Building and Pushing Images
-
-Build the image with version tags:
-
-```sh
-docker compose build
-```
-
-Push to your registry (after authenticating with `docker login`):
-
-```sh
-docker compose push
-```
-
-This creates and pushes versioned tags:
-- `<registry>/<repository>/drawio-mcp-server-standalone:latest`
-- `<registry>/<repository>/drawio-mcp-server-standalone:1.0.0`
-
-##### Running with Docker Compose
-
-Start the container:
-
-```sh
+cp .env.example .env   # Configure REGISTRY and IMAGE_VERSION
 docker compose up -d
 ```
 
-To stop the container:
+The `.env` file supports:
+- `REGISTRY` — Docker registry URL (e.g., `docker.io/myusername`)
+- `IMAGE_VERSION` — Semantic version for image tags (e.g., `1.0.0`)
 
-```sh
-docker compose down
-```
+## Tools
 
-To rebuild after code changes:
+> **Performance tip**: Prefer batch tools (`batch-add-cells`, `batch-add-cells-of-shape`, `batch-edit-cells`) and array parameters (`queries`, `cells`) over repeated single-call usage.
 
-```sh
-docker compose up -d --build
-```
+### Shape Discovery
 
-## Installation
+| Tool | Description |
+|---|---|
+| `search-shapes` | Fuzzy search for shapes including 700+ Azure icons. Supports `queries` array for batch lookup. |
+| `get-shape-categories` | List all shape categories (General, Flowchart, Azure categories). |
+| `get-shapes-in-category` | List all shapes in a category by `category_id`. |
+| `get-shape-by-name` | Get a specific shape by exact name. |
+| `get-style-presets` | Get built-in style presets (Azure colors, flowchart shapes, edge styles). |
 
-### Connecting with Claude Desktop
+### Diagram Modification
 
-1. Install [Claude Desktop](https://claude.ai/download)
-2. Open or create the configuration file:
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+| Tool | Description |
+|---|---|
+| `batch-add-cells` | Add multiple raw vertex and edge cells in one call. Supports `temp_id` for within-batch references. |
+| `batch-add-cells-of-shape` | Add multiple shape-library cells (Azure icons, basic shapes) in one call. |
+| `batch-edit-cells` | Update multiple vertex cells' properties in one call. |
+| `add-cell-of-shape` | Add a vertex cell using a shape from the library. |
+| `add-rectangle` | Add a rectangle vertex cell with custom position, size, text, and style. |
+| `add-edge` | Create an edge (connection) between two vertex cells. |
+| `set-cell-shape` | Apply a library shape's style to an existing cell. Supports `cells` array for batch updates. |
+| `edit-cell` | Update a vertex cell's properties (position, size, text, style). |
+| `edit-edge` | Update an edge's properties (text, source, target, style). |
+| `delete-cell-by-id` | Remove a cell (vertex or edge) by ID. |
 
-3. Update it to include this server:
+### Diagram Inspection
 
-<details>
-  <summary>Using <code>npm</code></summary>
+| Tool | Description |
+|---|---|
+| `list-paged-model` | Paginated view of all cells with filtering by type and attributes. |
+| `get-diagram-stats` | Statistics about cell counts, bounds, and layer distribution. |
+| `export-diagram` | Export the diagram as Draw.io XML. |
+| `clear-diagram` | Clear all cells and reset the diagram. |
 
-```json
-{
-   "mcpServers":{
-      "drawio":{
-         "command":"npx",
-         "args":[
-            "-y",
-            "drawio-mcp-server"
-         ]
-      }
-   }
-}
-```
-</details>
+### Layer Management
 
-<details>
-  <summary>Using <code>pnpm</code></summary>
+| Tool | Description |
+|---|---|
+| `list-layers` | List all layers with IDs, names, and visibility. |
+| `get-active-layer` | Get the currently active layer. |
+| `set-active-layer` | Set the active layer for new elements. |
+| `create-layer` | Create a new layer. |
+| `move-cell-to-layer` | Move a cell to a different layer. |
 
-```json
-{
-   "mcpServers":{
-      "drawio":{
-         "command":"pnpm",
-         "args":[
-            "dlx",
-            "drawio-mcp-server"
-         ]
-      }
-   }
-}
-```
-</details>
-
-To use a custom extension port (e.g., 8080), add `"--extension-port", "8080"` to the args array:
-
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["-y", "drawio-mcp-server", "--extension-port", "8080"]
-    }
-  }
-}
-```
-
-4. Restart Claude Desktop
-
-### Connecting with oterm
-
-This is an alternative MCP client in case you like terminal and you plan to connect to your own Ollama instance.
-
-The configuration is usually in: ~/.local/share/oterm/config.json
-
-<details>
-  <summary>Using <code>npm</code></summary>
-
-```json
-{
-	"mcpServers": {
-		"drawio": {
-			"command": "npx",
-			"args": [
-			  "-y",
-        "drawio-mcp-server"
-			]
-		}
-	}
-}
-```
-</details>
-
-<details>
-  <summary>Using <code>pnpm</code></summary>
-
-```json
-{
-	"mcpServers": {
-		"drawio": {
-			"command": "pnpm",
-			"args": [
-			  "dlx",
-        "drawio-mcp-server"
-			]
-		}
-	}
-}
-```
-</details>
-
-To use a custom extension port (e.g., 8080), add `"--extension-port", "8080"` to the args array:
-
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["-y", "drawio-mcp-server", "--extension-port", "8080"]
-    }
-  }
-}
-```
-
-### Connect with Zed
-
-1. Open the Zed Preview application.
-1. Click the Assistant (✨) icon in the bottom right corner.
-1. Click Settings in the top right panel of the Assistant.
-1. In the Context Servers section, click + Add Context Server.
-1. Configure with the following:
-
-<details>
-  <summary>Using <code>npm</code></summary>
-
-```json
-{
-  /// The name of your MCP server
-  "drawio": {
-	/// The path to the executable
-	"command": "npx",
-	/// The arguments to pass to the executable
-	"args": [
-	  "-y",
-	  "drawio-mcp-server"
-	],
-	/// The environment variables to set for the executable
-    "env": {}
-  }
-}
-```
-</details>
-
-<details>
-  <summary>Using <code>pnpm</code></summary>
-
-```json
-{
-  /// The name of your MCP server
-  "drawio": {
-	/// The path to the executable
-	"command": "pnpm",
-	/// The arguments to pass to the executable
-	"args": [
-	  "dlx",
-	  "drawio-mcp-server"
-	],
-	/// The environment variables to set for the executable
-    "env": {}
-  }
-}
-```
-</details>
-
-To use a custom extension port (e.g., 8080), add `"--extension-port", "8080"` to the args array:
-
-```json
-{
-  "drawio": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "drawio-mcp-server",
-      "--extension-port",
-      "8080"
-    ],
-    "env": {}
-  }
-}
-```
-
-### Connecting with Codex
-
-Edit the configuration usually located in: ~/.codex/config.toml
-
-<details>
-  <summary>Using <code>npm</code></summary>
-
-```toml
-[mcp_servers.drawio]
-command = "npx"
-args = [
-    "-y",
-    "drawio-mcp-server"
-]
-```
-</details>
-
-<details>
-  <summary>Using <code>pnpm</code></summary>
-
-```toml
-[mcp_servers.drawio]
-command = "pnpm"
-args = [
-    "dlx",
-    "drawio-mcp-server"
-]
-```
-</details>
-
-To use a custom extension port (e.g., 8080), add `"--extension-port", "8080"` to the args array:
-
-<details>
-  <summary>Using <code>npm</code></summary>
-
-```toml
-[mcp_servers.drawio]
-command = "npx"
-args = [
-    "-y",
-    "drawio-mcp-server",
-    "--extension-port",
-    "8080"
-]
-```
-</details>
-
-To connect to a locally running MCP with Streamable HTTP transport:
-
-```toml
-[mcp_servers.drawio]
-url = "http://localhost:8080/mcp"
-```
-
-
-### Browser Extension Setup
-
-In order to control the Draw.io diagram, you need to install dedicated Browser Extension.
-
-1. Open [Draw.io in your browser](https://app.diagrams.net/)
-2. Install the Draw.io MCP Browser Extension from a web store or [use other means](https://github.com/lgazo/drawio-mcp-extension)
-<p>
-  <a href="https://chrome.google.com/webstore/detail/drawio-mcp-extension/okdbbjbbccdhhfaefmcmekalmmdjjide">
-    <picture>
-      <source srcset="https://i.imgur.com/XBIE9pk.png" media="(prefers-color-scheme: dark)" />
-      <img height="58" src="https://i.imgur.com/oGxig2F.png" alt="Chrome Web Store" /></picture
-  ></a>
-  <a href="https://addons.mozilla.org/en-US/firefox/addon/drawio-mcp-extension/">
-    <picture>
-      <source srcset="https://i.imgur.com/ZluoP7T.png" media="(prefers-color-scheme: dark)" />
-      <img height="58" src="https://i.imgur.com/4PobQqE.png" alt="Firefox add-ons" /></picture
-  ></a>
-</p>
-3. Ensure it is connected, the Extension icon should indicate green signal overlay <img alt="Extension connected" src="https://raw.githubusercontent.com/lgazo/drawio-mcp-extension/refs/heads/main/public/icon/logo_connected_32.png" />
-
-**Important**: If you configured the MCP server to use a custom port (not 3333), you must configure the browser extension to use the same port. See the extension documentation for port configuration instructions.
-
-
-## Sponsoring
-
-If you enjoy the project or find it useful, consider supporting its continued development.
-
-
-lightning invoice:
-
-![lightning invoice](./lightning_qr.png)
-
-```
-lnbc1p5f8wvnpp5kk0qt60waplesw3sjxu7tcqwmdp6ysq570dc4ln52krd3u5nzq6sdp82pshjgr5dusyymrfde4jq4mpd3kx2apq24ek2uscqzpuxqr8pqsp5gvr72xcs883qt4hea6v3u7803stcwfnk5c9w0ykqr9a40qqwnpys9qxpqysgqfzlhm0cz5vqy7wqt7rwpmkacukrk59k89ltd5n642wzru2jn88tyd78gr4y3j6u64k2u4sd4qgavlsnccl986velrg3x0pe95sx7p4sqtatttp
-```
-
-lightning address:
-```
-ladislav@blink.sv
-```
-
-<div align="center">
-<a href="https://liberapay.com/ladislav/donate"><img alt="Donate using Liberapay" src="https://liberapay.com/assets/widgets/donate.svg"></a>
-</div>
-
-## Features
-
-The Draw.io MCP server provides the following tools for programmatic diagram interaction:
-
-Tip: For better performance, prefer batch tools and array parameters when creating or updating multiple items.
-
-### Best Practices (Performance)
-- Prefer `batch-add-cells` for creating many vertices and edges in one call.
-- Use `temp_id` inside `batch-add-cells` to wire edges without separate lookups.
-- Favor array parameters (`queries`, `cells`) over repeated single-call usage.
-
-Example (Standalone mode):
+### Batch Add Example
 
 ```json
 {
@@ -599,153 +238,67 @@ Example (Standalone mode):
 }
 ```
 
-### Diagram Inspection Tools
-- **`get-selected-cell`**
-  Retrieves the currently selected cell in Draw.io with all its attributes
-  *Returns*: JSON object containing cell properties (ID, geometry, style, value, etc.)
+## Azure Icon Library
 
-- **`search-shapes`** (Standalone only)
-  Fuzzy search for shapes (including 700+ Azure icons). Supports batch queries for efficiency.
-  *Parameters*:
-    - `query`: Single search query
-    - `queries`: Array of search queries (preferred for batch lookup)
-    - `limit`: Max results per query
+The server includes **700+ official Azure architecture icons** from [dwarfered/azure-architecture-icons-for-drawio](https://github.com/dwarfered/azure-architecture-icons-for-drawio), organized into categories:
 
-- **`get-shape-categories`**
-  Retrieves available shape categories from the diagram's library
-  *Returns*: Array of category objects with their IDs and names
+| Category | Examples |
+|---|---|
+| AI + Machine Learning | Cognitive Services, Azure OpenAI, Bot Service, Machine Learning |
+| Analytics | Synapse Analytics, Databricks, Data Factory, Event Hubs |
+| App Services | App Service, Static Web Apps |
+| Compute | Virtual Machines, Functions, AKS, Container Instances, Batch |
+| Containers | Container Registry, Container Instances, AKS |
+| Databases | SQL Database, Cosmos DB, Cache for Redis, PostgreSQL |
+| DevOps | Azure DevOps, Pipelines, Repos |
+| Identity | Azure AD, Key Vault |
+| Integration | Service Bus, Logic Apps, API Management, Event Grid |
+| Management + Governance | Monitor, Automation, Policy, Log Analytics |
+| Networking | Front Door, Load Balancer, Application Gateway, VPN Gateway, Firewall |
+| Security | Sentinel, Security Center |
+| Storage | Storage Account, Blob Storage, File Storage, Disk Storage |
 
-- **`get-shapes-in-category`**
-  Retrieves all shapes in a specified category from the diagram's library
-  *Parameters*:
-    - `category_id`: Identifier of the category to retrieve shapes from
-  *Returns*: Array of shape objects with their properties and styles
+Icons use **embedded base64 SVG data** — no external dependencies, works fully offline with correct Azure branding and colors.
 
-- **`get-shape-by-name`**
-  Retrieves a specific shape by its name from all available shapes
-  *Parameters*:
-    - `shape_name`: Name of the shape to retrieve
-  *Returns*: Shape object including its category and style information
+The library loads lazily on first access (singleton pattern). Search operations are <5ms after initial load.
 
-- **`list-paged-model`**
-  Retrieves a paginated view of all cells (vertices and edges) in the current Draw.io diagram. This tool provides access to the complete model data with essential fields only, sanitized to remove circular dependencies and excessive data. It allows to filter based on multiple criteria and attribute boolean logic. Useful for programmatic inspection of diagram structure without overwhelming response sizes.
+## Development
 
-### Diagram Modification Tools
-- **`add-rectangle`**
-  Creates a new rectangle shape on the active Draw.io page with customizable properties:
-  - Position (`x`, `y` coordinates)
-  - Dimensions (`width`, `height`)
-  - Text content
-  - Visual style (fill color, stroke, etc. using Draw.io style syntax)
-  *Tip*: Prefer `batch-add-cells` when adding multiple rectangles.
+### Setup
 
-- **`add-edge`**
-  Creates a connection between two cells (vertexes)
-  *Parameters*:
-    - `source_id`: ID of the source cell
-    - `target_id`: ID of the target cell
-    - `text`: Optional text label for the edge
-    - `style`: Optional style properties for the edge
-  *Tip*: Prefer `batch-add-cells` when adding multiple edges.
+```sh
+git clone https://github.com/lgazo/drawio-mcp-server.git
+cd drawio-mcp-server
+pnpm install
+pnpm build
+```
 
-- **`batch-add-cells`** (Standalone only)
-  Adds multiple cells in a single call. This is the most efficient way to create many shapes and edges.
-  *Parameters*:
-    - `cells`: Array of vertex/edge definitions (supports `temp_id` for within-batch references)
+### Common Commands
 
-- **`delete-cell-by-id`**
-  Removes a specified cell from the diagram
-  *Parameters*:
-    - `cell_id`: ID of the cell to delete
+| Command | Description |
+|---|---|
+| `pnpm build` | Clean build (removes `build/` first, then compiles) |
+| `pnpm dev` | Watch mode — auto-rebuild on changes |
+| `pnpm start` | Start with stdio transport |
+| `pnpm start:http` | Start with HTTP transport |
+| `pnpm start:both` | Start with both transports |
+| `pnpm test` | Run tests |
+| `pnpm test:watch` | Run tests in watch mode |
+| `pnpm test:coverage` | Run tests with coverage |
+| `pnpm lint` | Type-check without emitting |
 
-- **`add-cell-of-shape`**
-  Adds a new cell of a specific shape type from the diagram's library
-  *Parameters*:
-    - `shape_name`: Name of the shape to create
-    - `x`, `y`: Position coordinates (optional)
-    - `width`, `height`: Dimensions (optional)
-    - `text`: Optional text content
-    - `style`: Optional additional style properties
-  *Tip*: Prefer `batch-add-cells` when adding multiple shaped cells.
+### MCP Inspector
 
-- **`set-cell-shape`**
-  Applies a library shape's style to an existing cell
-  *Parameters*:
-    - `cell_id`: ID of the cell whose appearance should change
-    - `shape_name`: Name of the library shape whose style should be applied
-    - `cells`: Array of `{ cell_id, shape_name }` pairs for batch updates (preferred)
+Use the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector) to debug the server:
 
-- **`set-cell-data`**
-  Stores or updates a custom attribute on a cell
-  *Parameters*:
-    - `cell_id`: ID of the cell to update
-    - `key`: Attribute name to set
-    - `value`: Attribute value (stored as a string internally)
+```sh
+pnpm inspect
+```
 
-- **`edit-cell`**
-  Updates an existing vertex/shape cell in place by ID
-  *Parameters*:
-    - `cell_id`: ID of the cell whose properties should change (required)
-    - `text`, `x`, `y`, `width`, `height`, `style`: Optional fields to update on the cell; omitted properties stay as-is
+After rebuilding, **Restart** the Inspector. After changing tool definitions, **Clear** and **List** the tools again.
 
-- **`edit-edge`**
-  Updates an existing edge connection between cells by ID
-  *Parameters*:
-    - `cell_id`: ID of the edge cell to update (required)
-    - `text`: Optional edge label text
-    - `source_id`, `target_id`: Optional IDs of new source/target cells
-    - `style`: Optional replacement style string
+To enable Node.js debugging, set the Inspector arguments to `--inspect build/index.js` and connect via `chrome://inspect`.
 
-### Layer Management Tools
-- **`list-layers`**
-  Lists all available layers in the diagram with their IDs and names
-  *Returns*: Array of layer objects with properties (ID, name, visibility, locked status)
+## License
 
-- **`set-active-layer`**
-  Sets the active layer for creating new elements. All subsequent element creation will happen in this layer
-  *Parameters*:
-    - `layer_id`: ID of the layer to set as active
-  *Returns*: Information about the newly active layer
-
-- **`move-cell-to-layer`**
-  Moves a cell from its current layer to a target layer
-  *Parameters*:
-    - `cell_id`: ID of the cell to move
-    - `target_layer_id`: ID of the target layer where the cell will be moved
-  *Returns*: Confirmation of the move operation
-
-- **`get-active-layer`**
-  Gets the currently active layer information
-  *Returns*: Information about the current active layer (ID and name)
-
-- **`create-layer`**
-  Creates a new layer in the diagram
-  *Parameters*:
-    - `name`: Name for the new layer
-  *Returns*: Information about the newly created layer
-
-## Related Resources
-
-[Troubleshooting](./TROUBLESHOOTING.md)
-
-[Prompt examples](./docs/examples/index.md)
-
-[Contributing](./CONTRIBUTING.md)
-
-[Architecture](./ARCHITECTURE.md)
-
-[Development](./DEVELOPMENT.md)
-
-## Star History
-
-<a href="https://star-history.com/#lgazo/drawio-mcp-server&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lgazo/drawio-mcp-server&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=lgazo/drawio-mcp-server&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=lgazo/drawio-mcp-server&type=Date" />
- </picture>
-</a>
-
-## Assessments
-
-[![MSeeP.ai Security Assessment Badge](https://mseep.net/pr/lgazo-drawio-mcp-server-badge.png)](https://mseep.ai/app/lgazo-drawio-mcp-server)
+[MIT](LICENSE.md)

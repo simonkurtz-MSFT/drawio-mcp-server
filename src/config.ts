@@ -1,4 +1,10 @@
 /**
+ * Application version — single source of truth.
+ * Keep in sync with package.json version.
+ */
+export const VERSION = "1.6.1";
+
+/**
  * Application configuration interface
  */
 export interface ServerConfig {

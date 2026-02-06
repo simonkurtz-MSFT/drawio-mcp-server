@@ -10,7 +10,7 @@ services:
     image: ${REGISTRY}/drawio-mcp-server-standalone:${IMAGE_VERSION:-latest}
     ports:
       # HTTP for standalone MCP server
-      - "3000:3000"
+      - "8080:8080"
     restart: unless-stopped
 
     # Resource limits - SWAG starting point - should be evaluated for accuracy
