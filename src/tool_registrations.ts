@@ -39,7 +39,9 @@ export const TOOL_NAMES = {
   RENAME_PAGE: "rename-page",
   DELETE_PAGE: "delete-page",
   CREATE_GROUP: "create-group",
+  BATCH_CREATE_GROUPS: "batch-create-groups",
   ADD_CELL_TO_GROUP: "add-cell-to-group",
+  BATCH_ADD_CELLS_TO_GROUP: "batch-add-cells-to-group",
   REMOVE_CELL_FROM_GROUP: "remove-cell-from-group",
   LIST_GROUP_CHILDREN: "list-group-children",
   IMPORT_DIAGRAM: "import-diagram",
@@ -411,7 +413,7 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   server.registerTool(
     TOOL_NAMES.SEARCH_SHAPES,
     {
-      description: "Fuzzy search for shapes (700+ Azure icons). Returns names for use with add-cell-of-shape. Prefer 'queries' for batch lookups.",
+      description: "Fuzzy search for shapes (700+ Azure icons). Returns names for use with add-cell-of-shape / batch-add-cells-of-shape. IMPORTANT: Call once with 'queries' array for all shapes you need — do NOT call multiple times. Example: {queries: ['front door', 'container apps', 'app service', 'key vault']}",
       inputSchema: {
         query: z.string().optional().describe("Single search query (e.g., 'virtual machine', 'storage', 'function')"),
         queries: z.array(z.string()).optional().describe("Array of search queries for batch searching. Cannot be used with 'query'."),
@@ -597,7 +599,7 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   server.registerTool(
     TOOL_NAMES.CREATE_GROUP,
     {
-      description: "Create a group/container cell that can hold child cells. Used for visual grouping (e.g., VNet containing subnets, resource groups). Children are positioned relative to the group.",
+      description: "Create a single group/container cell. Prefer batch-create-groups when creating multiple groups (fewer calls, faster). Children are positioned relative to the group.",
       inputSchema: {
         x: z.number().optional().describe("X-axis position of the group").default(0),
         y: z.number().optional().describe("Y-axis position of the group").default(0),
@@ -611,15 +613,48 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   );
 
   server.registerTool(
+    TOOL_NAMES.BATCH_CREATE_GROUPS,
+    {
+      description: "Create multiple group/container cells in one call. Much faster than calling create-group individually. Use this when you need 2+ groups (e.g., VNets, resource groups, subnets). Each group gets a unique ID for use with batch-add-cells-to-group.",
+      inputSchema: {
+        groups: z.array(z.object({
+          x: z.number().optional().describe("X-axis position of the group").default(0),
+          y: z.number().optional().describe("Y-axis position of the group").default(0),
+          width: z.number().optional().describe("Width of the group container").default(400),
+          height: z.number().optional().describe("Height of the group container").default(300),
+          text: z.string().optional().describe("Label text for the group").default(""),
+          style: z.string().optional().describe("Draw.io style string for the group container"),
+          temp_id: z.string().optional().describe("Temporary ID for referencing this group later (e.g., in batch-add-cells-to-group)"),
+        })).describe("Array of groups to create. Example: [{text: 'VNet', width: 600, height: 400, temp_id: 'vnet'}, {text: 'Subnet', width: 300, height: 200, temp_id: 'subnet'}]"),
+      },
+    },
+    createToolHandler(TOOL_NAMES.BATCH_CREATE_GROUPS, true),
+  );
+
+  server.registerTool(
     TOOL_NAMES.ADD_CELL_TO_GROUP,
     {
-      description: "Add an existing cell into a group/container. The cell becomes a child of the group and is positioned relative to it.",
+      description: "Add a single cell into a group/container. Prefer batch-add-cells-to-group when assigning multiple cells to groups (fewer calls, faster).",
       inputSchema: {
         cell_id: z.string().describe("ID of the cell to add to the group"),
         group_id: z.string().describe("ID of the group/container cell"),
       },
     },
     createToolHandler(TOOL_NAMES.ADD_CELL_TO_GROUP, true),
+  );
+
+  server.registerTool(
+    TOOL_NAMES.BATCH_ADD_CELLS_TO_GROUP,
+    {
+      description: "Add multiple cells to groups in one call. Much faster than calling add-cell-to-group individually. Supports assigning cells to different groups in a single call. Example: {assignments: [{cell_id: 'cell-2', group_id: 'cell-1'}, {cell_id: 'cell-3', group_id: 'cell-1'}]}",
+      inputSchema: {
+        assignments: z.array(z.object({
+          cell_id: z.string().describe("ID of the cell to add to a group"),
+          group_id: z.string().describe("ID of the group/container cell"),
+        })).describe("Array of cell-to-group assignments. Each item assigns one cell to one group. Cells can be assigned to different groups. Example: [{cell_id: 'cell-5', group_id: 'cell-2'}, {cell_id: 'cell-6', group_id: 'cell-3'}]"),
+      },
+    },
+    createToolHandler(TOOL_NAMES.BATCH_ADD_CELLS_TO_GROUP, true),
   );
 
   server.registerTool(
@@ -660,7 +695,7 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   server.registerTool(
     TOOL_NAMES.EXPORT_DIAGRAM,
     {
-      description: "Export the diagram as Draw.io XML with diagram statistics. Save output to a .drawio file.",
+      description: "Export the diagram as Draw.io XML with diagram statistics. The diagram XML is cotnained in the response payload's `xml` property. Save the output to a .drawio file. If this is an update, use the same file; otherwise, create a new file with an appropriate name.",
     },
     createToolHandler(TOOL_NAMES.EXPORT_DIAGRAM),
   );

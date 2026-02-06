@@ -513,6 +513,26 @@ export class DiagramModel {
   }
 
   /**
+   * Batch create multiple groups in a single operation.
+   */
+  batchCreateGroups(
+    groups: Array<{
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      text?: string;
+      style?: string;
+      tempId?: string;
+    }>,
+  ): Array<{ success: boolean; cell: Cell; tempId?: string }> {
+    return groups.map((g) => {
+      const cell = this.createGroup(g);
+      return { success: true, cell, tempId: g.tempId };
+    });
+  }
+
+  /**
    * Add a cell to a group. The child cell's parent is set to the group.
    */
   addCellToGroup(cellId: string, groupId: string): Cell | { error: StructuredError } {
@@ -566,6 +586,21 @@ export class DiagramModel {
       group.children.push(cellId);
     }
     return cell;
+  }
+
+  /**
+   * Batch add multiple cells to groups in a single operation.
+   */
+  batchAddCellsToGroup(
+    assignments: Array<{ cellId: string; groupId: string }>,
+  ): Array<{ success: boolean; cell?: Cell; error?: StructuredError; cellId: string; groupId: string }> {
+    return assignments.map((a) => {
+      const result = this.addCellToGroup(a.cellId, a.groupId);
+      if ("error" in result) {
+        return { success: false, error: result.error, cellId: a.cellId, groupId: a.groupId };
+      }
+      return { success: true, cell: result, cellId: a.cellId, groupId: a.groupId };
+    });
   }
 
   /**

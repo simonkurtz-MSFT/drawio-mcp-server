@@ -357,6 +357,44 @@ export const handlers = {
     return successResult({ cell });
   },
 
+  "batch-create-groups": async (args: {
+    groups: Array<{
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      text?: string;
+      style?: string;
+      temp_id?: string;
+    }>;
+  }): Promise<CallToolResult> => {
+    if (!args.groups || args.groups.length === 0) {
+      return errorResult({
+        code: "INVALID_INPUT",
+        message: "Must provide a non-empty 'groups' array",
+      });
+    }
+
+    const items = args.groups.map((g) => ({
+      x: g.x,
+      y: g.y,
+      width: g.width,
+      height: g.height,
+      text: g.text,
+      style: g.style,
+      tempId: g.temp_id,
+    }));
+    const results = diagram.batchCreateGroups(items);
+    return successResult({
+      summary: { total: results.length, succeeded: results.length, failed: 0 },
+      results: results.map((r) => ({
+        success: r.success,
+        cell: r.cell,
+        temp_id: r.tempId,
+      })),
+    });
+  },
+
   "add-cell-to-group": async (args: {
     cell_id: string;
     group_id: string;
@@ -368,6 +406,38 @@ export const handlers = {
     return successResult({
       cell: result,
       group_children: diagram.getCell(args.group_id)!.children!.length,
+    });
+  },
+
+  "batch-add-cells-to-group": async (args: {
+    assignments: Array<{
+      cell_id: string;
+      group_id: string;
+    }>;
+  }): Promise<CallToolResult> => {
+    if (!args.assignments || args.assignments.length === 0) {
+      return errorResult({
+        code: "INVALID_INPUT",
+        message: "Must provide a non-empty 'assignments' array",
+      });
+    }
+
+    const items = args.assignments.map((a) => ({
+      cellId: a.cell_id,
+      groupId: a.group_id,
+    }));
+    const results = diagram.batchAddCellsToGroup(items);
+    const successCount = results.filter((r) => r.success).length;
+    const errorCount = results.filter((r) => !r.success).length;
+    return successResult({
+      summary: { total: results.length, succeeded: successCount, failed: errorCount },
+      results: results.map((r) => ({
+        success: r.success,
+        cell_id: r.cellId,
+        group_id: r.groupId,
+        ...(r.cell && { cell: r.cell }),
+        ...(r.error && { error: r.error }),
+      })),
     });
   },
 

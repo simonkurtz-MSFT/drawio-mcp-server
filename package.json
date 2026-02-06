@@ -20,8 +20,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "start": "pnpm run build && node ./build/index.js",
-    "start:http": "pnpm run build && node ./build/index.js --transport http",
-    "start:both": "pnpm run build && node ./build/index.js --transport stdio,http"
+    "start:http": "pnpm run build && node ./build/index.js --transport http --http-port 8080",
+    "start:both": "pnpm run build && node ./build/index.js --transport stdio,http --http-port 8080"
   },
   "engines": {
     "node": ">=24.0.0"

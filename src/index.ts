@@ -16,7 +16,7 @@ import {
 } from "./loggers/mcp_server_logger.js";
 import { handlers } from "./tools.js";
 import { createToolHandlerFactory } from "./tool_handler.js";
-import { setAzureIconLibraryPath, resetAzureIconLibrary } from "./shapes/azure_icon_library.js";
+import { initializeShapes, resetAzureIconLibrary } from "./shapes/azure_icon_library.js";
 import { diagram } from "./diagram_model.js";
 import { registerTools } from "./tool_registrations.js";
 import { readRelativeFile } from "./utils.js";
@@ -228,13 +228,14 @@ async function main() {
 
   const config: ServerConfig = configResult;
 
-  // Apply Azure icon library path from config if specified
-  if (config.azureIconLibraryPath) {
-    setAzureIconLibraryPath(config.azureIconLibraryPath);
-  }
-
   log.debug(`Draw.io MCP Server v${VERSION} starting`);
   log.debug(`Transports: ${config.transports.join(", ")}`);
+
+  // Eagerly load all shapes at startup so they are ready for the first tool call.
+  // initializeShapes also verifies the file is readable; getAzureIconLibrary()
+  // will re-attempt loading on subsequent calls if shapes are still empty.
+  const shapeLibrary = initializeShapes(config.azureIconLibraryPath);
+  log.debug(`Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} category/ies`);
 
   if (config.transports.indexOf("stdio") > -1) {
     await start_stdio_transport();

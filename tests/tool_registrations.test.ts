@@ -4,9 +4,9 @@ import { registerTools, TOOL_NAMES } from "../src/tool_registrations.js";
 import { createToolHandlerFactory, type ToolHandlerMap, type ToolLogger } from "../src/tool_handler.js";
 
 describe("TOOL_NAMES", () => {
-  it("should contain 36 tool name entries", () => {
+  it("should contain 38 tool name entries", () => {
     const entries = Object.entries(TOOL_NAMES);
-    expect(entries.length).toBe(36);
+    expect(entries.length).toBe(38);
   });
 
   it("should have all values in kebab-case format", () => {
@@ -52,14 +52,14 @@ describe("registerTools", () => {
     expect(() => registerTools(server, createToolHandler)).not.toThrow();
   });
 
-  it("should register exactly 36 tools", () => {
+  it("should register exactly 38 tools", () => {
     const server = new McpServer({ name: "test", version: "0.0.1" });
     const registerSpy = vi.spyOn(server, "registerTool");
     const createToolHandler = createMockToolHandler();
 
     registerTools(server, createToolHandler);
 
-    expect(registerSpy.mock.calls.length).toBe(36);
+    expect(registerSpy.mock.calls.length).toBe(38);
   });
 
   it("should register tools with names matching TOOL_NAMES values", () => {

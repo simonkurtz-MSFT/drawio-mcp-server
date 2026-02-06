@@ -10,6 +10,7 @@ import {
   getAzureShapeByName,
   resetAzureIconLibrary,
   setAzureIconLibraryPath,
+  initializeShapes,
 } from "../src/shapes/azure_icon_library.js";
 import type { AzureIconLibrary } from "../src/shapes/azure_icon_library.js";
 
@@ -357,6 +358,83 @@ describe("resetAzureIconLibrary", () => {
   test("search still works after reset", () => {
     resetAzureIconLibrary();
     // The search index must be rebuilt on next query
+    const results = searchAzureIcons("virtual machine", 5);
+    expect(results.length).toBeGreaterThan(0);
+  });
+});
+
+describe("initializeShapes", () => {
+  afterEach(() => {
+    // Restore the default path so other tests are unaffected
+    setAzureIconLibraryPath(path.resolve("assets/azure-public-service-icons/000 all azure public service icons.xml"));
+    resetAzureIconLibrary();
+  });
+
+  test("loads library eagerly and returns it", () => {
+    resetAzureIconLibrary();
+    const lib = initializeShapes();
+    expect(lib.shapes.length).toBeGreaterThan(0);
+    expect(lib.categories.size).toBeGreaterThan(0);
+  });
+
+  test("accepts a custom library path", () => {
+    const validPath = path.resolve("assets/azure-public-service-icons/000 all azure public service icons.xml");
+    const lib = initializeShapes(validPath);
+    expect(lib.shapes.length).toBeGreaterThan(0);
+  });
+
+  test("returns empty library for non-existent path", () => {
+    const lib = initializeShapes("/non/existent/path.xml");
+    expect(lib.shapes).toHaveLength(0);
+    expect(lib.categories.size).toBe(0);
+  });
+
+  test("subsequent getAzureIconLibrary returns the same pre-loaded instance", () => {
+    const lib1 = initializeShapes();
+    const lib2 = getAzureIconLibrary();
+    expect(lib2).toBe(lib1);
+  });
+
+  test("replaces a previously cached library", () => {
+    const lib1 = initializeShapes();
+    const lib2 = initializeShapes();
+    expect(lib2).not.toBe(lib1);
+    expect(lib2.shapes.length).toBe(lib1.shapes.length);
+  });
+});
+
+describe("getAzureIconLibrary automatic reload", () => {
+  afterEach(() => {
+    // Restore the default path so other tests are unaffected
+    setAzureIconLibraryPath(path.resolve("assets/azure-public-service-icons/000 all azure public service icons.xml"));
+    resetAzureIconLibrary();
+  });
+
+  test("reloads when cached library has zero shapes after path change", () => {
+    // Load from a non-existent path → cached library is empty
+    initializeShapes("/non/existent/path.xml");
+    const emptyLib = getAzureIconLibrary();
+    expect(emptyLib.shapes).toHaveLength(0);
+
+    // Change path to a valid location
+    const validPath = path.resolve("assets/azure-public-service-icons/000 all azure public service icons.xml");
+    setAzureIconLibraryPath(validPath);
+
+    // getAzureIconLibrary should detect empty shapes and reload from the new path
+    const reloadedLib = getAzureIconLibrary();
+    expect(reloadedLib.shapes.length).toBeGreaterThan(0);
+  });
+
+  test("search works after automatic reload from empty cache", () => {
+    // Start with an empty library
+    initializeShapes("/non/existent/path.xml");
+    expect(getAzureIconLibrary().shapes).toHaveLength(0);
+
+    // Fix the path
+    const validPath = path.resolve("assets/azure-public-service-icons/000 all azure public service icons.xml");
+    setAzureIconLibraryPath(validPath);
+
+    // Searching should trigger a reload and return results
     const results = searchAzureIcons("virtual machine", 5);
     expect(results.length).toBeGreaterThan(0);
   });

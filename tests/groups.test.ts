@@ -271,4 +271,152 @@ describe("DiagramModel groups", () => {
       expect(stats.vertices).toBe(3); // Groups are also vertices
     });
   });
+
+  describe("batchCreateGroups", () => {
+    it("should create multiple groups in one call", () => {
+      const results = model.batchCreateGroups([
+        { text: "VNet", width: 600, height: 400, tempId: "vnet" },
+        { text: "Subnet A", x: 50, y: 50, width: 250, height: 200, tempId: "subnet-a" },
+      ]);
+      expect(results).toHaveLength(2);
+      expect(results[0].success).toBe(true);
+      expect(results[0].cell.isGroup).toBe(true);
+      expect(results[0].cell.value).toBe("VNet");
+      expect(results[0].tempId).toBe("vnet");
+      expect(results[1].cell.value).toBe("Subnet A");
+      expect(results[1].tempId).toBe("subnet-a");
+    });
+
+    it("should create groups with defaults when no params given", () => {
+      const results = model.batchCreateGroups([{}]);
+      expect(results).toHaveLength(1);
+      expect(results[0].cell.width).toBe(400);
+      expect(results[0].cell.height).toBe(300);
+    });
+
+    it("should create groups that appear in listCells", () => {
+      model.batchCreateGroups([{ text: "G1" }, { text: "G2" }]);
+      const cells = model.listCells();
+      expect(cells).toHaveLength(2);
+      expect(cells.every(c => c.isGroup)).toBe(true);
+    });
+  });
+
+  describe("batchAddCellsToGroup", () => {
+    it("should assign multiple cells to groups in one call", () => {
+      const g1 = model.createGroup({ text: "Group 1" });
+      const g2 = model.createGroup({ text: "Group 2" });
+      const c1 = model.addRectangle({ text: "A" });
+      const c2 = model.addRectangle({ text: "B" });
+      const c3 = model.addRectangle({ text: "C" });
+
+      const results = model.batchAddCellsToGroup([
+        { cellId: c1.id, groupId: g1.id },
+        { cellId: c2.id, groupId: g1.id },
+        { cellId: c3.id, groupId: g2.id },
+      ]);
+      expect(results).toHaveLength(3);
+      expect(results.every(r => r.success)).toBe(true);
+      expect(results[0].cell!.parent).toBe(g1.id);
+      expect(results[2].cell!.parent).toBe(g2.id);
+      expect(g1.children).toContain(c1.id);
+      expect(g1.children).toContain(c2.id);
+      expect(g2.children).toContain(c3.id);
+    });
+
+    it("should handle mixed success and failure", () => {
+      const g = model.createGroup({ text: "G" });
+      const c = model.addRectangle({ text: "A" });
+
+      const results = model.batchAddCellsToGroup([
+        { cellId: c.id, groupId: g.id },
+        { cellId: "nonexistent", groupId: g.id },
+      ]);
+      expect(results).toHaveLength(2);
+      expect(results[0].success).toBe(true);
+      expect(results[1].success).toBe(false);
+      expect(results[1].error!.code).toBe("CELL_NOT_FOUND");
+    });
+
+    it("should report cellId and groupId in results", () => {
+      const g = model.createGroup({ text: "G" });
+      const c = model.addRectangle({ text: "A" });
+
+      const results = model.batchAddCellsToGroup([
+        { cellId: c.id, groupId: g.id },
+      ]);
+      expect(results[0].cellId).toBe(c.id);
+      expect(results[0].groupId).toBe(g.id);
+    });
+  });
+
+  describe("batchCreateGroups", () => {
+    it("should create multiple groups", () => {
+      const results = model.batchCreateGroups([
+        { text: "G1", x: 0, y: 0 },
+        { text: "G2", x: 500, y: 0 },
+      ]);
+      expect(results).toHaveLength(2);
+      expect(results[0].success).toBe(true);
+      expect(results[0].cell.isGroup).toBe(true);
+      expect(results[0].cell.value).toBe("G1");
+      expect(results[1].cell.value).toBe("G2");
+    });
+
+    it("should preserve tempId in results", () => {
+      const results = model.batchCreateGroups([
+        { text: "G1", tempId: "tmp-1" },
+        { text: "G2", tempId: "tmp-2" },
+      ]);
+      expect(results[0].tempId).toBe("tmp-1");
+      expect(results[1].tempId).toBe("tmp-2");
+    });
+
+    it("should handle single group", () => {
+      const results = model.batchCreateGroups([{ text: "Solo" }]);
+      expect(results).toHaveLength(1);
+      expect(results[0].cell.value).toBe("Solo");
+    });
+  });
+
+  describe("batchAddCellsToGroup", () => {
+    it("should add multiple cells to a group", () => {
+      const group = model.createGroup({ text: "G" });
+      const cell1 = model.addRectangle({ text: "A" });
+      const cell2 = model.addRectangle({ text: "B" });
+
+      const results = model.batchAddCellsToGroup([
+        { cellId: cell1.id, groupId: group.id },
+        { cellId: cell2.id, groupId: group.id },
+      ]);
+      expect(results).toHaveLength(2);
+      expect(results[0].success).toBe(true);
+      expect(results[0].cell!.parent).toBe(group.id);
+      expect(results[1].success).toBe(true);
+    });
+
+    it("should report errors for invalid assignments", () => {
+      const group = model.createGroup({ text: "G" });
+
+      const results = model.batchAddCellsToGroup([
+        { cellId: "nonexistent", groupId: group.id },
+      ]);
+      expect(results[0].success).toBe(false);
+      expect(results[0].error!.code).toBe("CELL_NOT_FOUND");
+      expect(results[0].cellId).toBe("nonexistent");
+      expect(results[0].groupId).toBe(group.id);
+    });
+
+    it("should handle mixed success and failure", () => {
+      const group = model.createGroup({ text: "G" });
+      const cell1 = model.addRectangle({ text: "A" });
+
+      const results = model.batchAddCellsToGroup([
+        { cellId: cell1.id, groupId: group.id },
+        { cellId: "nonexistent", groupId: group.id },
+      ]);
+      expect(results[0].success).toBe(true);
+      expect(results[1].success).toBe(false);
+    });
+  });
 });

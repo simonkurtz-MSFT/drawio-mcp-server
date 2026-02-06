@@ -256,9 +256,29 @@ export function setAzureIconLibraryPath(libraryPath: string): void {
 }
 
 export function getAzureIconLibrary(): AzureIconLibrary {
-  if (!cachedLibrary) {
+  if (!cachedLibrary || cachedLibrary.shapes.length === 0) {
     cachedLibrary = loadAzureIconLibrary(configuredLibraryPath);
+    cachedSearchIndex = null;
   }
+  return cachedLibrary;
+}
+
+/**
+ * Initialize the Azure icon library by loading shapes eagerly.
+ * Call this at server startup to ensure shapes are available
+ * before the first tool call.
+ *
+ * @param libraryPath Optional custom path to the icon library file.
+ *                    When provided it replaces any previously configured path.
+ * @returns The loaded library (may have zero shapes if the file is not found).
+ */
+export function initializeShapes(libraryPath?: string): AzureIconLibrary {
+  if (libraryPath !== undefined) {
+    configuredLibraryPath = libraryPath;
+  }
+  cachedLibrary = null;
+  cachedSearchIndex = null;
+  cachedLibrary = loadAzureIconLibrary(configuredLibraryPath);
   return cachedLibrary;
 }
 

@@ -149,6 +149,47 @@ describe("group tool handlers", () => {
     });
   });
 
+  describe("batch-create-groups", () => {
+    it("should create multiple groups in one call", async () => {
+      const result = await handlers["batch-create-groups"]({
+        groups: [
+          { text: "VNet", width: 600, height: 400, temp_id: "vnet" },
+          { text: "Subnet A", x: 50, y: 50, width: 250, height: 200, temp_id: "subnet-a" },
+          { text: "Subnet B", x: 320, y: 50, width: 250, height: 200, temp_id: "subnet-b" },
+        ],
+      });
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      expect(parsed.data.summary.total).toBe(3);
+      expect(parsed.data.summary.succeeded).toBe(3);
+      expect(parsed.data.summary.failed).toBe(0);
+      expect(parsed.data.results).toHaveLength(3);
+      expect(parsed.data.results[0].cell.isGroup).toBe(true);
+      expect(parsed.data.results[0].cell.value).toBe("VNet");
+      expect(parsed.data.results[0].temp_id).toBe("vnet");
+      expect(parsed.data.results[1].temp_id).toBe("subnet-a");
+    });
+
+    it("should return error for empty groups array", async () => {
+      const result = await handlers["batch-create-groups"]({
+        groups: [],
+      });
+      expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("INVALID_INPUT");
+    });
+
+    it("should create groups with default properties", async () => {
+      const result = await handlers["batch-create-groups"]({
+        groups: [{}],
+      });
+      const parsed = parseResult(result);
+      expect(parsed.data.summary.succeeded).toBe(1);
+      expect(parsed.data.results[0].cell.width).toBe(400);
+      expect(parsed.data.results[0].cell.height).toBe(300);
+    });
+  });
+
   describe("add-cell-to-group", () => {
     it("should add a cell to a group", async () => {
       const groupResult = await handlers["create-group"]({ text: "VNet" });
@@ -199,6 +240,80 @@ describe("group tool handlers", () => {
         group_id: cell2Id,
       });
       expect(result.isError).toBe(true);
+    });
+  });
+
+  describe("batch-add-cells-to-group", () => {
+    it("should assign multiple cells to groups in one call", async () => {
+      const g1 = await handlers["create-group"]({ text: "Group 1" });
+      const g1Id = parseResult(g1).data.cell.id;
+      const g2 = await handlers["create-group"]({ text: "Group 2" });
+      const g2Id = parseResult(g2).data.cell.id;
+
+      const c1 = await handlers["add-rectangle"]({ text: "A" });
+      const c1Id = parseResult(c1).data.cell.id;
+      const c2 = await handlers["add-rectangle"]({ text: "B" });
+      const c2Id = parseResult(c2).data.cell.id;
+      const c3 = await handlers["add-rectangle"]({ text: "C" });
+      const c3Id = parseResult(c3).data.cell.id;
+
+      const result = await handlers["batch-add-cells-to-group"]({
+        assignments: [
+          { cell_id: c1Id, group_id: g1Id },
+          { cell_id: c2Id, group_id: g1Id },
+          { cell_id: c3Id, group_id: g2Id },
+        ],
+      });
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      expect(parsed.data.summary.total).toBe(3);
+      expect(parsed.data.summary.succeeded).toBe(3);
+      expect(parsed.data.summary.failed).toBe(0);
+      expect(parsed.data.results[0].cell.parent).toBe(g1Id);
+      expect(parsed.data.results[2].cell.parent).toBe(g2Id);
+    });
+
+    it("should return error for empty assignments array", async () => {
+      const result = await handlers["batch-add-cells-to-group"]({
+        assignments: [],
+      });
+      expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("INVALID_INPUT");
+    });
+
+    it("should handle mixed success and failure", async () => {
+      const g = await handlers["create-group"]({ text: "Group" });
+      const gId = parseResult(g).data.cell.id;
+      const c = await handlers["add-rectangle"]({ text: "A" });
+      const cId = parseResult(c).data.cell.id;
+
+      const result = await handlers["batch-add-cells-to-group"]({
+        assignments: [
+          { cell_id: cId, group_id: gId },
+          { cell_id: "nonexistent", group_id: gId },
+        ],
+      });
+      const parsed = parseResult(result);
+      expect(parsed.data.summary.succeeded).toBe(1);
+      expect(parsed.data.summary.failed).toBe(1);
+      expect(parsed.data.results[0].success).toBe(true);
+      expect(parsed.data.results[1].success).toBe(false);
+      expect(parsed.data.results[1].error.code).toBe("CELL_NOT_FOUND");
+    });
+
+    it("should report cell_id and group_id in results", async () => {
+      const g = await handlers["create-group"]({ text: "G" });
+      const gId = parseResult(g).data.cell.id;
+      const c = await handlers["add-rectangle"]({ text: "A" });
+      const cId = parseResult(c).data.cell.id;
+
+      const result = await handlers["batch-add-cells-to-group"]({
+        assignments: [{ cell_id: cId, group_id: gId }],
+      });
+      const parsed = parseResult(result);
+      expect(parsed.data.results[0].cell_id).toBe(cId);
+      expect(parsed.data.results[0].group_id).toBe(gId);
     });
   });
 
@@ -351,5 +466,96 @@ describe("import-diagram handler", () => {
     const statsResult = await handlers["get-diagram-stats"]();
     const stats = parseResult(statsResult).data.stats;
     expect(stats.total_cells).toBe(2);
+  });
+});
+
+describe("batch-create-groups handler", () => {
+  it("should create multiple groups in one call", async () => {
+    const result = await handlers["batch-create-groups"]({
+      groups: [
+        { x: 0, y: 0, width: 400, height: 300, text: "VNet A", temp_id: "vnet-a" },
+        { x: 500, y: 0, width: 400, height: 300, text: "VNet B", temp_id: "vnet-b" },
+      ],
+    });
+    const parsed = parseResult(result);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data.summary.total).toBe(2);
+    expect(parsed.data.summary.succeeded).toBe(2);
+    expect(parsed.data.summary.failed).toBe(0);
+    expect(parsed.data.results[0].cell.isGroup).toBe(true);
+    expect(parsed.data.results[0].cell.value).toBe("VNet A");
+    expect(parsed.data.results[0].temp_id).toBe("vnet-a");
+    expect(parsed.data.results[1].cell.value).toBe("VNet B");
+    expect(parsed.data.results[1].temp_id).toBe("vnet-b");
+  });
+
+  it("should return error for empty groups array", async () => {
+    const result = await handlers["batch-create-groups"]({ groups: [] });
+    expect(result.isError).toBe(true);
+    const parsed = parseResult(result);
+    expect(parsed.error.code).toBe("INVALID_INPUT");
+  });
+
+  it("should create groups with default properties", async () => {
+    const result = await handlers["batch-create-groups"]({
+      groups: [{}],
+    });
+    const parsed = parseResult(result);
+    expect(parsed.data.summary.succeeded).toBe(1);
+    expect(parsed.data.results[0].cell.isGroup).toBe(true);
+    expect(parsed.data.results[0].cell.width).toBe(400);
+    expect(parsed.data.results[0].cell.height).toBe(300);
+  });
+});
+
+describe("batch-add-cells-to-group handler", () => {
+  it("should assign multiple cells to groups in one call", async () => {
+    const groupResult = await handlers["create-group"]({ text: "G" });
+    const groupId = parseResult(groupResult).data.cell.id;
+
+    const c1 = await handlers["add-rectangle"]({ text: "A" });
+    const c2 = await handlers["add-rectangle"]({ text: "B" });
+    const c1Id = parseResult(c1).data.cell.id;
+    const c2Id = parseResult(c2).data.cell.id;
+
+    const result = await handlers["batch-add-cells-to-group"]({
+      assignments: [
+        { cell_id: c1Id, group_id: groupId },
+        { cell_id: c2Id, group_id: groupId },
+      ],
+    });
+    const parsed = parseResult(result);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data.summary.total).toBe(2);
+    expect(parsed.data.summary.succeeded).toBe(2);
+    expect(parsed.data.summary.failed).toBe(0);
+    expect(parsed.data.results[0].success).toBe(true);
+    expect(parsed.data.results[0].cell.parent).toBe(groupId);
+  });
+
+  it("should return error for empty assignments array", async () => {
+    const result = await handlers["batch-add-cells-to-group"]({ assignments: [] });
+    expect(result.isError).toBe(true);
+    const parsed = parseResult(result);
+    expect(parsed.error.code).toBe("INVALID_INPUT");
+  });
+
+  it("should report mixed success and failure", async () => {
+    const groupResult = await handlers["create-group"]({ text: "G" });
+    const groupId = parseResult(groupResult).data.cell.id;
+    const c1 = await handlers["add-rectangle"]({ text: "A" });
+    const c1Id = parseResult(c1).data.cell.id;
+
+    const result = await handlers["batch-add-cells-to-group"]({
+      assignments: [
+        { cell_id: c1Id, group_id: groupId },
+        { cell_id: "nonexistent", group_id: groupId },
+      ],
+    });
+    const parsed = parseResult(result);
+    expect(parsed.data.summary.succeeded).toBe(1);
+    expect(parsed.data.summary.failed).toBe(1);
+    expect(parsed.data.results[1].success).toBe(false);
+    expect(parsed.data.results[1].error.code).toBe("CELL_NOT_FOUND");
   });
 });
