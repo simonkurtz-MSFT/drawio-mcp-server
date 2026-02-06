@@ -89,36 +89,6 @@ function errorResult(error: StructuredError): CallToolResult {
 }
 
 export const handlers = {
-  "add-rectangle": async (args: {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    text?: string;
-    style?: string;
-  }): Promise<CallToolResult> => {
-    const cell = diagram.addRectangle(args);
-    return successResult({ cell });
-  },
-
-  "add-edge": async (args: {
-    source_id: string;
-    target_id: string;
-    text?: string;
-    style?: string;
-  }): Promise<CallToolResult> => {
-    const result = diagram.addEdge({
-      sourceId: args.source_id,
-      targetId: args.target_id,
-      text: args.text,
-      style: args.style,
-    });
-    if ("error" in result) {
-      return errorResult(result.error);
-    }
-    return successResult({ cell: result });
-  },
-
   "delete-cell-by-id": async (args: {
     cell_id: string;
   }): Promise<CallToolResult> => {
@@ -165,29 +135,6 @@ export const handlers = {
       deleted: args.cell_id,
       remaining: { total_cells: stats.total_cells, vertices: stats.vertices, edges: stats.edges },
     });
-  },
-
-  "edit-cell": async (args: {
-    cell_id: string;
-    text?: string;
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    style?: string;
-  }): Promise<CallToolResult> => {
-    const result = diagram.editCell(args.cell_id, {
-      text: args.text,
-      x: args.x,
-      y: args.y,
-      width: args.width,
-      height: args.height,
-      style: args.style,
-    });
-    if ("error" in result) {
-      return errorResult(result.error);
-    }
-    return successResult({ cell: result });
   },
 
   "edit-edge": async (args: {
@@ -345,19 +292,7 @@ export const handlers = {
 
   // ─── Group / Container Handlers ─────────────────────────────────
 
-  "create-group": async (args: {
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    text?: string;
-    style?: string;
-  }): Promise<CallToolResult> => {
-    const cell = diagram.createGroup(args);
-    return successResult({ cell });
-  },
-
-  "batch-create-groups": async (args: {
+  "create-groups": async (args: {
     groups: Array<{
       x?: number;
       y?: number;
@@ -395,21 +330,7 @@ export const handlers = {
     });
   },
 
-  "add-cell-to-group": async (args: {
-    cell_id: string;
-    group_id: string;
-  }): Promise<CallToolResult> => {
-    const result = diagram.addCellToGroup(args.cell_id, args.group_id);
-    if ("error" in result) {
-      return errorResult(result.error);
-    }
-    return successResult({
-      cell: result,
-      group_children: diagram.getCell(args.group_id)!.children!.length,
-    });
-  },
-
-  "batch-add-cells-to-group": async (args: {
+  "add-cells-to-group": async (args: {
     assignments: Array<{
       cell_id: string;
       group_id: string;
@@ -557,47 +478,7 @@ export const handlers = {
     });
   },
 
-  "add-cell-of-shape": async (args: {
-    shape_name: string;
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    text?: string;
-    style?: string;
-  }): Promise<CallToolResult> => {
-    const resolved = resolveShape(args.shape_name);
-    if (!resolved) {
-      return errorResult({
-        code: "SHAPE_NOT_FOUND",
-        message: `Unknown shape '${args.shape_name}'`,
-        suggestion: "Use search-shapes to find available shapes, or try basic names like 'rectangle', 'ellipse', 'decision'",
-      });
-    }
-
-    const cell = diagram.addRectangle({
-      x: args.x,
-      y: args.y,
-      width: args.width ?? resolved.width,
-      height: args.height ?? resolved.height,
-      text: args.text ?? (resolved.source !== "basic" ? resolved.name : undefined),
-      style: args.style ?? resolved.style,
-    });
-
-    const info = resolved.source === "azure-fuzzy"
-      ? `Added Azure icon (matched from search): ${resolved.name}`
-      : resolved.source === "azure-exact"
-        ? `Added Azure icon: ${resolved.name}`
-        : undefined;
-
-    return successResult({
-      cell,
-      ...(info && { info }),
-      ...(resolved.score !== undefined && { confidence: resolved.score }),
-    });
-  },
-
-  "batch-add-cells-of-shape": async (args: {
+  "add-cells-of-shape": async (args: {
     cells: Array<{
       shape_name: string;
       x?: number;
@@ -667,100 +548,67 @@ export const handlers = {
   },
 
   "set-cell-shape": async (args: {
-    cell_id?: string;
-    shape_name?: string;
-    cells?: Array<{ cell_id: string; shape_name: string }>;
+    cells: Array<{ cell_id: string; shape_name: string }>;
   }): Promise<CallToolResult> => {
-    // Validate input: must have either cell_id/shape_name or cells, but not both
-    const hasSingleParams = args.cell_id && args.shape_name;
-    const hasBatchParams = args.cells && args.cells.length > 0;
-
-    if (!hasSingleParams && !hasBatchParams) {
+    if (!args.cells || args.cells.length === 0) {
       return errorResult({
         code: "INVALID_INPUT",
-        message: "Must provide either 'cell_id' and 'shape_name' OR 'cells' array",
-      });
-    }
-    if (hasSingleParams && hasBatchParams) {
-      return errorResult({
-        code: "INVALID_INPUT",
-        message: "Cannot provide both single parameters (cell_id/shape_name) and batch parameter (cells)",
+        message: "Must provide a non-empty 'cells' array",
       });
     }
 
-    // Helper function to get style for a shape name
     const getShapeStyle = (shapeName: string): string | null => {
       const resolved = resolveShape(shapeName);
       return resolved ? resolved.style : null;
     };
 
-    // Handle single operation (backward compatible)
-    if (hasSingleParams) {
-      const style = getShapeStyle(args.shape_name!);
+    const results = args.cells.map((item) => {
+      const style = getShapeStyle(item.shape_name);
       if (!style) {
-        return errorResult({
-          code: "SHAPE_NOT_FOUND",
-          message: `Unknown shape '${args.shape_name}'`,
-          suggestion: "Use search-shapes to find available shapes",
-        });
-      }
-
-      const result = diagram.editCell(args.cell_id!, { style });
-      if ("error" in result) {
-        return errorResult(result.error);
-      }
-      return successResult({ cell: result });
-    }
-
-    // hasBatchParams is guaranteed true here by the guards above
-    const results = args.cells!.map((item) => {
-        const style = getShapeStyle(item.shape_name);
-        if (!style) {
-          return {
-            success: false,
-            cell_id: item.cell_id,
-            shape_name: item.shape_name,
-            error: {
-              code: "SHAPE_NOT_FOUND",
-              message: `Unknown shape '${item.shape_name}'`,
-              suggestion: "Use search-shapes to find available shapes",
-            },
-          };
-        }
-
-        const result = diagram.editCell(item.cell_id, { style });
-        if ("error" in result) {
-          return {
-            success: false,
-            cell_id: item.cell_id,
-            shape_name: item.shape_name,
-            error: result.error,
-          };
-        }
-
         return {
-          success: true,
+          success: false,
           cell_id: item.cell_id,
           shape_name: item.shape_name,
-          cell: result,
+          error: {
+            code: "SHAPE_NOT_FOUND",
+            message: `Unknown shape '${item.shape_name}'`,
+            suggestion: "Use search-shapes to find available shapes",
+          },
         };
-      });
+      }
 
-      const successCount = results.filter((r) => r.success).length;
-      const errorCount = results.filter((r) => !r.success).length;
+      const result = diagram.editCell(item.cell_id, { style });
+      if ("error" in result) {
+        return {
+          success: false,
+          cell_id: item.cell_id,
+          shape_name: item.shape_name,
+          error: result.error,
+        };
+      }
 
-      return successResult({
-        batch: true,
-        summary: {
-          total: results.length,
-          succeeded: successCount,
-          failed: errorCount,
-        },
-        results,
-      });
+      return {
+        success: true,
+        cell_id: item.cell_id,
+        shape_name: item.shape_name,
+        cell: result,
+      };
+    });
+
+    const successCount = results.filter((r) => r.success).length;
+    const errorCount = results.filter((r) => !r.success).length;
+
+    return successResult({
+      summary: {
+        total: results.length,
+        succeeded: successCount,
+        failed: errorCount,
+      },
+      results,
+    });
   },
 
-  "batch-add-cells": async (args: {
+  "add-cells": async (args: {
     cells: Array<{
       type: "vertex" | "edge";
       x?: number;
@@ -797,7 +645,7 @@ export const handlers = {
     });
   },
 
-  "batch-edit-cells": async (args: {
+  "edit-cells": async (args: {
     cells: Array<{
       cell_id: string;
       text?: string;
@@ -851,49 +699,23 @@ export const handlers = {
   },
 
   "search-shapes": async (args: {
-    query?: string;
-    queries?: string[];
+    queries: string[];
     limit?: number;
   }): Promise<CallToolResult> => {
     const limit = args.limit ?? 10;
 
-    // Validate input: must have either query or queries, but not both
-    if (!args.query && !args.queries) {
+    if (!args.queries || args.queries.length === 0) {
       return errorResult({
         code: "INVALID_INPUT",
-        message: "Must provide either 'query' (string) or 'queries' (array of strings)",
-      });
-    }
-    if (args.query && args.queries) {
-      return errorResult({
-        code: "INVALID_INPUT",
-        message: "Cannot provide both 'query' and 'queries'. Use one or the other.",
+        message: "Must provide a non-empty 'queries' array",
       });
     }
 
-    // Handle single query (backward compatible)
-    if (args.query) {
-      const results = searchAzureIcons(args.query, limit);
-      return successResult({
-        query: args.query,
-        matches: results.map(r => ({
-          name: r.title,
-          id: r.id,
-          category: r.category,
-          width: r.width,
-          height: r.height,
-          confidence: r.score,
-        })),
-        total: results.length,
-      });
-    }
-
-    // args.queries is guaranteed truthy here by the guards above
-    const batchResults = args.queries!.map(q => {
-      const results = searchAzureIcons(q, limit);
+    const results = args.queries.map(q => {
+      const matches = searchAzureIcons(q, limit);
       return {
         query: q,
-        matches: results.map(r => ({
+        matches: matches.map(r => ({
           name: r.title,
           id: r.id,
           category: r.category,
@@ -901,14 +723,13 @@ export const handlers = {
           height: r.height,
           confidence: r.score,
         })),
-        total: results.length,
+        total: matches.length,
       };
     });
 
     return successResult({
-      batch: true,
-      results: batchResults,
-      totalQueries: args.queries!.length,
+      results,
+      totalQueries: args.queries.length,
     });
   },
 };

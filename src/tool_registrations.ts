@@ -12,44 +12,38 @@ import type { createToolHandlerFactory } from "./tool_handler.js";
 // ─── Tool Name Constants ───────────────────────────────────────
 
 export const TOOL_NAMES = {
-  ADD_RECTANGLE: "add-rectangle",
-  ADD_EDGE: "add-edge",
+  ADD_CELLS: "add-cells",
+  ADD_CELLS_OF_SHAPE: "add-cells-of-shape",
+  ADD_CELLS_TO_GROUP: "add-cells-to-group",
+  CLEAR_DIAGRAM: "clear-diagram",
+  CREATE_GROUPS: "create-groups",
+  CREATE_LAYER: "create-layer",
+  CREATE_PAGE: "create-page",
   DELETE_CELL_BY_ID: "delete-cell-by-id",
   DELETE_EDGE: "delete-edge",
+  DELETE_PAGE: "delete-page",
+  EDIT_CELLS: "edit-cells",
+  EDIT_EDGE: "edit-edge",
+  EXPORT_DIAGRAM: "export-diagram",
+  GET_ACTIVE_LAYER: "get-active-layer",
+  GET_ACTIVE_PAGE: "get-active-page",
+  GET_DIAGRAM_STATS: "get-diagram-stats",
+  GET_SHAPE_BY_NAME: "get-shape-by-name",
   GET_SHAPE_CATEGORIES: "get-shape-categories",
   GET_SHAPES_IN_CATEGORY: "get-shapes-in-category",
-  GET_SHAPE_BY_NAME: "get-shape-by-name",
-  ADD_CELL_OF_SHAPE: "add-cell-of-shape",
-  BATCH_ADD_CELLS_OF_SHAPE: "batch-add-cells-of-shape",
-  SET_CELL_SHAPE: "set-cell-shape",
-  EDIT_CELL: "edit-cell",
-  EDIT_EDGE: "edit-edge",
-  LIST_PAGED_MODEL: "list-paged-model",
-  LIST_LAYERS: "list-layers",
-  SET_ACTIVE_LAYER: "set-active-layer",
-  MOVE_CELL_TO_LAYER: "move-cell-to-layer",
-  GET_ACTIVE_LAYER: "get-active-layer",
-  CREATE_LAYER: "create-layer",
-  EXPORT_DIAGRAM: "export-diagram",
-  CLEAR_DIAGRAM: "clear-diagram",
-  CREATE_PAGE: "create-page",
-  LIST_PAGES: "list-pages",
-  GET_ACTIVE_PAGE: "get-active-page",
-  SET_ACTIVE_PAGE: "set-active-page",
-  RENAME_PAGE: "rename-page",
-  DELETE_PAGE: "delete-page",
-  CREATE_GROUP: "create-group",
-  BATCH_CREATE_GROUPS: "batch-create-groups",
-  ADD_CELL_TO_GROUP: "add-cell-to-group",
-  BATCH_ADD_CELLS_TO_GROUP: "batch-add-cells-to-group",
-  REMOVE_CELL_FROM_GROUP: "remove-cell-from-group",
-  LIST_GROUP_CHILDREN: "list-group-children",
-  IMPORT_DIAGRAM: "import-diagram",
-  GET_DIAGRAM_STATS: "get-diagram-stats",
-  BATCH_ADD_CELLS: "batch-add-cells",
-  BATCH_EDIT_CELLS: "batch-edit-cells",
   GET_STYLE_PRESETS: "get-style-presets",
+  IMPORT_DIAGRAM: "import-diagram",
+  LIST_GROUP_CHILDREN: "list-group-children",
+  LIST_LAYERS: "list-layers",
+  LIST_PAGED_MODEL: "list-paged-model",
+  LIST_PAGES: "list-pages",
+  MOVE_CELL_TO_LAYER: "move-cell-to-layer",
+  REMOVE_CELL_FROM_GROUP: "remove-cell-from-group",
+  RENAME_PAGE: "rename-page",
   SEARCH_SHAPES: "search-shapes",
+  SET_ACTIVE_LAYER: "set-active-layer",
+  SET_ACTIVE_PAGE: "set-active-page",
+  SET_CELL_SHAPE: "set-cell-shape",
 } as const;
 
 /** The handler factory function type returned by createToolHandlerFactory */
@@ -63,77 +57,6 @@ type CreateToolHandler = ReturnType<typeof createToolHandlerFactory>;
 export function registerTools(server: McpServer, createToolHandler: CreateToolHandler): void {
 
   // ─── Cell Tools ────────────────────────────────────────────────
-
-  server.registerTool(
-    TOOL_NAMES.ADD_RECTANGLE,
-    {
-      description: "Add a new rectangle vertex cell to the diagram. Prefer batch-add-cells for multiple cells (fewer calls, faster).",
-      inputSchema: {
-        x: z
-          .number()
-          .optional()
-          .describe("X-axis position of the Rectangle vertex cell")
-          .default(100),
-        y: z
-          .number()
-          .optional()
-          .describe("Y-axis position of the Rectangle vertex cell")
-          .default(100),
-        width: z
-          .number()
-          .optional()
-          .describe("Width of the Rectangle vertex cell")
-          .default(200),
-        height: z
-          .number()
-          .optional()
-          .describe("Height of the Rectangle vertex cell")
-          .default(100),
-        text: z
-          .string()
-          .optional()
-          .describe("Text content placed inside of the Rectangle vertex cell")
-          .default("New Cell"),
-        style: z
-          .string()
-          .optional()
-          .describe(
-            "Semi-colon separated list of Draw.io visual styles, in the form of `key=value`. Example: `whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;`",
-          )
-          .default("whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;"),
-      },
-    },
-    createToolHandler(TOOL_NAMES.ADD_RECTANGLE, true),
-  );
-
-  server.registerTool(
-    TOOL_NAMES.ADD_EDGE,
-    {
-      description: "Create an edge (connection/relation) between two vertex cells. Prefer batch-add-cells for multiple edges (fewer calls, faster).",
-      inputSchema: {
-        source_id: z
-          .string()
-          .describe("Source ID of a cell. It is represented by `id` attribute."),
-        target_id: z
-          .string()
-          .describe("Target ID of a cell. It is represented by `id` attribute."),
-        text: z
-          .string()
-          .optional()
-          .describe("Text content placed over the edge cell"),
-        style: z
-          .string()
-          .optional()
-          .describe(
-            "Semi-colon separated list of Draw.io visual styles, in the form of `key=value`. Example: `edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;`",
-          )
-          .default(
-            "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;",
-          ),
-      },
-    },
-    createToolHandler(TOOL_NAMES.ADD_EDGE, true),
-  );
 
   server.registerTool(
     TOOL_NAMES.DELETE_CELL_BY_ID,
@@ -166,41 +89,6 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   );
 
   server.registerTool(
-    TOOL_NAMES.EDIT_CELL,
-    {
-      description: "Update a vertex cell's properties (position, size, text, style). Only specified fields change.",
-      inputSchema: {
-        cell_id: z
-          .string()
-          .describe(
-            "Identifier (`id` attribute) of the cell to update. Applies to vertex/shape cells.",
-          ),
-        text: z
-          .string()
-          .optional()
-          .describe("Replace the cell's text/label content."),
-        x: z
-          .number()
-          .optional()
-          .describe("Set a new X-axis position for the cell."),
-        y: z
-          .number()
-          .optional()
-          .describe("Set a new Y-axis position for the cell."),
-        width: z.number().optional().describe("Set a new width for the cell."),
-        height: z.number().optional().describe("Set a new height for the cell."),
-        style: z
-          .string()
-          .optional()
-          .describe(
-            "Replace the cell's style string (semi-colon separated `key=value` pairs).",
-          ),
-      },
-    },
-    createToolHandler(TOOL_NAMES.EDIT_CELL, true),
-  );
-
-  server.registerTool(
     TOOL_NAMES.EDIT_EDGE,
     {
       description: "Update an edge's properties (text, source, target, style). Only specified fields change.",
@@ -230,12 +118,12 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
     createToolHandler(TOOL_NAMES.EDIT_EDGE, true),
   );
 
-  // ─── Batch Operations ──────────────────────────────────────────
+  // ─── Add / Edit Cells ─────────────────────────────────────────
 
   server.registerTool(
-    TOOL_NAMES.BATCH_ADD_CELLS,
+    TOOL_NAMES.ADD_CELLS,
     {
-      description: "Add multiple raw vertex and edge cells in one call with explicit styles. Use temp_id to reference cells within the batch. For shape-library cells (Azure icons, basic shapes), use batch-add-cells-of-shape instead. Example: {cells: [{type:'vertex', x:100, y:100, text:'Web', temp_id:'web'}, {type:'edge', source_id:'web', target_id:'api'}]}",
+      description: "Add vertices and/or edges to the diagram. Always pass ALL cells you need in a single call — never call this tool repeatedly. Use temp_id to reference cells within the same batch (e.g., an edge referencing a vertex created in the same call). For shape-library cells (Azure icons, basic shapes), use add-cells-of-shape instead.",
       inputSchema: {
         cells: z.array(z.object({
           type: z.enum(["vertex", "edge"]).describe("Cell type: 'vertex' for shapes, 'edge' for connections"),
@@ -248,17 +136,17 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
           source_id: z.string().optional().describe("Source cell ID for edges (can use temp_id from same batch)"),
           target_id: z.string().optional().describe("Target cell ID for edges (can use temp_id from same batch)"),
           temp_id: z.string().optional().describe("Temporary ID to reference this cell within the batch"),
-        })).describe("Array of cells to create. Example: [{type:'vertex', x:100, y:100, temp_id:'node1'}, {type:'edge', source_id:'node1', target_id:'node2'}]"),
+        })).describe("Array of cells to create. Gather ALL cells you need and submit them in ONE call. Example: [{type:'vertex', x:100, y:100, temp_id:'node1'}, {type:'edge', source_id:'node1', target_id:'node2'}]"),
         dry_run: z.boolean().optional().describe("If true, validates the batch without persisting changes. Use to check for errors before committing."),
       },
     },
-    createToolHandler(TOOL_NAMES.BATCH_ADD_CELLS, true),
+    createToolHandler(TOOL_NAMES.ADD_CELLS, true),
   );
 
   server.registerTool(
-    TOOL_NAMES.BATCH_EDIT_CELLS,
+    TOOL_NAMES.EDIT_CELLS,
     {
-      description: "Edit multiple vertex cells in one call. Much faster than calling edit-cell repeatedly. Only updates specified properties on each cell.",
+      description: "Edit one or more vertex cells. Always pass ALL updates in a single call — never call this tool repeatedly. Only updates specified properties on each cell.",
       inputSchema: {
         cells: z.array(z.object({
           cell_id: z.string().describe("ID of the cell to update"),
@@ -271,7 +159,7 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
         })).describe("Array of cell updates. Example: [{cell_id: 'cell-1', x: 200, y: 150}, {cell_id: 'cell-2', text: 'Updated'}]"),
       },
     },
-    createToolHandler(TOOL_NAMES.BATCH_EDIT_CELLS, true),
+    createToolHandler(TOOL_NAMES.EDIT_CELLS, true),
   );
 
   // ─── Shape Tools ───────────────────────────────────────────────
@@ -287,7 +175,7 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   server.registerTool(
     TOOL_NAMES.GET_SHAPES_IN_CATEGORY,
     {
-      description: "List all shapes in a category. Returns shape names and styles for use with add-cell-of-shape.",
+      description: "List all shapes in a category. Returns shape names and styles for use with add-cells-of-shape.",
       inputSchema: {
         category_id: z
           .string()
@@ -315,52 +203,9 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   );
 
   server.registerTool(
-    TOOL_NAMES.ADD_CELL_OF_SHAPE,
+    TOOL_NAMES.ADD_CELLS_OF_SHAPE,
     {
-      description: "Add a vertex cell using a shape from the library (e.g., Azure icons). Use search-shapes to find shape names. Prefer batch-add-cells when adding multiple shapes.",
-      inputSchema: {
-        shape_name: z
-          .string()
-          .describe(
-            "Name of the shape to retrieve from the shape library (e.g., 'rectangle', 'decision', or an Azure icon name). Use search-shapes to discover names.",
-          ),
-        x: z
-          .number()
-          .optional()
-          .describe("X-axis position of the vertex cell of the shape")
-          .default(100),
-        y: z
-          .number()
-          .optional()
-          .describe("Y-axis position of the vertex cell of the shape")
-          .default(100),
-        width: z
-          .number()
-          .optional()
-          .describe("Width of the vertex cell (defaults to the shape's native width)"),
-        height: z
-          .number()
-          .optional()
-          .describe("Height of the vertex cell (defaults to the shape's native height)"),
-        text: z
-          .string()
-          .optional()
-          .describe("Text content placed inside of the vertex cell of the shape"),
-        style: z
-          .string()
-          .optional()
-          .describe(
-            "Semi-colon separated list of Draw.io visual styles, in the form of `key=value`. Example: `whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;`",
-          ),
-      },
-    },
-    createToolHandler(TOOL_NAMES.ADD_CELL_OF_SHAPE, true),
-  );
-
-  server.registerTool(
-    TOOL_NAMES.BATCH_ADD_CELLS_OF_SHAPE,
-    {
-      description: "Add multiple shape-based cells in one call. Much faster than calling add-cell-of-shape individually. Supports Azure icons and basic shapes.",
+      description: "Add one or more shape-based cells (Azure icons, basic shapes) to the diagram. Always pass ALL shapes in a single call — never call this tool repeatedly. Use search-shapes first to discover shape names.",
       inputSchema: {
         cells: z.array(z.object({
           shape_name: z.string().describe("Name of the shape from the library (e.g., Azure icon name or basic shape like 'rectangle')"),
@@ -371,29 +216,17 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
           text: z.string().optional().describe("Text label (defaults to shape title)"),
           style: z.string().optional().describe("Override the shape's default style"),
           temp_id: z.string().optional().describe("Temporary ID for referencing this cell later"),
-        })).describe("Array of shape cells to create"),
+        })).describe("Array of shape cells to create. Gather ALL shapes and submit ONE call."),
       },
     },
-    createToolHandler(TOOL_NAMES.BATCH_ADD_CELLS_OF_SHAPE, true),
+    createToolHandler(TOOL_NAMES.ADD_CELLS_OF_SHAPE, true),
   );
 
   server.registerTool(
     TOOL_NAMES.SET_CELL_SHAPE,
     {
-      description: "Update a cell's visual style to match a library shape. Use search-shapes to find shape names. Prefer the 'cells' array for batch updates. Example: {cells: [{cell_id: 'cell-1', shape_name: 'Virtual Machines'}, {cell_id: 'cell-2', shape_name: 'Storage Accounts'}]}",
+      description: "Update one or more cells' visual styles to match library shapes. Always pass ALL updates in a single call. Use search-shapes to find shape names first.",
       inputSchema: {
-        cell_id: z
-          .string()
-          .optional()
-          .describe(
-            "Identifier (`id` attribute) of the cell whose shape should change.",
-          ),
-        shape_name: z
-          .string()
-          .optional()
-          .describe(
-            "Name of the library shape whose style should be applied to the existing cell.",
-          ),
         cells: z
           .array(
             z.object({
@@ -401,9 +234,8 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
               shape_name: z.string().describe("Shape name to apply"),
             }),
           )
-          .optional()
           .describe(
-            "Array of cell-shape pairs for batch operations. Cannot be used with cell_id/shape_name. Example: [{cell_id: 'cell-1', shape_name: 'App Services'}, {cell_id: 'cell-2', shape_name: 'SQL Database'}]",
+            "Array of cell-shape pairs. Example: [{cell_id: 'cell-1', shape_name: 'App Services'}, {cell_id: 'cell-2', shape_name: 'SQL Database'}]",
           ),
       },
     },
@@ -413,10 +245,9 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   server.registerTool(
     TOOL_NAMES.SEARCH_SHAPES,
     {
-      description: "Fuzzy search for shapes (700+ Azure icons). Returns names for use with add-cell-of-shape / batch-add-cells-of-shape. IMPORTANT: Call once with 'queries' array for all shapes you need — do NOT call multiple times. Example: {queries: ['front door', 'container apps', 'app service', 'key vault']}",
+      description: "Fuzzy search for shapes across 700+ Azure icons and basic shapes. Returns names for use with add-cells-of-shape. Call this tool exactly ONCE with ALL shape names in the queries array — never call it multiple times.",
       inputSchema: {
-        query: z.string().optional().describe("Single search query (e.g., 'virtual machine', 'storage', 'function')"),
-        queries: z.array(z.string()).optional().describe("Array of search queries for batch searching. Cannot be used with 'query'."),
+        queries: z.array(z.string()).describe("Array of ALL search terms. Gather every shape name you need and pass them all here. Example: ['front door', 'container apps', 'app service', 'key vault', 'dns zone', 'nsg', 'log analytics']"),
         limit: z.number().min(1).max(50).optional().default(10).describe("Maximum results to return per query (1-50)"),
       },
     },
@@ -597,25 +428,9 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   // ─── Group / Container Tools ───────────────────────────────────
 
   server.registerTool(
-    TOOL_NAMES.CREATE_GROUP,
+    TOOL_NAMES.CREATE_GROUPS,
     {
-      description: "Create a single group/container cell. Prefer batch-create-groups when creating multiple groups (fewer calls, faster). Children are positioned relative to the group.",
-      inputSchema: {
-        x: z.number().optional().describe("X-axis position of the group").default(0),
-        y: z.number().optional().describe("Y-axis position of the group").default(0),
-        width: z.number().optional().describe("Width of the group container").default(400),
-        height: z.number().optional().describe("Height of the group container").default(300),
-        text: z.string().optional().describe("Label text for the group").default(""),
-        style: z.string().optional().describe("Draw.io style string for the group container"),
-      },
-    },
-    createToolHandler(TOOL_NAMES.CREATE_GROUP, true),
-  );
-
-  server.registerTool(
-    TOOL_NAMES.BATCH_CREATE_GROUPS,
-    {
-      description: "Create multiple group/container cells in one call. Much faster than calling create-group individually. Use this when you need 2+ groups (e.g., VNets, resource groups, subnets). Each group gets a unique ID for use with batch-add-cells-to-group.",
+      description: "Create one or more group/container cells. Always pass ALL groups in a single call — never call this tool repeatedly. Each group gets a unique ID for use with add-cells-to-group. Children are positioned relative to the group.",
       inputSchema: {
         groups: z.array(z.object({
           x: z.number().optional().describe("X-axis position of the group").default(0),
@@ -624,37 +439,25 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
           height: z.number().optional().describe("Height of the group container").default(300),
           text: z.string().optional().describe("Label text for the group").default(""),
           style: z.string().optional().describe("Draw.io style string for the group container"),
-          temp_id: z.string().optional().describe("Temporary ID for referencing this group later (e.g., in batch-add-cells-to-group)"),
+          temp_id: z.string().optional().describe("Temporary ID for referencing this group later (e.g., in add-cells-to-group)"),
         })).describe("Array of groups to create. Example: [{text: 'VNet', width: 600, height: 400, temp_id: 'vnet'}, {text: 'Subnet', width: 300, height: 200, temp_id: 'subnet'}]"),
       },
     },
-    createToolHandler(TOOL_NAMES.BATCH_CREATE_GROUPS, true),
+    createToolHandler(TOOL_NAMES.CREATE_GROUPS, true),
   );
 
   server.registerTool(
-    TOOL_NAMES.ADD_CELL_TO_GROUP,
+    TOOL_NAMES.ADD_CELLS_TO_GROUP,
     {
-      description: "Add a single cell into a group/container. Prefer batch-add-cells-to-group when assigning multiple cells to groups (fewer calls, faster).",
-      inputSchema: {
-        cell_id: z.string().describe("ID of the cell to add to the group"),
-        group_id: z.string().describe("ID of the group/container cell"),
-      },
-    },
-    createToolHandler(TOOL_NAMES.ADD_CELL_TO_GROUP, true),
-  );
-
-  server.registerTool(
-    TOOL_NAMES.BATCH_ADD_CELLS_TO_GROUP,
-    {
-      description: "Add multiple cells to groups in one call. Much faster than calling add-cell-to-group individually. Supports assigning cells to different groups in a single call. Example: {assignments: [{cell_id: 'cell-2', group_id: 'cell-1'}, {cell_id: 'cell-3', group_id: 'cell-1'}]}",
+      description: "Assign one or more cells to groups. Always pass ALL assignments in a single call — never call this tool repeatedly. Supports assigning cells to different groups in a single call.",
       inputSchema: {
         assignments: z.array(z.object({
           cell_id: z.string().describe("ID of the cell to add to a group"),
           group_id: z.string().describe("ID of the group/container cell"),
-        })).describe("Array of cell-to-group assignments. Each item assigns one cell to one group. Cells can be assigned to different groups. Example: [{cell_id: 'cell-5', group_id: 'cell-2'}, {cell_id: 'cell-6', group_id: 'cell-3'}]"),
+        })).describe("Array of cell-to-group assignments. Example: [{cell_id: 'cell-5', group_id: 'cell-2'}, {cell_id: 'cell-6', group_id: 'cell-3'}]"),
       },
     },
-    createToolHandler(TOOL_NAMES.BATCH_ADD_CELLS_TO_GROUP, true),
+    createToolHandler(TOOL_NAMES.ADD_CELLS_TO_GROUP, true),
   );
 
   server.registerTool(
@@ -695,7 +498,7 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
   server.registerTool(
     TOOL_NAMES.EXPORT_DIAGRAM,
     {
-      description: "Export the diagram as Draw.io XML with diagram statistics. The diagram XML is cotnained in the response payload's `xml` property. Save the output to a .drawio file. If this is an update, use the same file; otherwise, create a new file with an appropriate name.",
+      description: "Export the diagram as Draw.io XML with diagram statistics. The XML is in the response payload's `xml` property. Save the output to a .drawio file.",
     },
     createToolHandler(TOOL_NAMES.EXPORT_DIAGRAM),
   );

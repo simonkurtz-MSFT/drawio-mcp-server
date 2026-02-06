@@ -87,16 +87,17 @@ Follow this 3-step pattern:
 - Content returned from the Draw.io MCP server will be in XML format. Take this content and create or update a `.drawio` file in the repository with that content.
 - Default to Azure icons and context for architecture diagrams unless otherwise specified. Use official Azure icons and colors for all components.
 - Diagram flow should be left-to-right and top-to-bottom unless otherwise specified.
-- Use stencils for all components in the diagrams. Do not use basic shapes (rectangles, circles, etc.) to represent architecture components. Call `search-shapes` **once** with the `queries` array containing **all** shape names you need — never call it multiple times when a single call suffices.
+- Use stencils for all components in the diagrams. Do not use basic shapes (rectangles, circles, etc.) to represent architecture components. Call `search-shapes` **exactly once** with the `queries` array containing **every** shape name you need for the whole diagram — never call it more than once.
 - Use `get-style-presets` to apply consistent Azure, flowchart, or general color presets.
 - Add labels for traffic paths (static vs API) or security boundaries (VNet/private endpoints). Labels should not overlay stencils. Use whitespace for clarity.
-- **Always prefer batch tools over repeated single-item calls.** When you know you need to create, update, or assign multiple items, use the corresponding batch tool in a single call:
-  - `batch-add-cells-of-shape` (not `add-cell-of-shape` repeatedly) for multiple shape-based cells
-  - `batch-add-cells` (not `add-rectangle`/`add-edge` repeatedly) for multiple raw cells
-  - `batch-edit-cells` (not `edit-cell` repeatedly) for multiple cell updates
-  - `batch-create-groups` (not `create-group` repeatedly) for multiple groups/containers
-  - `batch-add-cells-to-group` (not `add-cell-to-group` repeatedly) for assigning multiple cells to groups
-  - `set-cell-shape` with `cells` array (not single calls) for multiple shape updates
-- Use `batch-create-groups` and `batch-add-cells-to-group` to represent containment (e.g., VNets containing subnets, resource groups holding resources). Position children relative to the group.
+- **Every array-based tool MUST be called exactly ONCE with ALL items. NEVER call a tool repeatedly for individual items:**
+  - `add-cells-of-shape` — gather ALL shapes, submit ONE call
+  - `add-cells` — gather ALL raw cells/edges, submit ONE call
+  - `edit-cells` — gather ALL updates, submit ONE call
+  - `create-groups` — gather ALL groups, submit ONE call
+  - `add-cells-to-group` — gather ALL assignments, submit ONE call
+  - `set-cell-shape` — gather ALL shape updates, submit ONE call
+  - `search-shapes` — gather ALL queries, submit ONE call
+- Use `create-groups` and `add-cells-to-group` to represent containment (e.g., VNets containing subnets, resource groups holding resources). Position children relative to the group.
 - For multi-page diagrams, use `create-page` and `set-active-page` to organize content across tabs (e.g., separate pages for networking, compute, and data layers).
 - To modify an existing `.drawio` file, read its XML content and pass it to `import-diagram`, make changes, then `export-diagram` to get the updated XML.

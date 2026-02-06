@@ -15,83 +15,34 @@ function parseResult(result: CallToolResult): any {
   return JSON.parse(content.text);
 }
 
+/** Create a vertex via add-cells and return the cell data. */
+async function addVertex(args: { x?: number; y?: number; width?: number; height?: number; text?: string; style?: string } = {}) {
+  const result = await handlers["add-cells"]({ cells: [{ type: "vertex" as const, ...args }] });
+  return parseResult(result).data.results[0].cell;
+}
+
+/** Create an edge via add-cells and return the cell data. */
+async function addEdge(sourceId: string, targetId: string, text?: string, style?: string) {
+  const result = await handlers["add-cells"]({
+    cells: [{ type: "edge" as const, source_id: sourceId, target_id: targetId, text, style }],
+  });
+  return parseResult(result).data.results[0].cell;
+}
+
 // Reset diagram state between tests
 beforeEach(() => {
   diagram.clear();
 });
 
 describe("tool handlers", () => {
-  describe("add-rectangle", () => {
-    it("should create a rectangle with defaults", async () => {
-      const result = await handlers["add-rectangle"]({});
-      const parsed = parseResult(result);
-      expect(parsed.success).toBe(true);
-      expect(parsed.data.cell.type).toBe("vertex");
-    });
-
-    it("should accept custom parameters", async () => {
-      const result = await handlers["add-rectangle"]({
-        x: 50,
-        y: 75,
-        width: 300,
-        height: 150,
-        text: "Custom",
-      });
-      const parsed = parseResult(result);
-      expect(parsed.data.cell.value).toBe("Custom");
-      expect(parsed.data.cell.x).toBe(50);
-      expect(parsed.data.cell.width).toBe(300);
-    });
-  });
-
-  describe("add-edge", () => {
-    it("should create an edge between two cells", async () => {
-      const r1 = await handlers["add-rectangle"]({ text: "A" });
-      const r2 = await handlers["add-rectangle"]({ text: "B" });
-      const cell1 = parseResult(r1).data.cell;
-      const cell2 = parseResult(r2).data.cell;
-
-      const result = await handlers["add-edge"]({
-        source_id: cell1.id,
-        target_id: cell2.id,
-        text: "connects",
-      });
-      const parsed = parseResult(result);
-      expect(parsed.success).toBe(true);
-      expect(parsed.data.cell.type).toBe("edge");
-    });
-
-    it("should return error for non-existent source", async () => {
-      await handlers["add-rectangle"]({ text: "B" });
-      const result = await handlers["add-edge"]({
-        source_id: "nonexistent",
-        target_id: "cell-2",
-      });
-      expect(result.isError).toBe(true);
-    });
-
-    it("should return error for non-existent target", async () => {
-      const r1 = await handlers["add-rectangle"]({ text: "A" });
-      const cell1 = parseResult(r1).data.cell;
-      const result = await handlers["add-edge"]({
-        source_id: cell1.id,
-        target_id: "nonexistent",
-      });
-      expect(result.isError).toBe(true);
-      const parsed = parseResult(result);
-      expect(parsed.error.code).toBe("TARGET_NOT_FOUND");
-    });
-  });
-
   describe("delete-cell-by-id", () => {
     it("should delete an existing cell", async () => {
-      const r = await handlers["add-rectangle"]({ text: "ToDelete" });
-      const cellId = parseResult(r).data.cell.id;
+      const cell = await addVertex({ text: "ToDelete" });
 
-      const result = await handlers["delete-cell-by-id"]({ cell_id: cellId });
+      const result = await handlers["delete-cell-by-id"]({ cell_id: cell.id });
       const parsed = parseResult(result);
       expect(parsed.success).toBe(true);
-      expect(parsed.data.deleted).toBe(cellId);
+      expect(parsed.data.deleted).toBe(cell.id);
     });
 
     it("should return error for non-existent cell", async () => {
@@ -100,32 +51,27 @@ describe("tool handlers", () => {
     });
 
     it("should report cascaded edge deletions", async () => {
-      const a = await handlers["add-rectangle"]({ text: "A" });
-      const b = await handlers["add-rectangle"]({ text: "B" });
-      const aId = parseResult(a).data.cell.id;
-      const bId = parseResult(b).data.cell.id;
-      await handlers["add-edge"]({ source_id: aId, target_id: bId });
+      const a = await addVertex({ text: "A" });
+      const b = await addVertex({ text: "B" });
+      await addEdge(a.id, b.id);
 
-      const result = await handlers["delete-cell-by-id"]({ cell_id: aId });
+      const result = await handlers["delete-cell-by-id"]({ cell_id: a.id });
       const parsed = parseResult(result);
-      expect(parsed.data.deleted).toBe(aId);
+      expect(parsed.data.deleted).toBe(a.id);
       expect(parsed.data.cascaded_edges).toHaveLength(1);
     });
   });
 
   describe("delete-edge", () => {
     it("should delete an existing edge", async () => {
-      const a = await handlers["add-rectangle"]({ text: "A" });
-      const b = await handlers["add-rectangle"]({ text: "B" });
-      const aId = parseResult(a).data.cell.id;
-      const bId = parseResult(b).data.cell.id;
-      const e = await handlers["add-edge"]({ source_id: aId, target_id: bId });
-      const edgeId = parseResult(e).data.cell.id;
+      const a = await addVertex({ text: "A" });
+      const b = await addVertex({ text: "B" });
+      const edge = await addEdge(a.id, b.id);
 
-      const result = await handlers["delete-edge"]({ cell_id: edgeId });
+      const result = await handlers["delete-edge"]({ cell_id: edge.id });
       const parsed = parseResult(result);
       expect(parsed.success).toBe(true);
-      expect(parsed.data.deleted).toBe(edgeId);
+      expect(parsed.data.deleted).toBe(edge.id);
       expect(parsed.data.remaining).toBeDefined();
     });
 
@@ -137,10 +83,9 @@ describe("tool handlers", () => {
     });
 
     it("should return error when target is a vertex, not an edge", async () => {
-      const r = await handlers["add-rectangle"]({ text: "NotAnEdge" });
-      const cellId = parseResult(r).data.cell.id;
+      const cell = await addVertex({ text: "NotAnEdge" });
 
-      const result = await handlers["delete-edge"]({ cell_id: cellId });
+      const result = await handlers["delete-edge"]({ cell_id: cell.id });
       expect(result.isError).toBe(true);
       const parsed = JSON.parse((result.content[0] as any).text);
       expect(parsed.error.code).toBe("NOT_AN_EDGE");
@@ -148,69 +93,14 @@ describe("tool handlers", () => {
     });
   });
 
-  describe("edit-cell", () => {
-    it("should update cell properties", async () => {
-      const r = await handlers["add-rectangle"]({ text: "Original" });
-      const cellId = parseResult(r).data.cell.id;
-
-      const result = await handlers["edit-cell"]({
-        cell_id: cellId,
-        text: "Updated",
-        x: 500,
-      });
-      const parsed = parseResult(result);
-      expect(parsed.success).toBe(true);
-      expect(parsed.data.cell.value).toBe("Updated");
-      expect(parsed.data.cell.x).toBe(500);
-    });
-
-    it("should return error for non-existent cell", async () => {
-      const result = await handlers["edit-cell"]({
-        cell_id: "nonexistent",
-        text: "X",
-      });
-      expect(result.isError).toBe(true);
-      const parsed = parseResult(result);
-      expect(parsed.error.code).toBe("CELL_NOT_FOUND");
-    });
-
-    it("should return error when editing an edge as a vertex", async () => {
-      const r1 = await handlers["add-rectangle"]({ text: "A" });
-      const r2 = await handlers["add-rectangle"]({ text: "B" });
-      const cell1 = parseResult(r1).data.cell;
-      const cell2 = parseResult(r2).data.cell;
-      const edgeResult = await handlers["add-edge"]({
-        source_id: cell1.id,
-        target_id: cell2.id,
-      });
-      const edgeId = parseResult(edgeResult).data.cell.id;
-
-      const result = await handlers["edit-cell"]({
-        cell_id: edgeId,
-        text: "X",
-      });
-      expect(result.isError).toBe(true);
-      const parsed = parseResult(result);
-      expect(parsed.error.code).toBe("WRONG_CELL_TYPE");
-    });
-  });
-
   describe("edit-edge", () => {
     it("should update edge text", async () => {
-      const r1 = await handlers["add-rectangle"]({ text: "A" });
-      const r2 = await handlers["add-rectangle"]({ text: "B" });
-      const cell1 = parseResult(r1).data.cell;
-      const cell2 = parseResult(r2).data.cell;
-
-      const edgeResult = await handlers["add-edge"]({
-        source_id: cell1.id,
-        target_id: cell2.id,
-        text: "old",
-      });
-      const edgeId = parseResult(edgeResult).data.cell.id;
+      const a = await addVertex({ text: "A" });
+      const b = await addVertex({ text: "B" });
+      const edge = await addEdge(a.id, b.id, "old");
 
       const result = await handlers["edit-edge"]({
-        cell_id: edgeId,
+        cell_id: edge.id,
         text: "new label",
       });
       const parsed = parseResult(result);
@@ -229,11 +119,10 @@ describe("tool handlers", () => {
     });
 
     it("should return error when editing a vertex as an edge", async () => {
-      const r = await handlers["add-rectangle"]({ text: "A" });
-      const cellId = parseResult(r).data.cell.id;
+      const cell = await addVertex({ text: "A" });
 
       const result = await handlers["edit-edge"]({
-        cell_id: cellId,
+        cell_id: cell.id,
         text: "X",
       });
       expect(result.isError).toBe(true);
@@ -252,7 +141,7 @@ describe("tool handlers", () => {
 
     it("should paginate cells", async () => {
       for (let i = 0; i < 5; i++) {
-        await handlers["add-rectangle"]({ text: `Cell ${i}` });
+        await addVertex({ text: `Cell ${i}` });
       }
 
       const page0 = await handlers["list-paged-model"]({ page: 0, page_size: 2 });
@@ -266,11 +155,9 @@ describe("tool handlers", () => {
     });
 
     it("should filter by cell type", async () => {
-      const r1 = await handlers["add-rectangle"]({ text: "A" });
-      const r2 = await handlers["add-rectangle"]({ text: "B" });
-      const cell1 = parseResult(r1).data.cell;
-      const cell2 = parseResult(r2).data.cell;
-      await handlers["add-edge"]({ source_id: cell1.id, target_id: cell2.id });
+      const a = await addVertex({ text: "A" });
+      const b = await addVertex({ text: "B" });
+      await addEdge(a.id, b.id);
 
       const vertexResult = await handlers["list-paged-model"]({
         filter: { cell_type: "vertex" },
@@ -280,11 +167,9 @@ describe("tool handlers", () => {
     });
 
     it("should filter by edge type", async () => {
-      const r1 = await handlers["add-rectangle"]({ text: "A" });
-      const r2 = await handlers["add-rectangle"]({ text: "B" });
-      const cell1 = parseResult(r1).data.cell;
-      const cell2 = parseResult(r2).data.cell;
-      await handlers["add-edge"]({ source_id: cell1.id, target_id: cell2.id });
+      const a = await addVertex({ text: "A" });
+      const b = await addVertex({ text: "B" });
+      await addEdge(a.id, b.id);
 
       const edgeResult = await handlers["list-paged-model"]({
         filter: { cell_type: "edge" },
@@ -314,11 +199,10 @@ describe("tool handlers", () => {
       const layerResult = await handlers["create-layer"]({ name: "Target" });
       const layerId = parseResult(layerResult).data.layer.id;
 
-      const cellResult = await handlers["add-rectangle"]({ text: "Movable" });
-      const cellId = parseResult(cellResult).data.cell.id;
+      const cell = await addVertex({ text: "Movable" });
 
       const moveResult = await handlers["move-cell-to-layer"]({
-        cell_id: cellId,
+        cell_id: cell.id,
         target_layer_id: layerId,
       });
       const moved = parseResult(moveResult);
@@ -346,11 +230,10 @@ describe("tool handlers", () => {
     });
 
     it("should return error for move-cell-to-layer with non-existent layer", async () => {
-      const cellResult = await handlers["add-rectangle"]({ text: "A" });
-      const cellId = parseResult(cellResult).data.cell.id;
+      const cell = await addVertex({ text: "A" });
 
       const result = await handlers["move-cell-to-layer"]({
-        cell_id: cellId,
+        cell_id: cell.id,
         target_layer_id: "nonexistent",
       });
       expect(result.isError).toBe(true);
@@ -361,7 +244,7 @@ describe("tool handlers", () => {
 
   describe("export-diagram", () => {
     it("should return valid XML", async () => {
-      await handlers["add-rectangle"]({ text: "Test" });
+      await addVertex({ text: "Test" });
       const result = await handlers["export-diagram"]();
       const parsed = parseResult(result);
       expect(parsed.data.xml).toContain("<mxfile");
@@ -371,8 +254,8 @@ describe("tool handlers", () => {
 
   describe("clear-diagram", () => {
     it("should clear all cells", async () => {
-      await handlers["add-rectangle"]({ text: "A" });
-      await handlers["add-rectangle"]({ text: "B" });
+      await addVertex({ text: "A" });
+      await addVertex({ text: "B" });
       await handlers["clear-diagram"]();
 
       const stats = await handlers["get-diagram-stats"]();
@@ -383,8 +266,8 @@ describe("tool handlers", () => {
 
   describe("get-diagram-stats", () => {
     it("should return correct stats", async () => {
-      await handlers["add-rectangle"]({ text: "A" });
-      await handlers["add-rectangle"]({ text: "B" });
+      await addVertex({ text: "A" });
+      await addVertex({ text: "B" });
 
       const result = await handlers["get-diagram-stats"]();
       const parsed = parseResult(result);
@@ -453,9 +336,9 @@ describe("tool handlers", () => {
     });
 
     it("should find Azure shapes by exact title", async () => {
-      // Use a well-known Azure shape from the icon library
-      const searchResult = await handlers["search-shapes"]({ query: "virtual machine", limit: 1 });
-      const shapeName = parseResult(searchResult).data.matches[0].name;
+      // Use search-shapes to get a real Azure shape name
+      const searchResult = await handlers["search-shapes"]({ queries: ["virtual machine"], limit: 1 });
+      const shapeName = parseResult(searchResult).data.results[0].matches[0].name;
 
       const result = await handlers["get-shape-by-name"]({ shape_name: shapeName });
       const parsed = parseResult(result);
@@ -487,75 +370,9 @@ describe("tool handlers", () => {
     });
   });
 
-  describe("add-cell-of-shape", () => {
-    it("should add a basic shape cell", async () => {
-      const result = await handlers["add-cell-of-shape"]({
-        shape_name: "decision",
-        x: 200,
-        y: 200,
-      });
-      const parsed = parseResult(result);
-      expect(parsed.success).toBe(true);
-      expect(parsed.data.cell.type).toBe("vertex");
-    });
-
-    it("should return error for unknown shape", async () => {
-      const result = await handlers["add-cell-of-shape"]({
-        shape_name: "xyznonexistent",
-      });
-      expect(result.isError).toBe(true);
-      const parsed = parseResult(result);
-      expect(parsed.error.code).toBe("SHAPE_NOT_FOUND");
-    });
-
-    it("should add an Azure shape by exact name and include info", async () => {
-      // Get a real Azure shape name via search
-      const searchResult = await handlers["search-shapes"]({ query: "virtual machine", limit: 1 });
-      const shapeName = parseResult(searchResult).data.matches[0].name;
-
-      const result = await handlers["add-cell-of-shape"]({ shape_name: shapeName });
-      const parsed = parseResult(result);
-      expect(parsed.success).toBe(true);
-      expect(parsed.data.cell.type).toBe("vertex");
-      // Azure exact match should include info
-      expect(parsed.data.info).toContain("Azure icon");
-    });
-
-    it("should add an Azure shape via fuzzy match and include info", async () => {
-      const result = await handlers["add-cell-of-shape"]({ shape_name: "storage account" });
-      const parsed = parseResult(result);
-      expect(parsed.success).toBe(true);
-      expect(parsed.data.cell.type).toBe("vertex");
-      expect(parsed.data.info).toContain("Azure icon");
-    });
-
-    it("should use custom dimensions over shape defaults", async () => {
-      const result = await handlers["add-cell-of-shape"]({
-        shape_name: "decision",
-        width: 500,
-        height: 300,
-        text: "Custom Size",
-        style: "fillColor=#ff0000;",
-      });
-      const parsed = parseResult(result);
-      expect(parsed.data.cell.width).toBe(500);
-      expect(parsed.data.cell.height).toBe(300);
-      expect(parsed.data.cell.value).toBe("Custom Size");
-      expect(parsed.data.cell.style).toBe("fillColor=#ff0000;");
-    });
-
-    it("should not include info field for basic shapes", async () => {
-      const result = await handlers["add-cell-of-shape"]({ shape_name: "rectangle" });
-      const parsed = parseResult(result);
-      expect(parsed.success).toBe(true);
-      expect(parsed.data.cell.type).toBe("vertex");
-      expect(parsed.data.info).toBeUndefined();
-    });
-  });
-
-  describe("batch-add-cells", () => {
+  describe("add-cells", () => {
     it("should add multiple cells and resolve temp IDs", async () => {
-      const result = await handlers["batch-add-cells"]({
+      const result = await handlers["add-cells"]({
         cells: [
           { type: "vertex", x: 100, y: 100, text: "A", temp_id: "a" },
           { type: "vertex", x: 300, y: 100, text: "B", temp_id: "b" },
@@ -568,7 +385,7 @@ describe("tool handlers", () => {
     });
 
     it("should support dry_run mode", async () => {
-      const result = await handlers["batch-add-cells"]({
+      const result = await handlers["add-cells"]({
         cells: [
           { type: "vertex", x: 100, y: 100, text: "DryRun" },
         ],
@@ -585,7 +402,7 @@ describe("tool handlers", () => {
     });
 
     it("should fail when edge references non-existent source", async () => {
-      const result = await handlers["batch-add-cells"]({
+      const result = await handlers["add-cells"]({
         cells: [
           { type: "edge", source_id: "nonexistent", target_id: "also-nonexistent" },
         ],
@@ -595,7 +412,7 @@ describe("tool handlers", () => {
     });
 
     it("should resolve temp IDs for edges referencing earlier batch items", async () => {
-      const result = await handlers["batch-add-cells"]({
+      const result = await handlers["add-cells"]({
         cells: [
           { type: "vertex", x: 100, y: 100, text: "A", temp_id: "tmp-a" },
           { type: "vertex", x: 300, y: 100, text: "B", temp_id: "tmp-b" },
@@ -610,17 +427,15 @@ describe("tool handlers", () => {
     });
   });
 
-  describe("batch-edit-cells", () => {
+  describe("edit-cells", () => {
     it("should edit multiple cells", async () => {
-      const r1 = await handlers["add-rectangle"]({ text: "A" });
-      const r2 = await handlers["add-rectangle"]({ text: "B" });
-      const id1 = parseResult(r1).data.cell.id;
-      const id2 = parseResult(r2).data.cell.id;
+      const a = await addVertex({ text: "A" });
+      const b = await addVertex({ text: "B" });
 
-      const result = await handlers["batch-edit-cells"]({
+      const result = await handlers["edit-cells"]({
         cells: [
-          { cell_id: id1, text: "Updated A" },
-          { cell_id: id2, x: 999 },
+          { cell_id: a.id, text: "Updated A" },
+          { cell_id: b.id, x: 999 },
         ],
       });
       const parsed = parseResult(result);
@@ -628,12 +443,11 @@ describe("tool handlers", () => {
     });
 
     it("should report failure for non-existent cell in batch", async () => {
-      const r1 = await handlers["add-rectangle"]({ text: "A" });
-      const id1 = parseResult(r1).data.cell.id;
+      const a = await addVertex({ text: "A" });
 
-      const result = await handlers["batch-edit-cells"]({
+      const result = await handlers["edit-cells"]({
         cells: [
-          { cell_id: id1, text: "Updated" },
+          { cell_id: a.id, text: "Updated" },
           { cell_id: "nonexistent", text: "Fail" },
         ],
       });
@@ -643,9 +457,9 @@ describe("tool handlers", () => {
     });
   });
 
-  describe("batch-add-cells-of-shape", () => {
+  describe("add-cells-of-shape", () => {
     it("should add multiple shape cells", async () => {
-      const result = await handlers["batch-add-cells-of-shape"]({
+      const result = await handlers["add-cells-of-shape"]({
         cells: [
           { shape_name: "rectangle", x: 100, y: 100, temp_id: "r1" },
           { shape_name: "decision", x: 300, y: 100, temp_id: "d1" },
@@ -657,7 +471,7 @@ describe("tool handlers", () => {
     });
 
     it("should return error for empty cells array", async () => {
-      const result = await handlers["batch-add-cells-of-shape"]({
+      const result = await handlers["add-cells-of-shape"]({
         cells: [],
       });
       expect(result.isError).toBe(true);
@@ -666,10 +480,10 @@ describe("tool handlers", () => {
     });
 
     it("should add Azure shape cells with info", async () => {
-      const searchResult = await handlers["search-shapes"]({ query: "virtual machine", limit: 1 });
-      const azureName = parseResult(searchResult).data.matches[0].name;
+      const searchResult = await handlers["search-shapes"]({ queries: ["virtual machine"], limit: 1 });
+      const azureName = parseResult(searchResult).data.results[0].matches[0].name;
 
-      const result = await handlers["batch-add-cells-of-shape"]({
+      const result = await handlers["add-cells-of-shape"]({
         cells: [
           { shape_name: azureName, x: 100, y: 100 },
         ],
@@ -680,7 +494,7 @@ describe("tool handlers", () => {
     });
 
     it("should include confidence for fuzzy-matched Azure shapes", async () => {
-      const result = await handlers["batch-add-cells-of-shape"]({
+      const result = await handlers["add-cells-of-shape"]({
         cells: [
           { shape_name: "storage account", x: 100, y: 100 },
         ],
@@ -692,7 +506,7 @@ describe("tool handlers", () => {
     });
 
     it("should handle mixed success and failure in batch", async () => {
-      const result = await handlers["batch-add-cells-of-shape"]({
+      const result = await handlers["add-cells-of-shape"]({
         cells: [
           { shape_name: "rectangle", x: 100, y: 100 },
           { shape_name: "xyznonexistent_shape", x: 200, y: 200 },
@@ -708,7 +522,7 @@ describe("tool handlers", () => {
     });
 
     it("should use custom dimensions over shape defaults", async () => {
-      const result = await handlers["batch-add-cells-of-shape"]({
+      const result = await handlers["add-cells-of-shape"]({
         cells: [
           { shape_name: "rectangle", x: 50, y: 50, width: 400, height: 200, text: "Big", style: "fillColor=#ff0000;" },
         ],
@@ -722,42 +536,33 @@ describe("tool handlers", () => {
   });
 
   describe("search-shapes", () => {
-    it("should find shapes with single query", async () => {
-      const result = await handlers["search-shapes"]({ query: "storage" });
+    it("should find shapes with queries array", async () => {
+      const result = await handlers["search-shapes"]({ queries: ["storage"] });
       const parsed = parseResult(result);
-      expect(parsed.data.matches.length).toBeGreaterThan(0);
+      expect(parsed.data.results).toHaveLength(1);
+      expect(parsed.data.results[0].matches.length).toBeGreaterThan(0);
     });
 
-    it("should support batch queries", async () => {
+    it("should support multiple queries", async () => {
       const result = await handlers["search-shapes"]({
         queries: ["storage", "compute"],
       });
       const parsed = parseResult(result);
-      expect(parsed.data.batch).toBe(true);
       expect(parsed.data.results).toHaveLength(2);
+      expect(parsed.data.totalQueries).toBe(2);
     });
 
-    it("should error when neither query nor queries provided", async () => {
-      const result = await handlers["search-shapes"]({});
-      expect(result.isError).toBe(true);
-      const parsed = parseResult(result);
-      expect(parsed.error.code).toBe("INVALID_INPUT");
-    });
-
-    it("should error when both query and queries provided", async () => {
-      const result = await handlers["search-shapes"]({
-        query: "x",
-        queries: ["y"],
-      });
+    it("should error when queries array is empty", async () => {
+      const result = await handlers["search-shapes"]({ queries: [] });
       expect(result.isError).toBe(true);
       const parsed = parseResult(result);
       expect(parsed.error.code).toBe("INVALID_INPUT");
     });
 
     it("should respect custom limit", async () => {
-      const result = await handlers["search-shapes"]({ query: "azure", limit: 3 });
+      const result = await handlers["search-shapes"]({ queries: ["azure"], limit: 3 });
       const parsed = parseResult(result);
-      expect(parsed.data.matches.length).toBeLessThanOrEqual(3);
+      expect(parsed.data.results[0].matches.length).toBeLessThanOrEqual(3);
     });
   });
 
@@ -773,76 +578,33 @@ describe("tool handlers", () => {
   });
 
   describe("set-cell-shape", () => {
-    it("should update a cell's style to match a shape", async () => {
-      const r = await handlers["add-rectangle"]({ text: "Test" });
-      const cellId = parseResult(r).data.cell.id;
-
-      const result = await handlers["set-cell-shape"]({
-        cell_id: cellId,
-        shape_name: "decision",
-      });
-      const parsed = parseResult(result);
-      expect(parsed.success).toBe(true);
-      expect(parsed.data.cell.style).toContain("rhombus");
-    });
-
-    it("should support batch cell-shape updates", async () => {
-      const r1 = await handlers["add-rectangle"]({ text: "A" });
-      const r2 = await handlers["add-rectangle"]({ text: "B" });
-      const id1 = parseResult(r1).data.cell.id;
-      const id2 = parseResult(r2).data.cell.id;
+    it("should update cells' styles to match shapes", async () => {
+      const a = await addVertex({ text: "A" });
+      const b = await addVertex({ text: "B" });
 
       const result = await handlers["set-cell-shape"]({
         cells: [
-          { cell_id: id1, shape_name: "ellipse" },
-          { cell_id: id2, shape_name: "circle" },
+          { cell_id: a.id, shape_name: "ellipse" },
+          { cell_id: b.id, shape_name: "circle" },
         ],
       });
       const parsed = parseResult(result);
       expect(parsed.data.summary.succeeded).toBe(2);
     });
 
-    it("should error when no arguments provided", async () => {
-      const result = await handlers["set-cell-shape"]({});
+    it("should error when cells array is empty", async () => {
+      const result = await handlers["set-cell-shape"]({ cells: [] });
       expect(result.isError).toBe(true);
       const parsed = parseResult(result);
       expect(parsed.error.code).toBe("INVALID_INPUT");
     });
 
-    it("should error when both single and batch params provided", async () => {
-      const r = await handlers["add-rectangle"]({ text: "A" });
-      const cellId = parseResult(r).data.cell.id;
-
-      const result = await handlers["set-cell-shape"]({
-        cell_id: cellId,
-        shape_name: "decision",
-        cells: [{ cell_id: cellId, shape_name: "ellipse" }],
-      });
-      expect(result.isError).toBe(true);
-      const parsed = parseResult(result);
-      expect(parsed.error.code).toBe("INVALID_INPUT");
-    });
-
-    it("should error for unknown single shape name", async () => {
-      const r = await handlers["add-rectangle"]({ text: "A" });
-      const cellId = parseResult(r).data.cell.id;
-
-      const result = await handlers["set-cell-shape"]({
-        cell_id: cellId,
-        shape_name: "xyznonexistent",
-      });
-      expect(result.isError).toBe(true);
-      const parsed = parseResult(result);
-      expect(parsed.error.code).toBe("SHAPE_NOT_FOUND");
-    });
-
-    it("should report errors for unknown shapes in batch", async () => {
-      const r = await handlers["add-rectangle"]({ text: "A" });
-      const cellId = parseResult(r).data.cell.id;
+    it("should report errors for unknown shapes in cells array", async () => {
+      const cell = await addVertex({ text: "A" });
 
       const result = await handlers["set-cell-shape"]({
         cells: [
-          { cell_id: cellId, shape_name: "xyznonexistent" },
+          { cell_id: cell.id, shape_name: "xyznonexistent" },
         ],
       });
       const parsed = parseResult(result);
@@ -850,7 +612,7 @@ describe("tool handlers", () => {
       expect(parsed.data.results[0].error.code).toBe("SHAPE_NOT_FOUND");
     });
 
-    it("should report errors for non-existent cell in batch", async () => {
+    it("should report errors for non-existent cell in cells array", async () => {
       const result = await handlers["set-cell-shape"]({
         cells: [
           { cell_id: "nonexistent", shape_name: "rectangle" },
@@ -858,14 +620,6 @@ describe("tool handlers", () => {
       });
       const parsed = parseResult(result);
       expect(parsed.data.summary.failed).toBe(1);
-    });
-
-    it("should error for non-existent cell in single mode", async () => {
-      const result = await handlers["set-cell-shape"]({
-        cell_id: "nonexistent",
-        shape_name: "rectangle",
-      });
-      expect(result.isError).toBe(true);
     });
   });
 });
