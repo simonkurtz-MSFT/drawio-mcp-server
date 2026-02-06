@@ -879,7 +879,9 @@ ${diagramsXml}
                     <mxGeometry x="${cell.x!}" y="${cell.y!}" width="${cell.width!}" height="${cell.height!}" as="geometry"/>
                 </mxCell>`;
         } else {
-          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style!)}" edge="1" parent="${cell.parent!}" source="${cell.sourceId!}" target="${cell.targetId!}">
+          const sourceAttr = cell.sourceId ? ` source="${cell.sourceId}"` : "";
+          const targetAttr = cell.targetId ? ` target="${cell.targetId}"` : "";
+          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style!)}" edge="1" parent="${cell.parent!}"${sourceAttr}${targetAttr}>
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>`;
         }

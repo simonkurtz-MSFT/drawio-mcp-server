@@ -131,9 +131,39 @@ export const handlers = {
         suggestion: "Use list-paged-model to see available cells",
       });
     }
+    const stats = diagram.getStats();
     return successResult({
       deleted: args.cell_id,
       ...(cascadedEdgeIds.length > 0 && { cascaded_edges: cascadedEdgeIds }),
+      remaining: { total_cells: stats.total_cells, vertices: stats.vertices, edges: stats.edges },
+    });
+  },
+
+  "delete-edge": async (args: {
+    cell_id: string;
+  }): Promise<CallToolResult> => {
+    const cell = diagram.getCell(args.cell_id);
+    if (!cell) {
+      return errorResult({
+        code: "CELL_NOT_FOUND",
+        message: `Edge '${args.cell_id}' not found`,
+        cell_id: args.cell_id,
+        suggestion: "Use list-paged-model with filter {cell_type: 'edge'} to see available edges",
+      });
+    }
+    if (cell.type !== "edge") {
+      return errorResult({
+        code: "NOT_AN_EDGE",
+        message: `Cell '${args.cell_id}' is a ${cell.type}, not an edge`,
+        cell_id: args.cell_id,
+        suggestion: "Use delete-cell-by-id to delete vertices",
+      });
+    }
+    diagram.deleteCell(args.cell_id);
+    const stats = diagram.getStats();
+    return successResult({
+      deleted: args.cell_id,
+      remaining: { total_cells: stats.total_cells, vertices: stats.vertices, edges: stats.edges },
     });
   },
 
@@ -205,12 +235,17 @@ export const handlers = {
       pageSize,
       totalCells: cells.length,
       totalPages: Math.ceil(cells.length / pageSize),
+      active_page: diagram.getActivePage(),
+      active_layer: diagram.getActiveLayer(),
       cells: pagedCells,
     });
   },
 
   "list-layers": async (): Promise<CallToolResult> => {
-    return successResult({ layers: diagram.listLayers() });
+    return successResult({
+      layers: diagram.listLayers(),
+      active_layer_id: diagram.getActiveLayer().id,
+    });
   },
 
   "get-active-layer": async (): Promise<CallToolResult> => {
@@ -224,12 +259,12 @@ export const handlers = {
     if ("error" in result) {
       return errorResult(result.error);
     }
-    return successResult({ success: true, layer: result });
+    return successResult({ layer: result });
   },
 
   "create-layer": async (args: { name: string }): Promise<CallToolResult> => {
     const layer = diagram.createLayer(args.name);
-    return successResult({ success: true, layer });
+    return successResult({ layer, total_layers: diagram.listLayers().length });
   },
 
   "move-cell-to-layer": async (args: {
@@ -240,7 +275,7 @@ export const handlers = {
     if ("error" in result) {
       return errorResult(result.error);
     }
-    return successResult({ success: true, cell: result });
+    return successResult({ cell: result });
   },
 
   "export-diagram": async (): Promise<CallToolResult> => {
@@ -263,7 +298,7 @@ export const handlers = {
 
   "create-page": async (args: { name: string }): Promise<CallToolResult> => {
     const page = diagram.createPage(args.name);
-    return successResult({ page });
+    return successResult({ page, total_pages: diagram.listPages().length });
   },
 
   "list-pages": async (): Promise<CallToolResult> => {
@@ -282,7 +317,14 @@ export const handlers = {
     if ("error" in result) {
       return errorResult(result.error);
     }
-    return successResult({ page: result });
+    const stats = diagram.getStats();
+    return successResult({
+      page: result,
+      cells: stats.total_cells,
+      vertices: stats.vertices,
+      edges: stats.edges,
+      layers: stats.layers,
+    });
   },
 
   "rename-page": async (args: { page_id: string; name: string }): Promise<CallToolResult> => {
@@ -323,7 +365,10 @@ export const handlers = {
     if ("error" in result) {
       return errorResult(result.error);
     }
-    return successResult({ cell: result });
+    return successResult({
+      cell: result,
+      group_children: diagram.getCell(args.group_id)!.children!.length,
+    });
   },
 
   "remove-cell-from-group": async (args: {
@@ -476,7 +521,6 @@ export const handlers = {
         : undefined;
 
     return successResult({
-      success: true,
       cell,
       ...(info && { info }),
       ...(resolved.score !== undefined && { confidence: resolved.score }),
@@ -595,10 +639,7 @@ export const handlers = {
       if ("error" in result) {
         return errorResult(result.error);
       }
-      return successResult({
-        success: true,
-        cell: result,
-      });
+      return successResult({ cell: result });
     }
 
     // hasBatchParams is guaranteed true here by the guards above

@@ -113,6 +113,41 @@ describe("tool handlers", () => {
     });
   });
 
+  describe("delete-edge", () => {
+    it("should delete an existing edge", async () => {
+      const a = await handlers["add-rectangle"]({ text: "A" });
+      const b = await handlers["add-rectangle"]({ text: "B" });
+      const aId = parseResult(a).data.cell.id;
+      const bId = parseResult(b).data.cell.id;
+      const e = await handlers["add-edge"]({ source_id: aId, target_id: bId });
+      const edgeId = parseResult(e).data.cell.id;
+
+      const result = await handlers["delete-edge"]({ cell_id: edgeId });
+      const parsed = parseResult(result);
+      expect(parsed.success).toBe(true);
+      expect(parsed.data.deleted).toBe(edgeId);
+      expect(parsed.data.remaining).toBeDefined();
+    });
+
+    it("should return error for non-existent cell", async () => {
+      const result = await handlers["delete-edge"]({ cell_id: "nope" });
+      expect(result.isError).toBe(true);
+      const parsed = JSON.parse((result.content[0] as any).text);
+      expect(parsed.error.code).toBe("CELL_NOT_FOUND");
+    });
+
+    it("should return error when target is a vertex, not an edge", async () => {
+      const r = await handlers["add-rectangle"]({ text: "NotAnEdge" });
+      const cellId = parseResult(r).data.cell.id;
+
+      const result = await handlers["delete-edge"]({ cell_id: cellId });
+      expect(result.isError).toBe(true);
+      const parsed = JSON.parse((result.content[0] as any).text);
+      expect(parsed.error.code).toBe("NOT_AN_EDGE");
+      expect(parsed.error.message).toContain("vertex");
+    });
+  });
+
   describe("edit-cell", () => {
     it("should update cell properties", async () => {
       const r = await handlers["add-rectangle"]({ text: "Original" });

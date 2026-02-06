@@ -234,6 +234,27 @@ describe("DiagramModel importXml", () => {
       expect(edge!.sourceId).toBeUndefined();
       expect(edge!.targetId).toBeUndefined();
     });
+
+    it("should roundtrip edge without source/target without 'undefined' in XML", () => {
+      const xml = `<mxfile host="test">
+    <diagram id="d1" name="Page">
+        <mxGraphModel>
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="2" value="" style="edgeStyle=orthogonal;" edge="1" parent="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>`;
+      model.importXml(xml);
+      const exported = model.toXml();
+      expect(exported).not.toContain('source="undefined"');
+      expect(exported).not.toContain('target="undefined"');
+      expect(exported).toContain('edge="1"');
+    });
   });
 
   describe("import cell without parent attribute", () => {

@@ -9,7 +9,7 @@
     "drawio-mcp-server": "./build/index.js"
   },
   "scripts": {
-    "build": "pnpm run clean && tsc -p tsconfig.build.json",
+    "build": "pnpm run clean && tsc -p tsconfig.build.json && node -e \"import('fs').then(fs => fs.copyFileSync('src/instructions.md', 'build/instructions.md'))\"",
     "ci": "pnpm install --frozen-lockfile",
     "clean": "node -e \"import('fs').then(fs => fs.rmSync('build', { recursive: true, force: true }))\"",
     "dev": "tsc -p tsconfig.build.json --watch",

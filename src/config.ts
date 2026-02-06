@@ -1,8 +1,12 @@
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const pkg = require("../package.json") as { version: string };
+
 /**
- * Application version — single source of truth.
- * Keep in sync with package.json version.
+ * Application version — read from package.json (single source of truth).
  */
-export const VERSION = "1.0.0";
+export const VERSION: string = pkg.version;
 
 /**
  * Application configuration interface
