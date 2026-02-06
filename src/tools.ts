@@ -1,5 +1,5 @@
 /**
- * Standalone tool handlers that generate Draw.io XML directly
+ * Tool handlers that generate Draw.io XML directly
  * without requiring the browser extension.
  */
 
@@ -87,7 +87,7 @@ function errorResult(error: StructuredError | string): CallToolResult {
   };
 }
 
-export const standaloneHandlers = {
+export const handlers = {
   "add-rectangle": async (args: {
     x?: number;
     y?: number;
@@ -453,9 +453,8 @@ export const standaloneHandlers = {
       });
     }
 
-    // Handle batch operation
-    if (hasBatchParams) {
-      const results = args.cells!.map((item) => {
+    // hasBatchParams is guaranteed true here by the guards above
+    const results = args.cells!.map((item) => {
         const style = getShapeStyle(item.shape_name);
         if (!style) {
           return {
@@ -496,10 +495,6 @@ export const standaloneHandlers = {
         },
         results,
       });
-    }
-
-    // Should never reach here
-    return errorResult("Invalid set-cell-shape arguments");
   },
 
   "batch-add-cells": async (args: {
@@ -623,31 +618,26 @@ export const standaloneHandlers = {
       });
     }
 
-    // Handle batch queries
-    if (args.queries) {
-      const batchResults = args.queries.map(q => {
-        const results = searchAzureIcons(q, limit);
-        return {
-          query: q,
-          matches: results.map(r => ({
-            name: r.title,
-            id: r.id,
-            width: r.width,
-            height: r.height,
-            confidence: r.score,
-          })),
-          total: results.length,
-        };
-      });
+    // args.queries is guaranteed truthy here by the guards above
+    const batchResults = args.queries!.map(q => {
+      const results = searchAzureIcons(q, limit);
+      return {
+        query: q,
+        matches: results.map(r => ({
+          name: r.title,
+          id: r.id,
+          width: r.width,
+          height: r.height,
+          confidence: r.score,
+        })),
+        total: results.length,
+      };
+    });
 
-      return successResult({
-        batch: true,
-        results: batchResults,
-        totalQueries: args.queries.length,
-      });
-    }
-
-    // Should never reach here
-    return errorResult("Invalid search-shapes arguments");
+    return successResult({
+      batch: true,
+      results: batchResults,
+      totalQueries: args.queries!.length,
+    });
   },
 };

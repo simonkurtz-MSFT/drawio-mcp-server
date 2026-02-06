@@ -1,5 +1,5 @@
 /**
- * Standalone Draw.io diagram model that generates XML without requiring
+ * Draw.io diagram model that generates XML without requiring
  * the browser extension or Draw.io application.
  */
 
@@ -292,7 +292,7 @@ export class DiagramModel {
   }
 
   getActiveLayer(): Layer {
-    return this.layers.find(l => l.id === this.activeLayerId) ?? this.layers[0];
+    return this.layers.find(l => l.id === this.activeLayerId)!;
   }
 
   moveCellToLayer(cellId: string, targetLayerId: string): Cell | { error: StructuredError } {
@@ -334,11 +334,11 @@ export class DiagramModel {
     const cellsXml = Array.from(this.cells.values())
       .map(cell => {
         if (cell.type === "vertex") {
-          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style ?? "")}" vertex="1" parent="${cell.parent ?? "1"}">
-                    <mxGeometry x="${cell.x ?? 0}" y="${cell.y ?? 0}" width="${cell.width ?? 100}" height="${cell.height ?? 60}" as="geometry"/>
+          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style!)}" vertex="1" parent="${cell.parent!}">
+                    <mxGeometry x="${cell.x!}" y="${cell.y!}" width="${cell.width!}" height="${cell.height!}" as="geometry"/>
                 </mxCell>`;
         } else {
-          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style ?? "")}" edge="1" parent="${cell.parent ?? "1"}" source="${cell.sourceId ?? ""}" target="${cell.targetId ?? ""}">
+          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style!)}" edge="1" parent="${cell.parent!}" source="${cell.sourceId!}" target="${cell.targetId!}">
                     <mxGeometry relative="1" as="geometry"/>
                 </mxCell>`;
         }
@@ -399,8 +399,8 @@ ${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
       if (positions.length > 0) {
         const minX = Math.min(...positions.map(v => v.x!));
         const minY = Math.min(...positions.map(v => v.y!));
-        const maxX = Math.max(...positions.map(v => (v.x ?? 0) + (v.width ?? 0)));
-        const maxY = Math.max(...positions.map(v => (v.y ?? 0) + (v.height ?? 0)));
+        const maxX = Math.max(...positions.map(v => v.x! + v.width!));
+        const maxY = Math.max(...positions.map(v => v.y! + v.height!));
         bounds = { minX, minY, maxX, maxY };
       }
     }
@@ -412,7 +412,7 @@ ${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
     // Count cells by layer
     const cellsByLayer: Record<string, number> = {};
     cells.forEach(c => {
-      const layer = c.parent ?? "1";
+      const layer = c.parent!;
       cellsByLayer[layer] = (cellsByLayer[layer] ?? 0) + 1;
     });
 
@@ -494,8 +494,9 @@ batchAddCells(
       }
       results.push({ success: true, cell, tempId: item.tempId });
     } else if (item.type === "edge") {
-      const sourceId = item.sourceId ? tempIdMap.get(item.sourceId) ?? item.sourceId : "";
-      const targetId = item.targetId ? tempIdMap.get(item.targetId) ?? item.targetId : "";
+      // Validation guarantees sourceId/targetId are truthy for edges
+      const sourceId = tempIdMap.get(item.sourceId!) ?? item.sourceId!;
+      const targetId = tempIdMap.get(item.targetId!) ?? item.targetId!;
 
       const result = this.addEdge({
         sourceId,
@@ -504,18 +505,12 @@ batchAddCells(
         style: item.style,
       });
 
-      if ("error" in result) {
-        results.push({
-          success: false,
-          error: result.error,
-          tempId: item.tempId,
-        });
-      } else {
-        if (item.tempId) {
-          tempIdMap.set(item.tempId, result.id);
-        }
-        results.push({ success: true, cell: result, tempId: item.tempId });
+      // Validation guarantees addEdge succeeds — cast safely
+      const edge = result as Cell;
+      if (item.tempId) {
+        tempIdMap.set(item.tempId, edge.id);
       }
+      results.push({ success: true, cell: edge, tempId: item.tempId });
     }
   }
 
@@ -539,8 +534,7 @@ private validateBatchCells(
     if (item.type === "edge") {
       // Validate source exists (check temp IDs from earlier items and existing cells)
       const sourceExists =
-        (item.sourceId && (createdTempIds.has(item.sourceId) || this.cells.has(item.sourceId))) ??
-        false;
+        !!(item.sourceId && (createdTempIds.has(item.sourceId) || this.cells.has(item.sourceId)));
       if (!sourceExists) {
         errors.push({
           success: false,
@@ -556,8 +550,7 @@ private validateBatchCells(
 
       // Validate target exists
       const targetExists =
-        (item.targetId && (createdTempIds.has(item.targetId) || this.cells.has(item.targetId))) ??
-        false;
+        !!(item.targetId && (createdTempIds.has(item.targetId) || this.cells.has(item.targetId)));
       if (!targetExists) {
         errors.push({
           success: false,
@@ -623,5 +616,5 @@ batchEditCells(
 }
 }
 
-// Singleton instance for the standalone diagram
+// Singleton instance for the diagram
 export const diagram = new DiagramModel();

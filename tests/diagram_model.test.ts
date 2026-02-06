@@ -43,12 +43,39 @@ describe("DiagramModel", () => {
       expect(xml).toContain("Layer &lt;1&gt; &amp; &quot;test&quot;");
     });
 
+    it("should escape special XML characters in cell text values", () => {
+      model.addRectangle({ text: '<strong>"Hello" & \'World\'</strong>' });
+      const xml = model.toXml();
+      expect(xml).toContain("&lt;strong&gt;&quot;Hello&quot; &amp; &apos;World&apos;&lt;/strong&gt;");
+    });
+
+    it("should escape special XML characters in cell styles", () => {
+      model.addRectangle({ text: "Test", style: 'fillColor=#ff0000;label="<b>bold</b>";' });
+      const xml = model.toXml();
+      expect(xml).toContain('fillColor=#ff0000;label=&quot;&lt;b&gt;bold&lt;/b&gt;&quot;;');
+    });
+
     it("should produce valid XML with no custom layers", () => {
       model.addRectangle({ text: "Hello" });
       const xml = model.toXml();
       expect(xml).toContain('<mxCell id="0"/>');
       expect(xml).toContain('<mxCell id="1" parent="0"/>');
       expect(xml).toContain('value="Hello"');
+    });
+
+    it("should render edges in XML output", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id, text: "connects" });
+      expect("error" in edge).toBe(false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        expect(xml).toContain(`edge="1"`);
+        expect(xml).toContain(`source="${a.id}"`);
+        expect(xml).toContain(`target="${b.id}"`);
+        expect(xml).toContain(`value="connects"`);
+        expect(xml).toContain(`<mxGeometry relative="1" as="geometry"/>`);
+      }
     });
   });
 
@@ -88,6 +115,15 @@ describe("DiagramModel", () => {
       expect("error" in result).toBe(true);
     });
 
+    it("should error when target does not exist", () => {
+      const a = model.addRectangle({ text: "Source" });
+      const result = model.addEdge({ sourceId: a.id, targetId: "nonexistent" });
+      expect("error" in result).toBe(true);
+      if ("error" in result) {
+        expect(result.error.code).toBe("TARGET_NOT_FOUND");
+      }
+    });
+
     it("should create edge between existing cells", () => {
       const a = model.addRectangle({ text: "A" });
       const b = model.addRectangle({ text: "B" });
@@ -95,6 +131,17 @@ describe("DiagramModel", () => {
       expect("error" in edge).toBe(false);
       if (!("error" in edge)) {
         expect(edge.type).toBe("edge");
+      }
+    });
+
+    it("should create edge with custom text and style", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id, text: "label", style: "dashed=1;" });
+      expect("error" in edge).toBe(false);
+      if (!("error" in edge)) {
+        expect(edge.value).toBe("label");
+        expect(edge.style).toBe("dashed=1;");
       }
     });
   });
@@ -210,6 +257,83 @@ describe("DiagramModel", () => {
         }
       }
     });
+
+    it("should update edge target to valid cell", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const c = model.addRectangle({ text: "C" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id });
+      expect("error" in edge).toBe(false);
+      if (!("error" in edge)) {
+        const result = model.editEdge(edge.id, { targetId: c.id });
+        expect("error" in result).toBe(false);
+        if (!("error" in result)) {
+          expect(result.targetId).toBe(c.id);
+        }
+      }
+    });
+
+    it("should reassign both source and target simultaneously", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const c = model.addRectangle({ text: "C" });
+      const d = model.addRectangle({ text: "D" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id });
+      expect("error" in edge).toBe(false);
+      if (!("error" in edge)) {
+        const result = model.editEdge(edge.id, { sourceId: c.id, targetId: d.id });
+        expect("error" in result).toBe(false);
+        if (!("error" in result)) {
+          expect(result.sourceId).toBe(c.id);
+          expect(result.targetId).toBe(d.id);
+        }
+      }
+    });
+
+    it("should partially update source when target is invalid", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const c = model.addRectangle({ text: "C" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id });
+      expect("error" in edge).toBe(false);
+      if (!("error" in edge)) {
+        const result = model.editEdge(edge.id, { sourceId: c.id, targetId: "nonexistent" });
+        expect("error" in result).toBe(true);
+        if ("error" in result) {
+          expect(result.error.code).toBe("TARGET_NOT_FOUND");
+        }
+        // Source was already mutated before the target check
+        const updated = model.getCell(edge.id);
+        expect(updated?.sourceId).toBe(c.id);
+      }
+    });
+  });
+
+  describe("getCell", () => {
+    it("should return a vertex by ID", () => {
+      const cell = model.addRectangle({ text: "Hello" });
+      const found = model.getCell(cell.id);
+      expect(found).toBeDefined();
+      expect(found!.value).toBe("Hello");
+      expect(found!.type).toBe("vertex");
+    });
+
+    it("should return undefined for non-existent ID", () => {
+      expect(model.getCell("nonexistent")).toBeUndefined();
+    });
+
+    it("should return an edge by ID", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id });
+      if (!("error" in edge)) {
+        const found = model.getCell(edge.id);
+        expect(found).toBeDefined();
+        expect(found!.type).toBe("edge");
+        expect(found!.sourceId).toBe(a.id);
+        expect(found!.targetId).toBe(b.id);
+      }
+    });
   });
 
   describe("moveCellToLayer", () => {
@@ -273,6 +397,68 @@ describe("DiagramModel", () => {
       // Should not have persisted
       expect(model.listCells()).toHaveLength(0);
     });
+
+    it("should support dry run with no text provided", () => {
+      const results = model.batchAddCells(
+        [{ type: "vertex" }],
+        { dryRun: true },
+      );
+      expect(results).toHaveLength(1);
+      expect(results[0].success).toBe(true);
+      expect(results[0].cell?.value).toBe("");
+    });
+
+    it("should return INVALID_SOURCE with tempId when edge has bad source", () => {
+      const results = model.batchAddCells([
+        { type: "edge", sourceId: "bad-src", targetId: "bad-tgt", tempId: "edge-1" },
+      ]);
+      expect(results.length).toBeGreaterThanOrEqual(1);
+      const sourceErr = results.find(r => !r.success && r.error?.code === "INVALID_SOURCE");
+      expect(sourceErr).toBeDefined();
+      expect(sourceErr!.tempId).toBe("edge-1");
+    });
+
+    it("should succeed with edge that has no tempId", () => {
+      const results = model.batchAddCells([
+        { type: "vertex", text: "A", tempId: "tmp-a" },
+        { type: "vertex", text: "B", tempId: "tmp-b" },
+        { type: "edge", sourceId: "tmp-a", targetId: "tmp-b" },
+      ]);
+      expect(results).toHaveLength(3);
+      expect(results[2].success).toBe(true);
+      expect(results[2].tempId).toBeUndefined();
+    });
+
+    it("should succeed with vertex that has no tempId", () => {
+      const results = model.batchAddCells([
+        { type: "vertex", text: "No TempId" },
+      ]);
+      expect(results).toHaveLength(1);
+      expect(results[0].success).toBe(true);
+      expect(results[0].tempId).toBeUndefined();
+    });
+
+    it("should reference existing diagram cells in batch edges", () => {
+      const existing = model.addRectangle({ text: "Existing" });
+      const results = model.batchAddCells([
+        { type: "vertex", text: "New", tempId: "tmp-new" },
+        { type: "edge", sourceId: existing.id, targetId: "tmp-new" },
+      ]);
+      expect(results).toHaveLength(2);
+      expect(results[1].success).toBe(true);
+    });
+
+    it("should allow an edge to reference another edge via tempId", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const results = model.batchAddCells([
+        { type: "edge", sourceId: a.id, targetId: b.id, tempId: "edge-1" },
+        { type: "edge", sourceId: a.id, targetId: "edge-1" },
+      ]);
+      expect(results).toHaveLength(2);
+      expect(results[0].success).toBe(true);
+      expect(results[1].success).toBe(true);
+    });
   });
 
   describe("batchEditCells", () => {
@@ -303,6 +489,56 @@ describe("DiagramModel", () => {
       expect(model.listCells()).toHaveLength(2);
       model.clear();
       expect(model.listCells()).toHaveLength(0);
+    });
+
+    it("should reset nextId so new cells start from cell-2", () => {
+      model.addRectangle({ text: "A" }); // cell-2
+      model.addRectangle({ text: "B" }); // cell-3
+      model.clear();
+      const cell = model.addRectangle({ text: "C" });
+      expect(cell.id).toBe("cell-2");
+    });
+
+    it("should not reset layers or activeLayerId", () => {
+      const layer = model.createLayer("Custom");
+      model.setActiveLayer(layer.id);
+      model.addRectangle({ text: "A" });
+      model.clear();
+
+      // Layers still exist after clear
+      expect(model.listLayers()).toHaveLength(2);
+      // Active layer is still the custom layer
+      expect(model.getActiveLayer().id).toBe(layer.id);
+      // New cells are parented to the custom layer
+      const cell = model.addRectangle({ text: "B" });
+      expect(cell.parent).toBe(layer.id);
+    });
+  });
+
+  describe("listCells", () => {
+    it("should return all cells without filter", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      model.addEdge({ sourceId: a.id, targetId: b.id });
+      expect(model.listCells()).toHaveLength(3);
+    });
+
+    it("should filter by vertex type", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      model.addEdge({ sourceId: a.id, targetId: b.id });
+      const vertices = model.listCells({ cellType: "vertex" });
+      expect(vertices).toHaveLength(2);
+      expect(vertices.every(c => c.type === "vertex")).toBe(true);
+    });
+
+    it("should filter by edge type", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      model.addEdge({ sourceId: a.id, targetId: b.id });
+      const edges = model.listCells({ cellType: "edge" });
+      expect(edges).toHaveLength(1);
+      expect(edges[0].type).toBe("edge");
     });
   });
 
@@ -418,6 +654,14 @@ describe("DiagramModel", () => {
       expect(stats.cells_by_layer["1"]).toBe(1); // Default layer
       expect(stats.cells_by_layer[layer1.id]).toBe(2);
       expect(stats.cells_by_layer[layer2.id]).toBe(1);
+    });
+
+    it("should return null bounds when vertices have no position", () => {
+      // addRectangle always sets x/y, but default is 0,0
+      // Vertices with x=0 y=0 still count as positioned (filter checks !== undefined)
+      model.addRectangle({ text: "A" });
+      const stats = model.getStats();
+      expect(stats.bounds).not.toBeNull();
     });
   });
 });

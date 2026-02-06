@@ -1,15 +1,15 @@
 services:
-  standalone:
+  drawio-mcp-server:
     # Build
     build:
       context: .
       dockerfile: Dockerfile
       tags:
-        - ${REGISTRY}/drawio-mcp-server-standalone:latest
-        - ${REGISTRY}/drawio-mcp-server-standalone:${IMAGE_VERSION:-latest}
-    image: ${REGISTRY}/drawio-mcp-server-standalone:${IMAGE_VERSION:-latest}
+        - ${REGISTRY}/drawio-mcp-server:latest
+        - ${REGISTRY}/drawio-mcp-server:${IMAGE_VERSION:-latest}
+    image: ${REGISTRY}/drawio-mcp-server:${IMAGE_VERSION:-latest}
     ports:
-      # HTTP for standalone MCP server
+      # HTTP for MCP server
       - "8080:8080"
     restart: unless-stopped
 

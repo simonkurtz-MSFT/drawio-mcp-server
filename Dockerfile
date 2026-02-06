@@ -40,7 +40,7 @@ COPY assets ./assets
 
 USER nodejs
 
-# 8080: HTTP for standalone MCP server
+# 8080: HTTP for MCP server
 EXPOSE 8080
 
 ENTRYPOINT ["node", "build/index.js"]

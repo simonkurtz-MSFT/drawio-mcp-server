@@ -2,8 +2,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
-import { ServerNotification, ServerRequest } from "@modelcontextprotocol/sdk/types.js";
 import { serve } from "@hono/node-server";
 import { z } from "zod";
 import { Hono } from "hono";
@@ -16,14 +14,15 @@ import {
   create_logger as create_server_logger,
   validLogLevels,
 } from "./loggers/mcp_server_logger.js";
-import { standaloneHandlers } from "./standalone_tools.js";
+import { handlers } from "./tools.js";
+import { createToolHandlerFactory } from "./tool_handler.js";
 
 /**
  * Display help message and exit
  */
 function showHelp(): never {
   console.log(`
-Draw.io MCP Server (${VERSION}) - Standalone Mode
+Draw.io MCP Server (${VERSION})
 
 Usage: drawio-mcp-server [options]
 
@@ -73,35 +72,9 @@ const log =
     : create_console_logger();
 
 /**
- * Creates a tool handler that logs session/request metadata and delegates to standaloneHandlers.
- * Works for both tools WITH inputSchema (args + extra) and WITHOUT (extra only).
+ * Create tool handler factory that logs session/request metadata and delegates to handlers.
  */
-function createToolHandler(toolName: string, hasArgs: true): (args: any, extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => Promise<any>;
-function createToolHandler(toolName: string, hasArgs?: false): (extra: RequestHandlerExtra<ServerRequest, ServerNotification>) => Promise<any>;
-function createToolHandler(toolName: string, hasArgs = false) {
-  return async (...params: any[]) => {
-    const extra: RequestHandlerExtra<ServerRequest, ServerNotification> = hasArgs ? params[1] : params[0];
-    const args = hasArgs ? params[0] : {};
-    const sessionId = extra.sessionId ?? "no-session";
-    const requestId = extra.requestId;
-    log.debug(`[tool:${toolName}] called (session=${sessionId}, req=${requestId})`);
-
-    const handler = standaloneHandlers[toolName as keyof typeof standaloneHandlers];
-    if (handler) {
-      const start = Date.now();
-      const result = await handler(args);
-      const duration = Date.now() - start;
-      const isError = result.isError ?? false;
-      log.debug(`[tool:${toolName}] ${isError ? "error" : "ok"} in ${duration}ms (session=${sessionId}, req=${requestId})`);
-      return result;
-    }
-    log.debug(`[tool:${toolName}] not found (session=${sessionId}, req=${requestId})`);
-    return {
-      content: [{ type: "text" as const, text: JSON.stringify({ error: `Tool ${toolName} not available` }) }],
-      isError: true,
-    };
-  };
-}
+const createToolHandler = createToolHandlerFactory(handlers, log);
 
 const TOOL_add_rectangle = "add-rectangle";
 server.registerTool(
@@ -515,7 +488,7 @@ const TOOL_export_diagram = "export-diagram";
 server.registerTool(
   TOOL_export_diagram,
   {
-    description: "[Standalone only] Export the diagram as Draw.io XML. Save output to a .drawio file.",
+    description: "Export the diagram as Draw.io XML. Save output to a .drawio file.",
   },
   createToolHandler(TOOL_export_diagram),
 );
@@ -524,7 +497,7 @@ const TOOL_clear_diagram = "clear-diagram";
 server.registerTool(
   TOOL_clear_diagram,
   {
-    description: "[Standalone only] Clear all cells and reset the diagram.",
+    description: "Clear all cells and reset the diagram.",
   },
   createToolHandler(TOOL_clear_diagram),
 );
@@ -533,7 +506,7 @@ const TOOL_get_diagram_stats = "get-diagram-stats";
 server.registerTool(
   TOOL_get_diagram_stats,
   {
-    description: "[Standalone only] Get comprehensive statistics about the current diagram including cell counts, bounds, layer distribution, and more. Useful for understanding diagram state before making changes.",
+    description: "Get comprehensive statistics about the current diagram including cell counts, bounds, layer distribution, and more. Useful for understanding diagram state before making changes.",
   },
   createToolHandler(TOOL_get_diagram_stats),
 );
@@ -543,7 +516,7 @@ const TOOL_batch_add_cells = "batch-add-cells";
 server.registerTool(
   TOOL_batch_add_cells,
   {
-    description: "[Standalone only] Add multiple raw vertex and edge cells in one call with explicit styles. Use temp_id to reference cells within the batch. For shape-library cells (Azure icons, basic shapes), use batch-add-cells-of-shape instead. Example: {cells: [{type:'vertex', x:100, y:100, text:'Web', temp_id:'web'}, {type:'edge', source_id:'web', target_id:'api'}]}",
+    description: "Add multiple raw vertex and edge cells in one call with explicit styles. Use temp_id to reference cells within the batch. For shape-library cells (Azure icons, basic shapes), use batch-add-cells-of-shape instead. Example: {cells: [{type:'vertex', x:100, y:100, text:'Web', temp_id:'web'}, {type:'edge', source_id:'web', target_id:'api'}]}",
     inputSchema: {
       cells: z.array(z.object({
         type: z.enum(["vertex", "edge"]).describe("Cell type: 'vertex' for shapes, 'edge' for connections"),
@@ -567,7 +540,7 @@ const TOOL_batch_edit_cells = "batch-edit-cells";
 server.registerTool(
   TOOL_batch_edit_cells,
   {
-    description: "[Standalone only] Edit multiple vertex cells in one call. Much faster than calling edit-cell repeatedly. Only updates specified properties on each cell.",
+    description: "Edit multiple vertex cells in one call. Much faster than calling edit-cell repeatedly. Only updates specified properties on each cell.",
     inputSchema: {
       cells: z.array(z.object({
         cell_id: z.string().describe("ID of the cell to update"),
@@ -672,7 +645,7 @@ async function main() {
 
   const config: ServerConfig = configResult;
 
-  log.debug(`Draw.io MCP Server v${VERSION} starting in STANDALONE mode`);
+  log.debug(`Draw.io MCP Server v${VERSION} starting`);
   log.debug(`Transports: ${config.transports.join(", ")}`);
 
   if (config.transports.indexOf("stdio") > -1) {

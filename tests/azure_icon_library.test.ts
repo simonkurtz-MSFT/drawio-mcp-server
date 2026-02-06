@@ -1,3 +1,6 @@
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import {
   loadAzureIconLibrary,
   getAzureIconLibrary,
@@ -39,6 +42,114 @@ describe("loadAzureIconLibrary", () => {
     expect(empty.shapes).toHaveLength(0);
     expect(empty.categories.size).toBe(0);
     expect(empty.indexByTitle.size).toBe(0);
+  });
+
+  test("returns empty shapes when XML has no mxlibrary tag", () => {
+    const tmpFile = path.join(os.tmpdir(), `drawio-test-no-mxlib-${Date.now()}.xml`);
+    try {
+      fs.writeFileSync(tmpFile, "<root><nothing/></root>", "utf-8");
+      const result = loadAzureIconLibrary(tmpFile);
+      expect(result.shapes).toHaveLength(0);
+      expect(result.categories.size).toBe(0);
+    } finally {
+      fs.unlinkSync(tmpFile);
+    }
+  });
+
+  test("returns empty shapes when mxlibrary contains invalid JSON", () => {
+    const tmpFile = path.join(os.tmpdir(), `drawio-test-bad-json-${Date.now()}.xml`);
+    try {
+      fs.writeFileSync(tmpFile, "<mxlibrary>[{invalid json!}]</mxlibrary>", "utf-8");
+      const result = loadAzureIconLibrary(tmpFile);
+      expect(result.shapes).toHaveLength(0);
+    } finally {
+      fs.unlinkSync(tmpFile);
+    }
+  });
+
+  test("returns empty library when path is a directory", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "drawio-test-dir-"));
+    try {
+      const result = loadAzureIconLibrary(tmpDir);
+      expect(result.shapes).toHaveLength(0);
+    } finally {
+      fs.rmdirSync(tmpDir);
+    }
+  });
+
+  test("handles shapes without image data URL in XML", () => {
+    const tmpFile = path.join(os.tmpdir(), `drawio-test-no-image-${Date.now()}.xml`);
+    const xmlContent = `<mxlibrary>[{"xml":"<mxGraphModel><root><mxCell style=\\"fillColor=#FF0000\\"/></root></mxGraphModel>","w":50,"h":50,"title":"No Image Shape"}]</mxlibrary>`;
+    try {
+      fs.writeFileSync(tmpFile, xmlContent, "utf-8");
+      const result = loadAzureIconLibrary(tmpFile);
+      expect(result.shapes).toHaveLength(1);
+      expect(result.shapes[0].style).toBeUndefined();
+      expect(result.shapes[0].title).toBe("No Image Shape");
+    } finally {
+      fs.unlinkSync(tmpFile);
+    }
+  });
+
+  test("handles item with missing xml, title, width, and height", () => {
+    const tmpFile = path.join(os.tmpdir(), `drawio-test-defaults-${Date.now()}.xml`);
+    // Item with no xml, no title, no w, no h
+    const xmlContent = `<mxlibrary>[{}]</mxlibrary>`;
+    try {
+      fs.writeFileSync(tmpFile, xmlContent, "utf-8");
+      const result = loadAzureIconLibrary(tmpFile);
+      expect(result.shapes).toHaveLength(1);
+      expect(result.shapes[0].xml).toBe("");
+      expect(result.shapes[0].title).toBe("shape-0");
+      expect(result.shapes[0].id).toBe("shape-0");
+      expect(result.shapes[0].width).toBe(48);
+      expect(result.shapes[0].height).toBe(48);
+    } finally {
+      fs.unlinkSync(tmpFile);
+    }
+  });
+
+  test("handles item with non-printable title falling back to shape-N", () => {
+    const tmpFile = path.join(os.tmpdir(), `drawio-test-nonprint-${Date.now()}.xml`);
+    // Title with only non-printable characters
+    const xmlContent = `<mxlibrary>[{"title":"\\u0000\\u0001","w":10,"h":10}]</mxlibrary>`;
+    try {
+      fs.writeFileSync(tmpFile, xmlContent, "utf-8");
+      const result = loadAzureIconLibrary(tmpFile);
+      expect(result.shapes).toHaveLength(1);
+      expect(result.shapes[0].title).toBe("shape-0");
+    } finally {
+      fs.unlinkSync(tmpFile);
+    }
+  });
+
+  test("falls back to shape-N id when title sanitizes to empty id", () => {
+    const tmpFile = path.join(os.tmpdir(), `drawio-test-emptyid-${Date.now()}.xml`);
+    // Title "+++" is printable ASCII so title stays "+++", but ID sanitization
+    // produces: "+++" → "---" → "-" → "" → falls back to "shape-0"
+    const xmlContent = `<mxlibrary>[{"title":"+++","w":20,"h":20}]</mxlibrary>`;
+    try {
+      fs.writeFileSync(tmpFile, xmlContent, "utf-8");
+      const result = loadAzureIconLibrary(tmpFile);
+      expect(result.shapes).toHaveLength(1);
+      expect(result.shapes[0].title).toBe("+++");
+      expect(result.shapes[0].id).toBe("shape-0");
+    } finally {
+      fs.unlinkSync(tmpFile);
+    }
+  });
+
+  test("handles item with URL-encoded XML (entity references)", () => {
+    const tmpFile = path.join(os.tmpdir(), `drawio-test-encoded-${Date.now()}.xml`);
+    const xmlContent = `<mxlibrary>[{"xml":"&lt;mxGraphModel&gt;&lt;root/&gt;&lt;/mxGraphModel&gt;","title":"Encoded","w":30,"h":30}]</mxlibrary>`;
+    try {
+      fs.writeFileSync(tmpFile, xmlContent, "utf-8");
+      const result = loadAzureIconLibrary(tmpFile);
+      expect(result.shapes).toHaveLength(1);
+      expect(result.shapes[0].xml).toBe("<mxGraphModel><root/></mxGraphModel>");
+    } finally {
+      fs.unlinkSync(tmpFile);
+    }
   });
 });
 
@@ -172,6 +283,22 @@ describe("searchAzureIcons", () => {
   test("returns empty for gibberish query", () => {
     const results = searchAzureIcons("xyzzyqwerty12345");
     expect(results).toHaveLength(0);
+  });
+
+  test("exact title match gets score of 1.0", () => {
+    const first = library.shapes[0];
+    const results = searchAzureIcons(first.title, 10);
+    const exactMatch = results.find(r => r.title === first.title);
+    expect(exactMatch).toBeDefined();
+    expect(exactMatch!.score).toBe(1.0);
+  });
+
+  test("exact id match gets high score", () => {
+    const first = library.shapes[0];
+    const results = searchAzureIcons(first.id, 10);
+    const idMatch = results.find(r => r.id === first.id);
+    expect(idMatch).toBeDefined();
+    expect(idMatch!.score).toBeGreaterThanOrEqual(0.95);
   });
 });
 

@@ -1,7 +1,7 @@
 {
   "name": "drawio-mcp-server",
   "version": "1.0.0",
-  "description": "Standalone Draw.io MCP server for diagram generation",
+  "description": "Draw.io MCP server for diagram generation",
   "type": "module",
   "main": "./build/index.js",
   "types": "./build/index.d.ts",

@@ -187,6 +187,14 @@ describe("parseConfig", () => {
     const result = parseConfig(["--transport", "foo"]);
     expect(result).toBeInstanceOf(Error);
   });
+
+  test("missing transport value returns Error", () => {
+    const result = parseConfig(["--transport"]);
+    expect(result).toBeInstanceOf(Error);
+    expect((result as Error).message).toContain(
+      "--transport flag requires a transport name",
+    );
+  });
 });
 
 describe("buildConfig", () => {
