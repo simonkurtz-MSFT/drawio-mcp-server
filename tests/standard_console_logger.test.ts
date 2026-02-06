@@ -1,19 +1,19 @@
-import { jest } from "@jest/globals";
+import { vi } from "vitest";
 import { create_logger } from "../src/standard_console_logger.js";
 
 describe("create_logger", () => {
   let originalConsoleLog: typeof console.log;
   let originalConsoleDebug: typeof console.debug;
-  let mockConsoleLog: jest.Mock;
-  let mockConsoleDebug: jest.Mock;
+  let mockConsoleLog: ReturnType<typeof vi.fn>;
+  let mockConsoleDebug: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     // Save original console methods
     originalConsoleLog = console.log;
     originalConsoleDebug = console.debug;
     // Create mocks
-    mockConsoleLog = jest.fn();
-    mockConsoleDebug = jest.fn();
+    mockConsoleLog = vi.fn();
+    mockConsoleDebug = vi.fn();
     console.log = mockConsoleLog;
     console.debug = mockConsoleDebug;
   });
@@ -23,7 +23,7 @@ describe("create_logger", () => {
     console.log = originalConsoleLog;
     console.debug = originalConsoleDebug;
     // Clear all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should return a Logger object with log and debug methods", () => {

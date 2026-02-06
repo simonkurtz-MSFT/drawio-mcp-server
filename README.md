@@ -7,11 +7,11 @@ Let's do some Vibe Diagramming with the most wide-spread diagramming tool called
 
 ## Introduction
 
-The Draw.io MCP server is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) implementation that brings powerful diagramming capabilities to AI agentic systems. This integration enables:
+The Draw.io MCP server is a standalone [Model Context Protocol (MCP)](https://modelcontextprotocol.io) implementation that brings powerful diagramming capabilities to AI agentic systems. This integration enables:
 
-- **Seamless Draw.io Integration**: Connect your MCP-powered applications with Draw.io's rich diagramming functionality
-- **Programmatic Diagram Control**: Create, modify, and manage diagram content through MCP commands
-- **Intelligent Diagram Analysis**: Retrieve detailed information about diagrams and their components for processing by AI agents
+- **Programmatic Diagram Generation**: Create, modify, and manage diagram content through MCP commands
+- **Intelligent Diagram Creation**: Generate diagrams programmatically with AI agents
+- **XML Export**: Export diagrams as standard Draw.io XML format for use in Draw.io applications
 - **Agentic System Development**: Build sophisticated AI workflows that incorporate visual modeling and diagram automation
 
 As an MCP-compliant tool, it follows the standard protocol for tool integration, making it compatible with any MCP client. This implementation is particularly valuable for creating AI systems that need to:
@@ -20,7 +20,7 @@ As an MCP-compliant tool, it follows the standard protocol for tool integration,
 - Annotate technical documentation
 - Create flowcharts and process maps programmatically
 
-The tool supports bidirectional communication, allowing both control of Draw.io instances and extraction of diagram information for further processing by AI agents in your MCP ecosystem.
+This server operates in **standalone mode**, generating Draw.io XML directly without requiring a browser extension or Draw.io instance.
 
 ## Requirements
 
@@ -28,7 +28,6 @@ To use the Draw.io MCP server, you'll need:
 
 ### Core Components
 - **Node.js** (v20 or higher) - Runtime environment for the MCP server
-- **Draw.io MCP Browser Extension** - Enables communication between Draw.io and the MCP server
 
 ### MCP Ecosystem
 - **MCP Client** (e.g., [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector)) - For testing and debugging the integration
@@ -36,45 +35,125 @@ To use the Draw.io MCP server, you'll need:
 
 ### Optional for Development
 - **pnpm** - Preferred package manager
-- **Chrome DevTools** - For debugging when using `--inspect` flag
 
-Note: The Draw.io desktop app or web version must be accessible to the system where the MCP server runs.
+Note: The server generates Draw.io XML files that can be opened in Draw.io desktop app or web version.
+
+## Running Locally
+
+### Development Setup
+
+To run the Draw.io MCP server locally for development:
+
+1. **Clone the repository**:
+   ```sh
+   git clone https://github.com/lgazo/drawio-mcp-server.git
+   cd drawio-mcp-server
+   ```
+
+2. **Install dependencies**:
+   ```sh
+   pnpm install
+   # or
+   npm install
+   ```
+
+3. **Build the project**:
+   ```sh
+   pnpm run build
+   # or
+   npm run build
+   ```
+
+4. **Run the server**:
+   ```sh
+   node build/index.js
+   ```
+
+   With custom HTTP port:
+   ```sh
+   node build/index.js --transport http --http-port 4000
+   ```
+
+5. **Development mode** (auto-rebuild on changes):
+   ```sh
+   pnpm run dev
+   # or
+   npm run dev
+   ```
+
+### MCP Configuration for Local Development
+
+When running the server locally from your development directory, configure your MCP client to point to the built server file:
+
+#### Claude Desktop Configuration
+
+Update your `claude_desktop_config.json`:
+
+**macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+**Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/drawio-mcp-server/build/index.js"
+      ]
+    }
+  }
+}
+```
+
+With custom HTTP port:
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/drawio-mcp-server/build/index.js",
+        "--transport",
+        "http",
+        "--http-port",
+        "4000"
+      ]
+    }
+  }
+}
+```
+
+#### MCP Inspector Configuration
+
+For testing with the MCP Inspector, create or update `inspector.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "node",
+      "args": [
+        "./build/index.js"
+      ]
+    }
+  }
+}
+```
+
+Then run the inspector:
+```sh
+pnpm run inspect
+# or
+npx @modelcontextprotocol/inspector --config ./inspector.json --server drawio
+```
+
+**Note**: Replace `/absolute/path/to/drawio-mcp-server` with the actual absolute path to your cloned repository.
 
 ## Configuration
 
-### WebSocket Port
-
-The server listens on port 3333 by default for WebSocket connections from the browser extension. You can customize this port using the `--extension-port` or `-p` flag.
-
-**Default behavior** (port 3333):
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["-y", "drawio-mcp-server"]
-    }
-  }
-}
-```
-
-**Custom port** (e.g., port 8080):
-```json
-{
-  "mcpServers": {
-    "drawio": {
-      "command": "npx",
-      "args": ["-y", "drawio-mcp-server", "--extension-port", "8080"]
-    }
-  }
-}
-```
-
-**Note**: When using a custom port, ensure the browser extension is configured to connect to the same port.
-
 ### HTTP Transport Port
 
-The server can expose a streamable HTTP MCP transport on port 3000. Change this using the `--http-port` flag:
+The server can expose a streamable HTTP MCP transport on port 8080 by default. Change this using the `--http-port` flag:
 
 ```json
 {
@@ -91,29 +170,41 @@ The server can expose a streamable HTTP MCP transport on port 3000. Change this 
 
 By default only the stdio transport starts. Limit or combine transports with the `--transport` flag:
 
-- `--transport stdio` – start only stdio (CLI-friendly)
+- `--transport stdio` – start only stdio (CLI-friendly, default)
 - `--transport http` – start only the HTTP transport (for remote clients)
 - `--transport stdio,http` – start both transports
 
+**Default behavior** (stdio only):
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "command": "npx",
+      "args": ["-y", "drawio-mcp-server"]
+    }
+  }
+}
+```
+
 ### Running the streamable HTTP transport
 
-Use the streamable HTTP transport when you need to reach the MCP server over the network (for example from a remote agent runtime). The Draw.io browser extension is still required, and you must opt in to the HTTP transport.
+Use the streamable HTTP transport when you need to reach the MCP server over the network (for example from a remote agent runtime).
 
 1. Start the server with HTTP enabled (optionally alongside stdio):
 
 ```sh
-npx -y drawio-mcp-server --transport http --http-port 3000
-# or both: npx -y drawio-mcp-server --transport stdio,http --http-port 4000
+npx -y drawio-mcp-server --transport http --http-port 8080
+# or both: npx -y drawio-mcp-server --transport stdio,http --http-port 8080
 ```
 
 2. Verify the health endpoint:
 
 ```sh
-curl http://localhost:3000/health
+curl http://localhost:8080/health
 # { "status": "ok" }
 ```
 
-3. Point your MCP client to the `/mcp` endpoint (`http://localhost:3000/mcp` by default). CORS is enabled for all origins so you can call it from a browser-based client as well.
+3. Point your MCP client to the `/mcp` endpoint (`http://localhost:8080/mcp` by default). CORS is enabled for all origins so you can call it from a browser-based client as well.
 
 ### Docker
 
@@ -127,17 +218,17 @@ docker build -t drawio-mcp-server .
 
 #### Running the Container
 
-The container exposes one port since we are running in `standalone` mode and are not connected to the browser extension (meaning no websocket 3333 port is needed):
-- **3000**: HTTP for MCP clients (Streamable HTTP at `/mcp`)
+The container exposes one port for HTTP MCP clients:
+- **8080**: HTTP for MCP clients (Streamable HTTP at `/mcp`)
 
 ```sh
-docker run -d --name drawio-mcp-server -p 3000:3000 drawio-mcp-server
+docker run -d --name drawio-mcp-server -p 8080:8080 drawio-mcp-server
 ```
 
 Verify it's running:
 
 ```sh
-curl http://localhost:3000/health
+curl http://localhost:8080/health
 # { "status": "ok" }
 ```
 
@@ -436,7 +527,7 @@ To connect to a locally running MCP with Streamable HTTP transport:
 
 ```toml
 [mcp_servers.drawio]
-url = "http://localhost:3000/mcp"
+url = "http://localhost:8080/mcp"
 ```
 
 

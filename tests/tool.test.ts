@@ -1,4 +1,4 @@
-import { jest } from "@jest/globals";
+import { describe, expect, it, vi, type Mocked, type Mock } from "vitest";
 import { build_channel, default_tool, Handler } from "../src/tool.js";
 import { Bus, BusListener, Context, IdGenerator, Logger } from "../src/types.js";
 import {
@@ -10,20 +10,20 @@ import { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.j
 import { create_logger } from "../src/standard_console_logger.js";
 
 describe("build_channel", () => {
-  let mockBus: jest.Mocked<Bus>;
-  let mockIdGenerator: { generate: jest.Mock<() => string> };
+  let mockBus: Mocked<Bus>;
+  let mockIdGenerator: { generate: Mock<() => string> };
   let context: Context;
-  const mockHandler = jest.fn<Handler>();
+  const mockHandler = vi.fn<Handler>();
   const log = create_logger();
 
   beforeEach(() => {
     mockBus = {
-      send_to_extension: jest.fn(),
-      on_reply_from_extension: jest.fn(),
-    } as unknown as jest.Mocked<Bus>;
+      send_to_extension: vi.fn(),
+      on_reply_from_extension: vi.fn(),
+    } as unknown as Mocked<Bus>;
 
     mockIdGenerator = {
-      generate: jest.fn<() => string>().mockReturnValue("123"),
+      generate: vi.fn<() => string>().mockReturnValue("123"),
     };
 
     context = {
@@ -94,21 +94,21 @@ describe("build_channel", () => {
 });
 
 describe("default_tool", () => {
-  let mockBus: jest.Mocked<Bus>;
-  let mockIdGenerator: { generate: jest.Mock<() => string> };
+  let mockBus: Mocked<Bus>;
+  let mockIdGenerator: { generate: Mock<() => string> };
   const log = create_logger();
   let context: Context;
 
   beforeEach(() => {
     mockBus = {
-      send_to_extension: jest.fn(),
-      on_reply_from_extension: jest.fn((_, callback: BusListener<unknown>) => {
+      send_to_extension: vi.fn(),
+      on_reply_from_extension: vi.fn((_, callback: BusListener<unknown>) => {
         callback({ test: "data" });
       }),
-    } as unknown as jest.Mocked<Bus>;
+    } as unknown as Mocked<Bus>;
 
     mockIdGenerator = {
-      generate: jest.fn<() => string>().mockReturnValue("789"),
+      generate: vi.fn<() => string>().mockReturnValue("789"),
     };
 
     context = {

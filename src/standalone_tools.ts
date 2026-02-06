@@ -4,7 +4,7 @@
  */
 
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { diagram } from "./diagram_model.js";
+import { diagram, StructuredError } from "./diagram_model.js";
 import {
   getAzureCategories,
   getShapesInCategory,
@@ -15,13 +15,14 @@ import { BASIC_SHAPES, BASIC_SHAPE_CATEGORIES, getBasicShape } from "./basic_sha
 
 function successResult(data: any): CallToolResult {
   return {
-    content: [{ type: "text", text: JSON.stringify(data) }],
+    content: [{ type: "text", text: JSON.stringify({ success: true, data }) }],
   };
 }
 
-function errorResult(message: string): CallToolResult {
+function errorResult(error: StructuredError | string): CallToolResult {
+  const errorObj = typeof error === "string" ? { code: "UNKNOWN_ERROR", message: error } : error;
   return {
-    content: [{ type: "text", text: JSON.stringify({ error: message }) }],
+    content: [{ type: "text", text: JSON.stringify({ success: false, error: errorObj }) }],
     isError: true,
   };
 }
@@ -36,7 +37,7 @@ export const standaloneHandlers = {
     style?: string;
   }): Promise<CallToolResult> => {
     const cell = diagram.addRectangle(args);
-    return successResult({ success: true, cell });
+    return successResult({ cell });
   },
 
   "add-edge": async (args: {
@@ -54,7 +55,7 @@ export const standaloneHandlers = {
     if ("error" in result) {
       return errorResult(result.error);
     }
-    return successResult({ success: true, cell: result });
+    return successResult({ cell: result });
   },
 
   "delete-cell-by-id": async (args: {
@@ -62,9 +63,14 @@ export const standaloneHandlers = {
   }): Promise<CallToolResult> => {
     const deleted = diagram.deleteCell(args.cell_id);
     if (!deleted) {
-      return errorResult(`Cell '${args.cell_id}' not found`);
+      return errorResult({
+        code: "CELL_NOT_FOUND",
+        message: `Cell '${args.cell_id}' not found`,
+        cell_id: args.cell_id,
+        suggestion: "Use list-paged-model to see available cells",
+      });
     }
-    return successResult({ success: true, deleted: args.cell_id });
+    return successResult({ deleted: args.cell_id });
   },
 
   "edit-cell": async (args: {
@@ -87,7 +93,7 @@ export const standaloneHandlers = {
     if ("error" in result) {
       return errorResult(result.error);
     }
-    return successResult({ success: true, cell: result });
+    return successResult({ cell: result });
   },
 
   "edit-edge": async (args: {
@@ -106,7 +112,7 @@ export const standaloneHandlers = {
     if ("error" in result) {
       return errorResult(result.error);
     }
-    return successResult({ success: true, cell: result });
+    return successResult({ cell: result });
   },
 
   "list-paged-model": async (args: {
@@ -178,9 +184,14 @@ export const standaloneHandlers = {
     return successResult({ xml });
   },
 
+  "get-diagram-stats": async (): Promise<CallToolResult> => {
+    const stats = diagram.getStats();
+    return successResult({ stats });
+  },
+
   "clear-diagram": async (): Promise<CallToolResult> => {
     diagram.clear();
-    return successResult({ success: true, message: "Diagram cleared" });
+    return successResult({ message: "Diagram cleared" });
   },
 
   "get-selected-cell": async (): Promise<CallToolResult> => {
@@ -545,6 +556,7 @@ export const standaloneHandlers = {
       target_id?: string;
       temp_id?: string;
     }>;
+    dry_run?: boolean;
   }): Promise<CallToolResult> => {
     const items = args.cells.map(c => ({
       type: c.type,
@@ -558,11 +570,31 @@ export const standaloneHandlers = {
       targetId: c.target_id,
       tempId: c.temp_id,
     }));
-    const results = diagram.batchAddCells(items);
+    const results = diagram.batchAddCells(items, { dryRun: args.dry_run });
     const successCount = results.filter(r => r.success).length;
     const errorCount = results.filter(r => !r.success).length;
     return successResult({
-      success: errorCount === 0,
+      summary: { total: results.length, succeeded: successCount, failed: errorCount },
+      results,
+      dry_run: args.dry_run ?? false,
+    });
+  },
+
+  "batch-edit-cells": async (args: {
+    cells: Array<{
+      cell_id: string;
+      text?: string;
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      style?: string;
+    }>;
+  }): Promise<CallToolResult> => {
+    const results = diagram.batchEditCells(args.cells);
+    const successCount = results.filter(r => r.success).length;
+    const errorCount = results.filter(r => !r.success).length;
+    return successResult({
       summary: { total: results.length, succeeded: successCount, failed: errorCount },
       results,
     });
@@ -626,6 +658,7 @@ export const standaloneHandlers = {
           id: r.id,
           width: r.width,
           height: r.height,
+          confidence: r.score,
         })),
         total: results.length,
       });
@@ -642,6 +675,7 @@ export const standaloneHandlers = {
             id: r.id,
             width: r.width,
             height: r.height,
+            confidence: r.score,
           })),
           total: results.length,
         };

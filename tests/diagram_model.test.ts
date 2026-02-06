@@ -110,4 +110,69 @@ describe("DiagramModel", () => {
       expect(model.listCells()).toHaveLength(0);
     });
   });
+
+  describe("getStats", () => {
+    it("should return correct stats for empty diagram", () => {
+      const stats = model.getStats();
+      expect(stats.total_cells).toBe(0);
+      expect(stats.vertices).toBe(0);
+      expect(stats.edges).toBe(0);
+      expect(stats.layers).toBe(1); // Default layer
+      expect(stats.bounds).toBeNull();
+      expect(stats.cells_with_text).toBe(0);
+      expect(stats.cells_without_text).toBe(0);
+    });
+
+    it("should return correct stats for diagram with cells", () => {
+      model.addRectangle({ text: "A", x: 100, y: 100, width: 200, height: 100 });
+      model.addRectangle({ text: "B", x: 400, y: 200, width: 150, height: 80 });
+      model.addRectangle({ text: "", x: 50, y: 50, width: 100, height: 100 }); // No text
+
+      const stats = model.getStats();
+      expect(stats.total_cells).toBe(3);
+      expect(stats.vertices).toBe(3);
+      expect(stats.edges).toBe(0);
+      expect(stats.cells_with_text).toBe(2);
+      expect(stats.cells_without_text).toBe(1);
+      expect(stats.bounds).toEqual({
+        minX: 50,
+        minY: 50,
+        maxX: 550, // 400 + 150
+        maxY: 280, // 200 + 80
+      });
+    });
+
+    it("should count edges correctly", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      model.addEdge({ sourceId: a.id, targetId: b.id, text: "connects" });
+
+      const stats = model.getStats();
+      expect(stats.total_cells).toBe(3);
+      expect(stats.vertices).toBe(2);
+      expect(stats.edges).toBe(1);
+      expect(stats.cells_with_text).toBe(3);
+    });
+
+    it("should track cells by layer", () => {
+      const layer1 = model.createLayer("Network");
+      const layer2 = model.createLayer("Security");
+
+      model.addRectangle({ text: "Default" }); // Added to default layer
+
+      model.setActiveLayer(layer1.id);
+      model.addRectangle({ text: "Net1" });
+      model.addRectangle({ text: "Net2" });
+
+      model.setActiveLayer(layer2.id);
+      model.addRectangle({ text: "Sec1" });
+
+      const stats = model.getStats();
+      expect(stats.total_cells).toBe(4);
+      expect(stats.layers).toBe(3);
+      expect(stats.cells_by_layer["1"]).toBe(1); // Default layer
+      expect(stats.cells_by_layer[layer1.id]).toBe(2);
+      expect(stats.cells_by_layer[layer2.id]).toBe(1);
+    });
+  });
 });

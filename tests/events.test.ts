@@ -1,4 +1,4 @@
-import { describe, it, expect } from "@jest/globals";
+import { describe, it, expect } from "vitest";
 import { strip_internal_fields } from "../src/events.js";
 
 describe("strip_internal_fields", () => {

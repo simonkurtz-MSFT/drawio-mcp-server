@@ -284,16 +284,41 @@ function getSearchIndex(): FuzzySearch<SearchableShape> {
 }
 
 /**
+ * Search result with confidence score
+ */
+export interface SearchResult extends AzureIconShape {
+  score: number; // 0-1, higher = better match
+}
+
+/**
  * Search for icons by title or keyword with fuzzy matching.
  */
-export function searchAzureIcons(query: string, limit = 10): AzureIconShape[] {
+export function searchAzureIcons(
+  query: string,
+  limit = 10,
+  options?: { caseSensitive?: boolean }
+): SearchResult[] {
   const searcher = getSearchIndex();
-  const results = searcher.search(query).slice(0, limit);
+  let results = searcher.search(query).slice(0, limit);
 
-  return results.map((item) => {
+  // Calculate confidence scores based on match position and query length
+  const searchResults: SearchResult[] = results.map((item, index) => {
     const { searchTitle, searchId, ...shape } = item;
-    return shape;
+    // Score: 1.0 for exact match, decreases with position in results
+    // Exact matches on title get boost
+    const titleMatch =
+      shape.title.toLowerCase() === query.toLowerCase() ? 1.0 : 0;
+    const idMatch = shape.id.toLowerCase() === query.toLowerCase() ? 0.95 : 0;
+    const positionDecay = 1 - index / results.length * 0.2; // Up to 20% decay
+    const score = Math.max(titleMatch, idMatch) || 0.5 + 0.3 * positionDecay;
+
+    return {
+      ...shape,
+      score: Math.min(1, Math.max(0, score)),
+    };
   });
+
+  return searchResults.sort((a, b) => b.score - a.score);
 }
 
 /**

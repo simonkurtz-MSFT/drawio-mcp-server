@@ -40,8 +40,8 @@ COPY assets ./assets
 
 USER nodejs
 
-# 3000: HTTP for standalone MCP server
-EXPOSE 3000
+# 8080: HTTP for standalone MCP server
+EXPOSE 8080
 
 ENTRYPOINT ["node", "build/index.js"]
-CMD ["--standalone", "--transport", "http", "--http-port", "3000"]
+CMD ["--standalone", "--transport", "http", "--http-port", "8080"]

@@ -3,6 +3,14 @@
  * the browser extension or Draw.io application.
  */
 
+export interface StructuredError {
+  code: string;
+  message: string;
+  cell_id?: string;
+  index?: number;
+  suggestion?: string;
+}
+
 export interface Cell {
   id: string;
   type: "vertex" | "edge";
@@ -65,13 +73,27 @@ export class DiagramModel {
     targetId: string;
     text?: string;
     style?: string;
-  }): Cell | { error: string } {
+  }): Cell | { error: StructuredError } {
     // Validate source and target exist
     if (!this.cells.has(params.sourceId)) {
-      return { error: `Source cell '${params.sourceId}' not found` };
+      return {
+        error: {
+          code: "SOURCE_NOT_FOUND",
+          message: `Source cell '${params.sourceId}' not found`,
+          cell_id: params.sourceId,
+          suggestion: "Use list-paged-model to see available cells",
+        },
+      };
     }
     if (!this.cells.has(params.targetId)) {
-      return { error: `Target cell '${params.targetId}' not found` };
+      return {
+        error: {
+          code: "TARGET_NOT_FOUND",
+          message: `Target cell '${params.targetId}' not found`,
+          cell_id: params.targetId,
+          suggestion: "Use list-paged-model to see available cells",
+        },
+      };
     }
 
     const id = this.generateId();
@@ -99,13 +121,27 @@ export class DiagramModel {
     width?: number;
     height?: number;
     style?: string;
-  }): Cell | { error: string } {
+  }): Cell | { error: StructuredError } {
     const cell = this.cells.get(cellId);
     if (!cell) {
-      return { error: `Cell '${cellId}' not found` };
+      return {
+        error: {
+          code: "CELL_NOT_FOUND",
+          message: `Cell '${cellId}' not found`,
+          cell_id: cellId,
+          suggestion: "Use list-paged-model to see available cells",
+        },
+      };
     }
     if (cell.type !== "vertex") {
-      return { error: `Cell '${cellId}' is not a vertex` };
+      return {
+        error: {
+          code: "WRONG_CELL_TYPE",
+          message: `Cell '${cellId}' is not a vertex`,
+          cell_id: cellId,
+          suggestion: `This cell is a ${cell.type}. Use edit-edge for edge cells.`,
+        },
+      };
     }
 
     if (params.text !== undefined) cell.value = params.text;
@@ -123,25 +159,53 @@ export class DiagramModel {
     sourceId?: string;
     targetId?: string;
     style?: string;
-  }): Cell | { error: string } {
+  }): Cell | { error: StructuredError } {
     const cell = this.cells.get(cellId);
     if (!cell) {
-      return { error: `Edge '${cellId}' not found` };
+      return {
+        error: {
+          code: "CELL_NOT_FOUND",
+          message: `Edge '${cellId}' not found`,
+          cell_id: cellId,
+          suggestion: "Use list-paged-model to see available cells",
+        },
+      };
     }
     if (cell.type !== "edge") {
-      return { error: `Cell '${cellId}' is not an edge` };
+      return {
+        error: {
+          code: "WRONG_CELL_TYPE",
+          message: `Cell '${cellId}' is not an edge`,
+          cell_id: cellId,
+          suggestion: `This cell is a ${cell.type}. Use edit-cell for vertex cells.`,
+        },
+      };
     }
 
     if (params.text !== undefined) cell.value = params.text;
     if (params.sourceId !== undefined) {
       if (!this.cells.has(params.sourceId)) {
-        return { error: `Source cell '${params.sourceId}' not found` };
+        return {
+          error: {
+            code: "SOURCE_NOT_FOUND",
+            message: `Source cell '${params.sourceId}' not found`,
+            cell_id: params.sourceId,
+            suggestion: "Use list-paged-model to see available cells",
+          },
+        };
       }
       cell.sourceId = params.sourceId;
     }
     if (params.targetId !== undefined) {
       if (!this.cells.has(params.targetId)) {
-        return { error: `Target cell '${params.targetId}' not found` };
+        return {
+          error: {
+            code: "TARGET_NOT_FOUND",
+            message: `Target cell '${params.targetId}' not found`,
+            cell_id: params.targetId,
+            suggestion: "Use list-paged-model to see available cells",
+          },
+        };
       }
       cell.targetId = params.targetId;
     }
@@ -173,10 +237,16 @@ export class DiagramModel {
     return [...this.layers];
   }
 
-  setActiveLayer(layerId: string): Layer | { error: string } {
+  setActiveLayer(layerId: string): Layer | { error: StructuredError } {
     const layer = this.layers.find(l => l.id === layerId);
     if (!layer) {
-      return { error: `Layer '${layerId}' not found` };
+      return {
+        error: {
+          code: "LAYER_NOT_FOUND",
+          message: `Layer '${layerId}' not found`,
+          suggestion: "Use list-layers to see available layers",
+        },
+      };
     }
     this.activeLayerId = layerId;
     return layer;
@@ -186,14 +256,27 @@ export class DiagramModel {
     return this.layers.find(l => l.id === this.activeLayerId) ?? this.layers[0];
   }
 
-  moveCellToLayer(cellId: string, targetLayerId: string): Cell | { error: string } {
+  moveCellToLayer(cellId: string, targetLayerId: string): Cell | { error: StructuredError } {
     const cell = this.cells.get(cellId);
     if (!cell) {
-      return { error: `Cell '${cellId}' not found` };
+      return {
+        error: {
+          code: "CELL_NOT_FOUND",
+          message: `Cell '${cellId}' not found`,
+          cell_id: cellId,
+          suggestion: "Use list-paged-model to see available cells",
+        },
+      };
     }
     const layer = this.layers.find(l => l.id === targetLayerId);
     if (!layer) {
-      return { error: `Layer '${targetLayerId}' not found` };
+      return {
+        error: {
+          code: "LAYER_NOT_FOUND",
+          message: `Layer '${targetLayerId}' not found`,
+          suggestion: "Use list-layers to see available layers",
+        },
+      };
     }
     cell.parent = targetLayerId;
     return cell;
@@ -254,10 +337,65 @@ ${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
   }
 
   /**
-   * Batch add multiple cells (vertices and edges) in a single operation.
-   * Returns an array of results with created cells or errors.
+   * Get statistics about the current diagram
    */
-  batchAddCells(items: Array<{
+  getStats(): {
+    total_cells: number;
+    vertices: number;
+    edges: number;
+    layers: number;
+    bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
+    cells_with_text: number;
+    cells_without_text: number;
+    cells_by_layer: Record<string, number>;
+  } {
+    const cells = Array.from(this.cells.values());
+    const vertices = cells.filter(c => c.type === "vertex");
+    const edges = cells.filter(c => c.type === "edge");
+
+    // Calculate bounding box
+    let bounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
+    if (vertices.length > 0) {
+      const positions = vertices.filter(v => v.x !== undefined && v.y !== undefined);
+      if (positions.length > 0) {
+        const minX = Math.min(...positions.map(v => v.x!));
+        const minY = Math.min(...positions.map(v => v.y!));
+        const maxX = Math.max(...positions.map(v => (v.x ?? 0) + (v.width ?? 0)));
+        const maxY = Math.max(...positions.map(v => (v.y ?? 0) + (v.height ?? 0)));
+        bounds = { minX, minY, maxX, maxY };
+      }
+    }
+
+    // Count cells with/without text
+    const cellsWithText = cells.filter(c => c.value && c.value.trim().length > 0).length;
+    const cellsWithoutText = cells.length - cellsWithText;
+
+    // Count cells by layer
+    const cellsByLayer: Record<string, number> = {};
+    cells.forEach(c => {
+      const layer = c.parent ?? "1";
+      cellsByLayer[layer] = (cellsByLayer[layer] ?? 0) + 1;
+    });
+
+    return {
+      total_cells: cells.length,
+      vertices: vertices.length,
+      edges: edges.length,
+      layers: this.layers.length,
+      bounds,
+      cells_with_text: cellsWithText,
+      cells_without_text: cellsWithoutText,
+      cells_by_layer: cellsByLayer,
+    };
+  }
+
+/**
+ * Batch add multiple cells (vertices and edges) in a single operation.
+ * Validates entire batch before executing to fail fast.
+ * Returns an array of results with created cells or errors.
+ */
+batchAddCells(
+  items: Array<{
     type: "vertex" | "edge";
     x?: number;
     y?: number;
@@ -267,50 +405,183 @@ ${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
     style?: string;
     sourceId?: string;
     targetId?: string;
-    tempId?: string; // Temporary ID for referencing in edges before real ID is assigned
-  }>): Array<{ success: boolean; cell?: Cell; error?: string; tempId?: string }> {
-    const results: Array<{ success: boolean; cell?: Cell; error?: string; tempId?: string }> = [];
-    const tempIdMap = new Map<string, string>(); // Maps tempId to real cell id
+    tempId?: string;
+  }>,
+  options?: { dryRun?: boolean },
+): Array<{ success: boolean; cell?: Cell; error?: StructuredError; tempId?: string }> {
+  // Pre-validate entire batch
+  const validationErrors = this.validateBatchCells(items);
+  if (validationErrors.length > 0) {
+    return validationErrors;
+  }
 
-    for (const item of items) {
-      if (item.type === "vertex") {
-        const cell = this.addRectangle({
-          x: item.x,
-          y: item.y,
-          width: item.width,
-          height: item.height,
-          text: item.text,
-          style: item.style,
+  // If dry-run, return success without persisting
+  if (options?.dryRun) {
+    return items.map((item, index) => ({
+      success: true,
+      tempId: item.tempId,
+      cell: {
+        id: `temp-cell-${index}`,
+        type: item.type,
+        value: item.text ?? "",
+        x: item.x,
+        y: item.y,
+        width: item.width,
+        height: item.height,
+        style: item.style,
+        sourceId: item.sourceId,
+        targetId: item.targetId,
+      } as Cell,
+    }));
+  }
+
+  // Execute batch operations
+  const results: Array<{ success: boolean; cell?: Cell; error?: StructuredError; tempId?: string }> =
+    [];
+  const tempIdMap = new Map<string, string>();
+
+  for (const item of items) {
+    if (item.type === "vertex") {
+      const cell = this.addRectangle({
+        x: item.x,
+        y: item.y,
+        width: item.width,
+        height: item.height,
+        text: item.text,
+        style: item.style,
+      });
+      if (item.tempId) {
+        tempIdMap.set(item.tempId, cell.id);
+      }
+      results.push({ success: true, cell, tempId: item.tempId });
+    } else if (item.type === "edge") {
+      const sourceId = item.sourceId ? tempIdMap.get(item.sourceId) ?? item.sourceId : "";
+      const targetId = item.targetId ? tempIdMap.get(item.targetId) ?? item.targetId : "";
+
+      const result = this.addEdge({
+        sourceId,
+        targetId,
+        text: item.text,
+        style: item.style,
+      });
+
+      if ("error" in result) {
+        results.push({
+          success: false,
+          error: result.error,
+          tempId: item.tempId,
         });
+      } else {
         if (item.tempId) {
-          tempIdMap.set(item.tempId, cell.id);
+          tempIdMap.set(item.tempId, result.id);
         }
-        results.push({ success: true, cell, tempId: item.tempId });
-      } else if (item.type === "edge") {
-        // Resolve tempIds to real IDs
-        const sourceId = item.sourceId ? (tempIdMap.get(item.sourceId) ?? item.sourceId) : "";
-        const targetId = item.targetId ? (tempIdMap.get(item.targetId) ?? item.targetId) : "";
+        results.push({ success: true, cell: result, tempId: item.tempId });
+      }
+    }
+  }
 
-        const result = this.addEdge({
-          sourceId,
-          targetId,
-          text: item.text,
-          style: item.style,
+  return results;
+}
+
+private validateBatchCells(
+  items: Array<{
+    type: "vertex" | "edge";
+    sourceId?: string;
+    targetId?: string;
+    tempId?: string;
+  }>,
+): Array<{ success: boolean; error: StructuredError; tempId?: string }> {
+  const errors: Array<{ success: boolean; error: StructuredError; tempId?: string }> = [];
+  const createdTempIds = new Set<string>();
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+
+    if (item.type === "edge") {
+      // Validate source exists (check temp IDs from earlier items and existing cells)
+      const sourceExists =
+        (item.sourceId && (createdTempIds.has(item.sourceId) || this.cells.has(item.sourceId))) ??
+        false;
+      if (!sourceExists) {
+        errors.push({
+          success: false,
+          tempId: item.tempId,
+          error: {
+            code: "INVALID_SOURCE",
+            message: `Edge at index ${i}: source cell '${item.sourceId}' not found`,
+            index: i,
+            suggestion: "Ensure source_id references an existing cell or a temp_id defined earlier in the batch",
+          },
         });
+      }
 
-        if ("error" in result) {
-          results.push({ success: false, error: result.error, tempId: item.tempId });
-        } else {
-          if (item.tempId) {
-            tempIdMap.set(item.tempId, result.id);
-          }
-          results.push({ success: true, cell: result, tempId: item.tempId });
-        }
+      // Validate target exists
+      const targetExists =
+        (item.targetId && (createdTempIds.has(item.targetId) || this.cells.has(item.targetId))) ??
+        false;
+      if (!targetExists) {
+        errors.push({
+          success: false,
+          tempId: item.tempId,
+          error: {
+            code: "INVALID_TARGET",
+            message: `Edge at index ${i}: target cell '${item.targetId}' not found`,
+            index: i,
+            suggestion:
+              "Ensure target_id references an existing cell or a temp_id defined earlier in the batch",
+          },
+        });
       }
     }
 
-    return results;
+    // Track temp IDs for validation
+    if (item.tempId) {
+      createdTempIds.add(item.tempId);
+    }
   }
+
+  return errors;
+}
+
+/**
+ * Batch edit multiple cells in a single operation.
+ */
+batchEditCells(
+  updates: Array<{
+    cell_id: string;
+    text?: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    style?: string;
+  }>,
+): Array<{ success: boolean; cell?: Cell; error?: StructuredError; cell_id: string }> {
+  return updates.map((update) => {
+    const result = this.editCell(update.cell_id, {
+      text: update.text,
+      x: update.x,
+      y: update.y,
+      width: update.width,
+      height: update.height,
+      style: update.style,
+    });
+
+    if ("error" in result) {
+      return {
+        success: false,
+        cell_id: update.cell_id,
+        error: result.error,
+      };
+    }
+
+    return {
+      success: true,
+      cell_id: update.cell_id,
+      cell: result,
+    };
+  });
+}
 }
 
 // Singleton instance for the standalone diagram

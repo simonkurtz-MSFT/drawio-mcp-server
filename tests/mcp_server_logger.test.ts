@@ -1,9 +1,9 @@
-import { jest } from "@jest/globals";
+import { vi } from "vitest";
 import { create_logger } from "../src/mcp_server_logger.js";
 
 describe("create_logger", () => {
-  let mock_send_logging_message: jest.Mock;
-  let mock_set_request_handler: jest.Mock;
+  let mock_send_logging_message: ReturnType<typeof vi.fn>;
+  let mock_set_request_handler: ReturnType<typeof vi.fn>;
   let mock_server: {
     server: {
       sendLoggingMessage: typeof mock_send_logging_message;
@@ -12,8 +12,8 @@ describe("create_logger", () => {
   };
 
   beforeEach(() => {
-    mock_send_logging_message = jest.fn();
-    mock_set_request_handler = jest.fn();
+    mock_send_logging_message = vi.fn();
+    mock_set_request_handler = vi.fn();
     mock_server = {
       server: {
         sendLoggingMessage: mock_send_logging_message,
@@ -23,7 +23,7 @@ describe("create_logger", () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should return a Logger object with log and debug methods", () => {
@@ -129,7 +129,7 @@ describe("create_logger", () => {
   it("should not log and print error if an invalid log level is used directly", () => {
     const logger = create_logger(mock_server as any);
 
-    const console_error_spy = jest
+    const console_error_spy = vi
       .spyOn(console, "error")
       .mockImplementation(() => {});
 

@@ -7,30 +7,14 @@ import { z } from "zod";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
-import EventEmitter from "node:events";
-import { createServer } from "node:net";
-
-import { WebSocket, WebSocketServer } from "ws";
 import { buildConfig, shouldShowHelp, type ServerConfig } from "./config.js";
 import {
-  Bus,
-  bus_reply_stream,
-  bus_request_stream,
-  BusListener,
-  Context,
-} from "./types.js";
-import { create_bus } from "./emitter_bus.js";
-import { default_tool } from "./tool.js";
-import { nanoid_id_generator } from "./nanoid_id_generator.js";
-import { create_logger as create_console_logger } from "./mcp_console_logger.js";
+  create_logger as create_console_logger } from "./mcp_console_logger.js";
 import {
   create_logger as create_server_logger,
   validLogLevels,
 } from "./mcp_server_logger.js";
 import { standaloneHandlers } from "./standalone_tools.js";
-
-// Flag to track if we're in standalone mode (set in main())
-let isStandaloneMode = false;
 
 const VERSION = "1.6.1";
 
@@ -39,118 +23,22 @@ const VERSION = "1.6.1";
  */
 function showHelp(): never {
   console.log(`
-Draw.io MCP Server (${VERSION})
+Draw.io MCP Server (${VERSION}) - Standalone Mode
 
 Usage: drawio-mcp-server [options]
 
 Options:
-  --extension-port, -p <number>  WebSocket server port for browser extension (default: 3333)
-  --standalone                   Run in standalone mode (no browser extension required)
-  --help, -h                     Show this help message
+  --http-port <number>     HTTP server port for MCP clients (default: 3000)
+  --transport <type>       Transport type: stdio, http, or stdio,http (default: stdio)
+  --help, -h              Show this help message
 
 Examples:
-  drawio-mcp-server                           # Use default extension port 3333
-  drawio-mcp-server --extension-port 8080     # Use custom extension port 8080
-  drawio-mcp-server -p 8080                   # Short form
-  drawio-mcp-server --standalone              # Standalone mode (generates XML directly)
+  drawio-mcp-server                           # Use stdio transport
+  drawio-mcp-server --transport http          # Use HTTP transport on port 3000
+  drawio-mcp-server --http-port 4000          # Use HTTP on port 4000
+  drawio-mcp-server --transport stdio,http    # Use both transports
   `);
   process.exit(0);
-}
-
-// No PORT constant needed - using dynamic config
-
-async function checkPortAvailable(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const server = createServer();
-
-    server.listen(port, () => {
-      server.close(() => resolve(true));
-    });
-
-    server.on("error", () => resolve(false));
-  });
-}
-
-const emitter = new EventEmitter();
-const conns = new Set<WebSocket>();
-
-const bus_to_ws_forwarder_listener = (event: any) => {
-  log.debug(
-    `[bridge] received; forwarding message to #${conns.size} clients`,
-    event,
-  );
-  for (const ws of [...conns]) {
-    if (ws.readyState !== WebSocket.OPEN) {
-      conns.delete(ws);
-      continue;
-    }
-
-    try {
-      ws.send(JSON.stringify(event));
-    } catch (e) {
-      log.debug("[bridge] error forwarding request", e);
-      conns.delete(ws);
-    }
-  }
-};
-emitter.on(bus_request_stream, bus_to_ws_forwarder_listener);
-
-async function start_websocket_server(extensionPort: number) {
-  log.debug(
-    `Draw.io MCP Server (${VERSION}) starting (WebSocket extension port: ${extensionPort})`,
-  );
-  const isPortAvailable = await checkPortAvailable(extensionPort);
-
-  if (!isPortAvailable) {
-    console.error(
-      `[start_websocket_server] Error: Port ${extensionPort} is already in use. Please stop the process using this port and try again.`,
-    );
-    process.exit(1);
-  }
-
-  const server = new WebSocketServer({ port: extensionPort });
-
-  server.on("connection", (ws) => {
-    log.debug(
-      `[ws_handler] A WebSocket client #${conns.size} connected, presumably MCP Extension!`,
-    );
-    conns.add(ws);
-
-    ws.on("message", (data) => {
-      const str = typeof data === "string" ? data : data.toString();
-      try {
-        const json = JSON.parse(str);
-        log.debug(`[ws] received from Extension`, json);
-        emitter.emit(bus_reply_stream, json);
-      } catch (error) {
-        log.debug(`[ws] failed to parse message`, error);
-      }
-    });
-
-    ws.on("close", (code) => {
-      conns.delete(ws);
-      log.debug(`[ws_handler] WebSocket client closed with code ${code}`);
-    });
-
-    ws.on("error", (error) => {
-      log.debug(`[ws_handler] WebSocket client error`, error);
-      conns.delete(ws);
-    });
-  });
-
-  server.on("listening", () => {
-    log.debug(`[start_websocket_server] Listening to port ${extensionPort}`);
-  });
-
-  server.on("error", (error) => {
-    console.error(
-      `[start_websocket_server] Error: Failed to listen on port ${extensionPort}`,
-      error,
-    );
-    process.exit(1);
-  });
-
-  return server;
 }
 
 const logger_type = process.env.LOGGER_TYPE;
@@ -183,32 +71,20 @@ const log =
   logger_type === "mcp_server"
     ? create_server_logger(server)
     : create_console_logger();
-const bus = create_bus(log)(emitter);
-const id_generator = nanoid_id_generator();
-
-const context: Context = {
-  bus,
-  id_generator,
-  log,
-};
 
 /**
- * Helper to create a tool handler that uses standalone mode or bridge mode
+ * Tool handler for standalone mode
  */
 function createToolHandler(toolName: string) {
   return async (args: any) => {
-    if (isStandaloneMode) {
-      const handler = standaloneHandlers[toolName as keyof typeof standaloneHandlers];
-      if (handler) {
-        return handler(args);
-      }
-      return {
-        content: [{ type: "text" as const, text: JSON.stringify({ error: `Tool ${toolName} not available in standalone mode` }) }],
-        isError: true,
-      };
+    const handler = standaloneHandlers[toolName as keyof typeof standaloneHandlers];
+    if (handler) {
+      return handler(args);
     }
-    // Use bridge mode (original behavior)
-    return default_tool(toolName, context)(args, {} as any);
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify({ error: `Tool ${toolName} not available` }) }],
+      isError: true,
+    };
   };
 }
 
@@ -216,7 +92,7 @@ const TOOL_get_selected_cell = "get-selected-cell";
 server.registerTool(
   TOOL_get_selected_cell,
   {
-    description: "[Bridge only] Retrieve the currently selected cell (vertex or edge) from the Draw.io UI. Returns JSON with cell attributes. In standalone mode, use list-paged-model instead.",
+    description: "[Deprecated] This tool is not available in standalone mode. Use list-paged-model instead.",
   },
   createToolHandler(TOOL_get_selected_cell),
 );
@@ -225,7 +101,7 @@ const TOOL_add_rectangle = "add-rectangle";
 server.registerTool(
   TOOL_add_rectangle,
   {
-    description: "[Standalone+Bridge] Add a new rectangle vertex cell to the diagram. Prefer batch-add-cells for multiple cells (fewer calls, faster).",
+    description: "Add a new rectangle vertex cell to the diagram. Prefer batch-add-cells for multiple cells (fewer calls, faster).",
     inputSchema: {
       x: z
         .number()
@@ -268,7 +144,7 @@ const TOOL_add_edge = "add-edge";
 server.registerTool(
   TOOL_add_edge,
   {
-    description: "[Standalone+Bridge] Create an edge (connection/relation) between two vertex cells. Prefer batch-add-cells for multiple edges (fewer calls, faster).",
+    description: "Create an edge (connection/relation) between two vertex cells. Prefer batch-add-cells for multiple edges (fewer calls, faster).",
     inputSchema: {
       source_id: z
         .string()
@@ -298,7 +174,7 @@ const TOOL_delete_cell_by_id = "delete-cell-by-id";
 server.registerTool(
   TOOL_delete_cell_by_id,
   {
-    description: "[Standalone+Bridge] Delete a cell (vertex or edge) by its ID.",
+    description: "Delete a cell (vertex or edge) by its ID.",
     inputSchema: {
       cell_id: z
         .string()
@@ -314,7 +190,7 @@ const TOOL_get_shape_categories = "get-shape-categories";
 server.registerTool(
   TOOL_get_shape_categories,
   {
-    description: "[Standalone+Bridge] Get available shape categories (General, Flowchart, Azure icons). Use search-shapes for faster fuzzy lookup.",
+    description: "Get available shape categories (General, Flowchart, Azure icons). Use search-shapes for faster fuzzy lookup.",
   },
   createToolHandler(TOOL_get_shape_categories),
 );
@@ -323,7 +199,7 @@ const TOOL_get_shapes_in_category = "get-shapes-in-category";
 server.registerTool(
   TOOL_get_shapes_in_category,
   {
-    description: "[Standalone+Bridge] List all shapes in a category. Returns shape names and styles for use with add-cell-of-shape.",
+    description: "List all shapes in a category. Returns shape names and styles for use with add-cell-of-shape.",
     inputSchema: {
       category_id: z
         .string()
@@ -339,7 +215,7 @@ const TOOL_get_shape_by_name = "get-shape-by-name";
 server.registerTool(
   TOOL_get_shape_by_name,
   {
-    description: "[Standalone+Bridge] Get a shape by exact name. For fuzzy matching, use search-shapes instead.",
+    description: "Get a shape by exact name. For fuzzy matching, use search-shapes instead.",
     inputSchema: {
       shape_name: z
         .string()
@@ -355,7 +231,7 @@ const TOOL_add_cell_of_shape = "add-cell-of-shape";
 server.registerTool(
   TOOL_add_cell_of_shape,
   {
-    description: "[Standalone+Bridge] Add a vertex cell using a shape from the library (e.g., Azure icons). Use search-shapes to find shape names. Prefer batch-add-cells when adding multiple shapes.",
+    description: "Add a vertex cell using a shape from the library (e.g., Azure icons). Use search-shapes to find shape names. Prefer batch-add-cells when adding multiple shapes.",
     inputSchema: {
       shape_name: z
         .string()
@@ -399,7 +275,7 @@ const TOOL_batch_add_cells_of_shape = "batch-add-cells-of-shape";
 server.registerTool(
   TOOL_batch_add_cells_of_shape,
   {
-    description: "[Standalone only] Add multiple shape-based cells in one call. Much faster than calling add-cell-of-shape individually. Supports Azure icons and basic shapes.",
+    description: "Add multiple shape-based cells in one call. Much faster than calling add-cell-of-shape individually. Supports Azure icons and basic shapes.",
     inputSchema: {
       cells: z.array(z.object({
         shape_name: z.string().describe("Name of the shape from the library (e.g., Azure icon name or basic shape like 'rectangle')"),
@@ -420,7 +296,7 @@ const TOOL_set_cell_shape = "set-cell-shape";
 server.registerTool(
   TOOL_set_cell_shape,
   {
-    description: "[Standalone+Bridge] Update a cell's visual style to match a library shape. Use search-shapes to find shape names. Prefer the 'cells' array for batch updates.",
+    description: "[Standalone+Bridge] Update a cell's visual style to match a library shape. Use search-shapes to find shape names. Prefer the 'cells' array for batch updates. Example: {cells: [{cell_id: 'cell-1', shape_name: 'Virtual Machines'}, {cell_id: 'cell-2', shape_name: 'Storage Accounts'}]}",
     inputSchema: {
       cell_id: z
         .string()
@@ -443,7 +319,7 @@ server.registerTool(
         )
         .optional()
         .describe(
-          "Array of cell-shape pairs for batch operations. Cannot be used with cell_id/shape_name.",
+          "Array of cell-shape pairs for batch operations. Cannot be used with cell_id/shape_name. Example: [{cell_id: 'cell-1', shape_name: 'App Services'}, {cell_id: 'cell-2', shape_name: 'SQL Database'}]",
         ),
     },
   },
@@ -454,7 +330,7 @@ const TOOL_set_cell_data = "set-cell-data";
 server.registerTool(
   TOOL_set_cell_data,
   {
-    description: "[Standalone+Bridge] Set a custom data attribute on a cell. Note: In standalone mode, data is not persisted to XML.",
+    description: "Set a custom data attribute on a cell. Note: Data is not persisted to XML.",
     inputSchema: {
       cell_id: z
         .string()
@@ -476,7 +352,7 @@ const TOOL_edit_cell = "edit-cell";
 server.registerTool(
   TOOL_edit_cell,
   {
-    description: "[Standalone+Bridge] Update a vertex cell's properties (position, size, text, style). Only specified fields change.",
+    description: "Update a vertex cell's properties (position, size, text, style). Only specified fields change.",
     inputSchema: {
       cell_id: z
         .string()
@@ -512,7 +388,7 @@ const TOOL_edit_edge = "edit-edge";
 server.registerTool(
   TOOL_edit_edge,
   {
-    description: "[Standalone+Bridge] Update an edge's properties (text, source, target, style). Only specified fields change.",
+    description: "Update an edge's properties (text, source, target, style). Only specified fields change.",
     inputSchema: {
       cell_id: z
         .string()
@@ -557,7 +433,7 @@ const TOOL_list_paged_model = "list-paged-model";
 server.registerTool(
   TOOL_list_paged_model,
   {
-    description: "[Standalone+Bridge] Get a paginated list of all cells with filtering. Use this to inspect diagram structure or find cells by type/attributes.",
+    description: "Get a paginated list of all cells with filtering. Use this to inspect diagram structure or find cells by type/attributes.",
     inputSchema: {
       page: z
         .number()
@@ -597,7 +473,7 @@ const TOOL_list_layers = "list-layers";
 server.registerTool(
   TOOL_list_layers,
   {
-    description: "[Standalone+Bridge] List all layers in the diagram with IDs and names.",
+    description: "List all layers in the diagram with IDs and names.",
   },
   createToolHandler(TOOL_list_layers),
 );
@@ -606,7 +482,7 @@ const TOOL_set_active_layer = "set-active-layer";
 server.registerTool(
   TOOL_set_active_layer,
   {
-    description: "[Standalone+Bridge] Set the active layer for new elements.",
+    description: "Set the active layer for new elements.",
     inputSchema: {
       layer_id: z.string().describe("ID of the layer to set as active"),
     },
@@ -618,7 +494,7 @@ const TOOL_move_cell_to_layer = "move-cell-to-layer";
 server.registerTool(
   TOOL_move_cell_to_layer,
   {
-    description: "[Standalone+Bridge] Move a cell to a different layer.",
+    description: "Move a cell to a different layer.",
     inputSchema: {
       cell_id: z.string().describe("ID of the cell to move"),
       target_layer_id: z
@@ -633,7 +509,7 @@ const TOOL_get_active_layer = "get-active-layer";
 server.registerTool(
   TOOL_get_active_layer,
   {
-    description: "[Standalone+Bridge] Get the currently active layer.",
+    description: "Get the currently active layer.",
   },
   createToolHandler(TOOL_get_active_layer),
 );
@@ -642,7 +518,7 @@ const TOOL_create_layer = "create-layer";
 server.registerTool(
   TOOL_create_layer,
   {
-    description: "[Standalone+Bridge] Create a new layer in the diagram.",
+    description: "Create a new layer in the diagram.",
     inputSchema: {
       name: z.string().describe("Name for the new layer"),
     },
@@ -650,7 +526,7 @@ server.registerTool(
   createToolHandler(TOOL_create_layer),
 );
 
-// Standalone-only tools
+// Core tools
 const TOOL_export_diagram = "export-diagram";
 server.registerTool(
   TOOL_export_diagram,
@@ -669,12 +545,21 @@ server.registerTool(
   createToolHandler(TOOL_clear_diagram),
 );
 
+const TOOL_get_diagram_stats = "get-diagram-stats";
+server.registerTool(
+  TOOL_get_diagram_stats,
+  {
+    description: "[Standalone only] Get comprehensive statistics about the current diagram including cell counts, bounds, layer distribution, and more. Useful for understanding diagram state before making changes.",
+  },
+  createToolHandler(TOOL_get_diagram_stats),
+);
+
 // Tier 1: Speed - Batch operations
 const TOOL_batch_add_cells = "batch-add-cells";
 server.registerTool(
   TOOL_batch_add_cells,
   {
-    description: "[Standalone only] Add multiple raw vertex and edge cells in one call with explicit styles. Use temp_id to reference cells within the batch. For shape-library cells (Azure icons, basic shapes), use batch-add-cells-of-shape instead.",
+    description: "[Standalone only] Add multiple raw vertex and edge cells in one call with explicit styles. Use temp_id to reference cells within the batch. For shape-library cells (Azure icons, basic shapes), use batch-add-cells-of-shape instead. Example: {cells: [{type:'vertex', x:100, y:100, text:'Web', temp_id:'web'}, {type:'edge', source_id:'web', target_id:'api'}]}",
     inputSchema: {
       cells: z.array(z.object({
         type: z.enum(["vertex", "edge"]).describe("Cell type: 'vertex' for shapes, 'edge' for connections"),
@@ -687,10 +572,31 @@ server.registerTool(
         source_id: z.string().optional().describe("Source cell ID for edges (can use temp_id from same batch)"),
         target_id: z.string().optional().describe("Target cell ID for edges (can use temp_id from same batch)"),
         temp_id: z.string().optional().describe("Temporary ID to reference this cell within the batch"),
-      })).describe("Array of cells to create"),
+      })).describe("Array of cells to create. Example: [{type:'vertex', x:100, y:100, temp_id:'node1'}, {type:'edge', source_id:'node1', target_id:'node2'}]"),
+      dry_run: z.boolean().optional().describe("If true, validates the batch without persisting changes. Use to check for errors before committing."),
     },
   },
   createToolHandler(TOOL_batch_add_cells),
+);
+
+const TOOL_batch_edit_cells = "batch-edit-cells";
+server.registerTool(
+  TOOL_batch_edit_cells,
+  {
+    description: "[Standalone only] Edit multiple vertex cells in one call. Much faster than calling edit-cell repeatedly. Only updates specified properties on each cell.",
+    inputSchema: {
+      cells: z.array(z.object({
+        cell_id: z.string().describe("ID of the cell to update"),
+        text: z.string().optional().describe("New text label"),
+        x: z.number().optional().describe("New X position"),
+        y: z.number().optional().describe("New Y position"),
+        width: z.number().optional().describe("New width"),
+        height: z.number().optional().describe("New height"),
+        style: z.string().optional().describe("New style string"),
+      })).describe("Array of cell updates. Example: [{cell_id: 'cell-1', x: 200, y: 150}, {cell_id: 'cell-2', text: 'Updated'}]"),
+    },
+  },
+  createToolHandler(TOOL_batch_edit_cells),
 );
 
 // Tier 1: Speed - Style presets
@@ -698,7 +604,7 @@ const TOOL_get_style_presets = "get-style-presets";
 server.registerTool(
   TOOL_get_style_presets,
   {
-    description: "[Standalone only] Get style presets (Azure colors, flowchart shapes, edges) for consistent styling.",
+    description: "Get style presets (Azure colors, flowchart shapes, edges) for consistent styling.",
   },
   createToolHandler(TOOL_get_style_presets),
 );
@@ -708,11 +614,11 @@ const TOOL_search_shapes = "search-shapes";
 server.registerTool(
   TOOL_search_shapes,
   {
-    description: "[Standalone only] Fuzzy search for shapes (700+ Azure icons). Returns names for use with add-cell-of-shape. Prefer 'queries' for batch lookups.",
+    description: "Fuzzy search for shapes (700+ Azure icons). Returns names for use with add-cell-of-shape. Prefer 'queries' for batch lookups.",
     inputSchema: {
       query: z.string().optional().describe("Single search query (e.g., 'virtual machine', 'storage', 'function')"),
       queries: z.array(z.string()).optional().describe("Array of search queries for batch searching. Cannot be used with 'query'."),
-      limit: z.number().optional().default(10).describe("Maximum results to return per query"),
+      limit: z.number().min(1).max(50).optional().default(10).describe("Maximum results to return per query (1-50)"),
     },
   },
   createToolHandler(TOOL_search_shapes),
@@ -782,15 +688,7 @@ async function main() {
 
   const config: ServerConfig = configResult;
 
-  // Set standalone mode flag
-  isStandaloneMode = config.standalone;
-
-  // Only start WebSocket server if not in standalone mode
-  if (!isStandaloneMode) {
-    await start_websocket_server(config.extensionPort);
-  } else {
-    log.debug(`Draw.io MCP Server running in STANDALONE mode (no browser extension required)`);
-  }
+  log.debug(`Draw.io MCP Server running in STANDALONE mode`);
 
   if (config.transports.indexOf("stdio") > -1) {
     await start_stdio_transport();

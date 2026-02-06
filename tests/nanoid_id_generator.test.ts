@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it } from "vitest";
 import { nanoid_id_generator } from "../src/nanoid_id_generator.js";
 
 describe("nanoid_id_generator", () => {

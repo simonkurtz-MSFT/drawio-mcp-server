@@ -2,10 +2,8 @@
  * Application configuration interface
  */
 export interface ServerConfig {
-  readonly extensionPort: number;
   readonly httpPort: number;
   readonly transports: TransportType[];
-  readonly standalone: boolean;
 }
 
 export type TransportType = "stdio" | "http";
@@ -14,10 +12,8 @@ export type TransportType = "stdio" | "http";
  * Default configuration values
  */
 const DEFAULT_CONFIG: ServerConfig = {
-  extensionPort: 3333,
-  httpPort: 3000,
+  httpPort: 8080,
   transports: ["stdio"],
-  standalone: false,
 } as const;
 
 /**
@@ -27,31 +23,6 @@ const PORT_RANGE = {
   min: 1,
   max: 65535,
 } as const;
-
-/**
- * Parse extension port value from string - pure function
- */
-export const parseExtensionPortValue = (
-  value: string | undefined,
-): number | Error => {
-  if (!value) {
-    return new Error("--extension-port flag requires a port number");
-  }
-
-  const port = parseInt(value, 10);
-
-  if (isNaN(port)) {
-    return new Error(`Invalid port number "${value}". Port must be a number`);
-  }
-
-  if (port < PORT_RANGE.min || port > PORT_RANGE.max) {
-    return new Error(
-      `Invalid port number "${value}". Port must be between ${PORT_RANGE.min} and ${PORT_RANGE.max}`,
-    );
-  }
-
-  return port;
-};
 
 /**
  * Parse http port value from string - pure function
@@ -144,25 +115,14 @@ export const shouldShowHelp = (args: readonly string[]): boolean => {
  */
 export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
   // Walk arguments so repeated flags allow "last wins" semantics
-  let portValue: string | undefined;
   let httpPortValue: string | undefined;
   let parsedHttpPort: number | undefined;
   let transportValues: string[] | undefined;
-  let standalone = false;
 
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
 
-    if (arg === "--extension-port" || arg === "-p") {
-      const nextValue = args[i + 1];
-
-      if (nextValue === undefined) {
-        return new Error("--extension-port flag requires a port number");
-      }
-
-      portValue = nextValue;
-      i += 1; // Skip the value we just consumed
-    } else if (arg === "--http-port") {
+    if (arg === "--http-port") {
       const nextValue = args[i + 1];
 
       if (nextValue === undefined) {
@@ -180,8 +140,6 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
 
       transportValues = [nextValue];
       i += 1;
-    } else if (arg === "--standalone") {
-      standalone = true;
     }
   }
 
@@ -193,52 +151,16 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
     parsedHttpPort = httpPort;
   }
 
-  if (portValue !== undefined) {
-    const extensionPort = parseExtensionPortValue(portValue);
-
-    if (extensionPort instanceof Error) {
-      return extensionPort;
-    }
-
-    const transports = parseTransports(transportValues);
-    if (transports instanceof Error) {
-      return transports;
-    }
-
-    return {
-      ...DEFAULT_CONFIG,
-      extensionPort,
-      httpPort:
-        parsedHttpPort !== undefined ? parsedHttpPort : DEFAULT_CONFIG.httpPort,
-      transports,
-      standalone,
-    };
-  }
-
-  if (httpPortValue !== undefined) {
-    const transports = parseTransports(transportValues);
-    if (transports instanceof Error) {
-      return transports;
-    }
-
-    return {
-      ...DEFAULT_CONFIG,
-      httpPort: parsedHttpPort as number,
-      transports,
-      standalone,
-    };
-  }
-
   const transports = parseTransports(transportValues);
   if (transports instanceof Error) {
     return transports;
   }
 
-  // Return default configuration
   return {
     ...DEFAULT_CONFIG,
+    httpPort:
+      parsedHttpPort !== undefined ? parsedHttpPort : DEFAULT_CONFIG.httpPort,
     transports,
-    standalone,
   };
 };
 

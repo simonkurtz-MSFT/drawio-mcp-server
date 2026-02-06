@@ -1,15 +1,15 @@
-import { jest } from "@jest/globals";
+import { vi } from "vitest";
 import { create_logger } from "../src/mcp_console_logger.js";
 
 describe("create_logger", () => {
   let originalConsoleError: typeof console.error;
-  let mockConsoleError: jest.Mock;
+  let mockConsoleError: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     // Save original console.error
     originalConsoleError = console.error;
     // Create mock for console.error
-    mockConsoleError = jest.fn();
+    mockConsoleError = vi.fn();
     console.error = mockConsoleError;
   });
 
@@ -17,7 +17,7 @@ describe("create_logger", () => {
     // Restore original console.error
     console.error = originalConsoleError;
     // Clear all mocks
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should return a Logger object with log and debug methods", () => {

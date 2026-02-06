@@ -1,4 +1,4 @@
-import { describe, it, expect, jest } from "@jest/globals";
+import { describe, it, expect, vi } from "vitest";
 import { EventEmitter } from "node:events";
 import { create_bus } from "../src/emitter_bus.js";
 import { bus_request_stream, bus_reply_stream, Bus } from "../src/types.js";
@@ -16,7 +16,7 @@ describe("create_bus", () => {
 
   it("should send requests to extension via emitter", () => {
     const mockRequest = { type: "test_request", data: "test" };
-    const emitSpy = jest.spyOn(emitter, "emit");
+    const emitSpy = vi.spyOn(emitter, "emit");
 
     bus.send_to_extension(mockRequest);
 
@@ -24,8 +24,8 @@ describe("create_bus", () => {
   });
 
   it("should register reply handlers and call them when matching events arrive", () => {
-    const mockReply1 = jest.fn();
-    const mockReply2 = jest.fn();
+    const mockReply1 = vi.fn();
+    const mockReply2 = vi.fn();
     const eventName1 = "event1";
     const eventName2 = "event2";
     const matchingEvent1 = { __event: eventName1, data: "test1" };
@@ -48,8 +48,8 @@ describe("create_bus", () => {
   it("should track all registered listeners", () => {
     // This test assumes the listeners array is accessible or there's a way to verify listeners
     // Since the original code doesn't expose the listeners array, we'll test indirectly
-    const mockReply1 = jest.fn();
-    const mockReply2 = jest.fn();
+    const mockReply1 = vi.fn();
+    const mockReply2 = vi.fn();
 
     bus.on_reply_from_extension("event1", mockReply1);
     bus.on_reply_from_extension("event2", mockReply2);
@@ -66,8 +66,8 @@ describe("create_bus", () => {
   });
 
   it("should only call the correct reply handler for each event", () => {
-    const mockReply1 = jest.fn();
-    const mockReply2 = jest.fn();
+    const mockReply1 = vi.fn();
+    const mockReply2 = vi.fn();
     const eventName1 = "event1";
     const eventName2 = "event2";
     const matchingEvent = { __event: eventName1, data: "test" };
