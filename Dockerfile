@@ -17,7 +17,7 @@ RUN pnpm install --frozen-lockfile && \
 COPY tsconfig.json ./
 COPY src ./src
 
-# Build and prune dev dependencies in single layer
+# Build, then prune dev dependencies in single layer as we will copy the node_modules for the prod build
 RUN pnpm run build && \
     pnpm prune --prod && \
     pnpm store prune
@@ -33,7 +33,7 @@ RUN addgroup -g 1001 -S nodejs && \
 
 WORKDIR /app
 
-# Copy production artifacts from builder
+# Copy production artifacts from builder (only the prod dependencies, build output, and any additional assets such as the Azure stencils)
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/build ./build
 COPY assets ./assets
@@ -42,6 +42,11 @@ USER nodejs
 
 # 8080: HTTP for MCP server
 EXPOSE 8080
+
+# Environment variables with defaults (can be overridden at runtime)
+ENV HTTP_PORT=8080
+ENV TRANSPORT=http
+ENV LOGGER_TYPE=console
 
 ENTRYPOINT ["node", "build/index.js"]
 CMD ["--transport", "http", "--http-port", "8080"]

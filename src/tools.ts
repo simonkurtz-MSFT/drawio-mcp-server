@@ -22,6 +22,7 @@ interface ResolvedShape {
   width: number;
   height: number;
   source: "basic" | "azure-exact" | "azure-fuzzy";
+  score?: number;
 }
 
 /**
@@ -67,6 +68,7 @@ function resolveShape(shapeName: string): ResolvedShape | undefined {
       width: shape.width,
       height: shape.height,
       source: "azure-fuzzy",
+      score: shape.score,
     };
   }
 
@@ -79,10 +81,9 @@ function successResult(data: any): CallToolResult {
   };
 }
 
-function errorResult(error: StructuredError | string): CallToolResult {
-  const errorObj = typeof error === "string" ? { code: "UNKNOWN_ERROR", message: error } : error;
+function errorResult(error: StructuredError): CallToolResult {
   return {
-    content: [{ type: "text", text: JSON.stringify({ success: false, error: errorObj }) }],
+    content: [{ type: "text", text: JSON.stringify({ success: false, error }) }],
     isError: true,
   };
 }
@@ -121,7 +122,7 @@ export const handlers = {
   "delete-cell-by-id": async (args: {
     cell_id: string;
   }): Promise<CallToolResult> => {
-    const deleted = diagram.deleteCell(args.cell_id);
+    const { deleted, cascadedEdgeIds } = diagram.deleteCell(args.cell_id);
     if (!deleted) {
       return errorResult({
         code: "CELL_NOT_FOUND",
@@ -130,7 +131,10 @@ export const handlers = {
         suggestion: "Use list-paged-model to see available cells",
       });
     }
-    return successResult({ deleted: args.cell_id });
+    return successResult({
+      deleted: args.cell_id,
+      ...(cascadedEdgeIds.length > 0 && { cascaded_edges: cascadedEdgeIds }),
+    });
   },
 
   "edit-cell": async (args: {
@@ -241,7 +245,8 @@ export const handlers = {
 
   "export-diagram": async (): Promise<CallToolResult> => {
     const xml = diagram.toXml();
-    return successResult({ xml });
+    const stats = diagram.getStats();
+    return successResult({ xml, stats });
   },
 
   "get-diagram-stats": async (): Promise<CallToolResult> => {
@@ -250,8 +255,110 @@ export const handlers = {
   },
 
   "clear-diagram": async (): Promise<CallToolResult> => {
-    diagram.clear();
-    return successResult({ message: "Diagram cleared" });
+    const cleared = diagram.clear();
+    return successResult({ message: "Diagram cleared", cleared });
+  },
+
+  // ─── Multi-Page Handlers ────────────────────────────────────────
+
+  "create-page": async (args: { name: string }): Promise<CallToolResult> => {
+    const page = diagram.createPage(args.name);
+    return successResult({ page });
+  },
+
+  "list-pages": async (): Promise<CallToolResult> => {
+    return successResult({
+      pages: diagram.listPages(),
+      active_page: diagram.getActivePage(),
+    });
+  },
+
+  "get-active-page": async (): Promise<CallToolResult> => {
+    return successResult({ page: diagram.getActivePage() });
+  },
+
+  "set-active-page": async (args: { page_id: string }): Promise<CallToolResult> => {
+    const result = diagram.setActivePage(args.page_id);
+    if ("error" in result) {
+      return errorResult(result.error);
+    }
+    return successResult({ page: result });
+  },
+
+  "rename-page": async (args: { page_id: string; name: string }): Promise<CallToolResult> => {
+    const result = diagram.renamePage(args.page_id, args.name);
+    if ("error" in result) {
+      return errorResult(result.error);
+    }
+    return successResult({ page: result });
+  },
+
+  "delete-page": async (args: { page_id: string }): Promise<CallToolResult> => {
+    const result = diagram.deletePage(args.page_id);
+    if (!result.deleted) {
+      return errorResult(result.error!);
+    }
+    return successResult({ deleted: true, remaining_pages: diagram.listPages() });
+  },
+
+  // ─── Group / Container Handlers ─────────────────────────────────
+
+  "create-group": async (args: {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    text?: string;
+    style?: string;
+  }): Promise<CallToolResult> => {
+    const cell = diagram.createGroup(args);
+    return successResult({ cell });
+  },
+
+  "add-cell-to-group": async (args: {
+    cell_id: string;
+    group_id: string;
+  }): Promise<CallToolResult> => {
+    const result = diagram.addCellToGroup(args.cell_id, args.group_id);
+    if ("error" in result) {
+      return errorResult(result.error);
+    }
+    return successResult({ cell: result });
+  },
+
+  "remove-cell-from-group": async (args: {
+    cell_id: string;
+  }): Promise<CallToolResult> => {
+    const result = diagram.removeCellFromGroup(args.cell_id);
+    if ("error" in result) {
+      return errorResult(result.error);
+    }
+    return successResult({ cell: result });
+  },
+
+  "list-group-children": async (args: {
+    group_id: string;
+  }): Promise<CallToolResult> => {
+    const result = diagram.listGroupChildren(args.group_id);
+    if ("error" in result) {
+      return errorResult(result.error);
+    }
+    return successResult({ children: result, total: result.length });
+  },
+
+  // ─── Import Handler ─────────────────────────────────────────────
+
+  "import-diagram": async (args: {
+    xml: string;
+  }): Promise<CallToolResult> => {
+    const result = diagram.importXml(args.xml);
+    if ("error" in result) {
+      return errorResult(result.error);
+    }
+    return successResult({
+      message: `Imported ${result.pages} page(s) with ${result.cells} cell(s) and ${result.layers} layer(s)`,
+      ...result,
+    });
   },
 
   "get-shape-categories": async (): Promise<CallToolResult> => {
@@ -305,7 +412,11 @@ export const handlers = {
       });
     }
 
-    return errorResult(`Category '${args.category_id}' not found. Use get-shape-categories to list available categories.`);
+    return errorResult({
+      code: "CATEGORY_NOT_FOUND",
+      message: `Category '${args.category_id}' not found`,
+      suggestion: "Use get-shape-categories to list available categories",
+    });
   },
 
   "get-shape-by-name": async (args: {
@@ -314,10 +425,21 @@ export const handlers = {
     const resolved = resolveShape(args.shape_name);
     if (resolved) {
       return successResult({
-        shape: { name: resolved.name, style: resolved.style, width: resolved.width, height: resolved.height },
+        shape: {
+          name: resolved.name,
+          style: resolved.style,
+          width: resolved.width,
+          height: resolved.height,
+          source: resolved.source,
+          ...(resolved.score !== undefined && { confidence: resolved.score }),
+        },
       });
     }
-    return errorResult(`Shape '${args.shape_name}' not found. Use search-shapes to find available shapes.`);
+    return errorResult({
+      code: "SHAPE_NOT_FOUND",
+      message: `Shape '${args.shape_name}' not found`,
+      suggestion: "Use search-shapes to find available shapes",
+    });
   },
 
   "add-cell-of-shape": async (args: {
@@ -331,7 +453,11 @@ export const handlers = {
   }): Promise<CallToolResult> => {
     const resolved = resolveShape(args.shape_name);
     if (!resolved) {
-      return errorResult(`Unknown shape '${args.shape_name}'. Use search-shapes to find available shapes, or try basic names like 'rectangle', 'ellipse', 'decision'.`);
+      return errorResult({
+        code: "SHAPE_NOT_FOUND",
+        message: `Unknown shape '${args.shape_name}'`,
+        suggestion: "Use search-shapes to find available shapes, or try basic names like 'rectangle', 'ellipse', 'decision'",
+      });
     }
 
     const cell = diagram.addRectangle({
@@ -349,7 +475,12 @@ export const handlers = {
         ? `Added Azure icon: ${resolved.name}`
         : undefined;
 
-    return successResult({ success: true, cell, ...(info && { info }) });
+    return successResult({
+      success: true,
+      cell,
+      ...(info && { info }),
+      ...(resolved.score !== undefined && { confidence: resolved.score }),
+    });
   },
 
   "batch-add-cells-of-shape": async (args: {
@@ -365,7 +496,10 @@ export const handlers = {
     }>;
   }): Promise<CallToolResult> => {
     if (!args.cells || args.cells.length === 0) {
-      return errorResult("Must provide a non-empty 'cells' array");
+      return errorResult({
+        code: "INVALID_INPUT",
+        message: "Must provide a non-empty 'cells' array",
+      });
     }
 
     const results = args.cells.map((item) => {
@@ -375,7 +509,11 @@ export const handlers = {
           success: false,
           temp_id: item.temp_id,
           shape_name: item.shape_name,
-          error: `Unknown shape '${item.shape_name}'. Use search-shapes to find available shapes.`,
+          error: {
+            code: "SHAPE_NOT_FOUND",
+            message: `Unknown shape '${item.shape_name}'`,
+            suggestion: "Use search-shapes to find available shapes",
+          },
         };
       }
 
@@ -392,7 +530,11 @@ export const handlers = {
         success: true,
         cell,
         temp_id: item.temp_id,
-        ...(resolved.source !== "basic" && { info: `Added Azure icon: ${resolved.name}` }),
+        ...(resolved.source === "azure-exact" && { info: `Added Azure icon: ${resolved.name}` }),
+        ...(resolved.source === "azure-fuzzy" && {
+          info: `Added Azure icon (matched from search): ${resolved.name}`,
+          confidence: resolved.score,
+        }),
       };
     });
 
@@ -420,14 +562,16 @@ export const handlers = {
     const hasBatchParams = args.cells && args.cells.length > 0;
 
     if (!hasSingleParams && !hasBatchParams) {
-      return errorResult(
-        "Must provide either 'cell_id' and 'shape_name' OR 'cells' array"
-      );
+      return errorResult({
+        code: "INVALID_INPUT",
+        message: "Must provide either 'cell_id' and 'shape_name' OR 'cells' array",
+      });
     }
     if (hasSingleParams && hasBatchParams) {
-      return errorResult(
-        "Cannot provide both single parameters (cell_id/shape_name) and batch parameter (cells)"
-      );
+      return errorResult({
+        code: "INVALID_INPUT",
+        message: "Cannot provide both single parameters (cell_id/shape_name) and batch parameter (cells)",
+      });
     }
 
     // Helper function to get style for a shape name
@@ -440,7 +584,11 @@ export const handlers = {
     if (hasSingleParams) {
       const style = getShapeStyle(args.shape_name!);
       if (!style) {
-        return errorResult(`Unknown shape '${args.shape_name}'`);
+        return errorResult({
+          code: "SHAPE_NOT_FOUND",
+          message: `Unknown shape '${args.shape_name}'`,
+          suggestion: "Use search-shapes to find available shapes",
+        });
       }
 
       const result = diagram.editCell(args.cell_id!, { style });
@@ -461,7 +609,11 @@ export const handlers = {
             success: false,
             cell_id: item.cell_id,
             shape_name: item.shape_name,
-            error: `Unknown shape '${item.shape_name}'`,
+            error: {
+              code: "SHAPE_NOT_FOUND",
+              message: `Unknown shape '${item.shape_name}'`,
+              suggestion: "Use search-shapes to find available shapes",
+            },
           };
         }
 
@@ -596,10 +748,16 @@ export const handlers = {
 
     // Validate input: must have either query or queries, but not both
     if (!args.query && !args.queries) {
-      return errorResult("Must provide either 'query' (string) or 'queries' (array of strings)");
+      return errorResult({
+        code: "INVALID_INPUT",
+        message: "Must provide either 'query' (string) or 'queries' (array of strings)",
+      });
     }
     if (args.query && args.queries) {
-      return errorResult("Cannot provide both 'query' and 'queries'. Use one or the other.");
+      return errorResult({
+        code: "INVALID_INPUT",
+        message: "Cannot provide both 'query' and 'queries'. Use one or the other.",
+      });
     }
 
     // Handle single query (backward compatible)
@@ -610,6 +768,7 @@ export const handlers = {
         matches: results.map(r => ({
           name: r.title,
           id: r.id,
+          category: r.category,
           width: r.width,
           height: r.height,
           confidence: r.score,
@@ -626,6 +785,7 @@ export const handlers = {
         matches: results.map(r => ({
           name: r.title,
           id: r.id,
+          category: r.category,
           width: r.width,
           height: r.height,
           confidence: r.score,

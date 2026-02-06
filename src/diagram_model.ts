@@ -23,9 +23,18 @@ export interface Cell {
   sourceId?: string;
   targetId?: string;
   parent?: string;
+  /** When true, this vertex acts as a container/group for other cells */
+  isGroup?: boolean;
+  /** IDs of child cells contained in this group */
+  children?: string[];
 }
 
 export interface Layer {
+  id: string;
+  name: string;
+}
+
+export interface Page {
   id: string;
   name: string;
 }
@@ -35,9 +44,20 @@ export class DiagramModel {
   private layers: Layer[] = [{ id: "1", name: "Default Layer" }];
   private activeLayerId: string = "1";
   private nextId: number = 2;
+  private pages: Page[] = [{ id: "page-1", name: "Page-1" }];
+  private activePageId: string = "page-1";
+  /** Per-page storage: pageId → { cells, layers, activeLayerId, nextId } */
+  private pageData: Map<string, { cells: Map<string, Cell>; layers: Layer[]; activeLayerId: string; nextId: number }> = new Map();
 
   constructor() {
     // Initialize with root cell (id=0) and default layer (id=1)
+    // Store initial page data
+    this.pageData.set("page-1", {
+      cells: this.cells,
+      layers: this.layers,
+      activeLayerId: this.activeLayerId,
+      nextId: this.nextId,
+    });
   }
 
   private generateId(): string {
@@ -52,29 +72,6 @@ export class DiagramModel {
     text?: string;
     style?: string;
   }): Cell {
-    const width = params.width ?? 200;
-    const height = params.height ?? 100;
-
-    if (width <= 0 || height <= 0) {
-      // Clamp to minimum 1 to avoid invisible cells
-      const clampedWidth = Math.max(1, width);
-      const clampedHeight = Math.max(1, height);
-      const id = this.generateId();
-      const cell: Cell = {
-        id,
-        type: "vertex",
-        value: params.text ?? "New Cell",
-        x: params.x ?? 100,
-        y: params.y ?? 100,
-        width: clampedWidth,
-        height: clampedHeight,
-        style: params.style ?? "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
-        parent: this.activeLayerId,
-      };
-      this.cells.set(id, cell);
-      return cell;
-    }
-
     const id = this.generateId();
     const cell: Cell = {
       id,
@@ -82,8 +79,8 @@ export class DiagramModel {
       value: params.text ?? "New Cell",
       x: params.x ?? 100,
       y: params.y ?? 100,
-      width,
-      height,
+      width: Math.max(1, params.width ?? 200),
+      height: Math.max(1, params.height ?? 100),
       style: params.style ?? "whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;",
       parent: this.activeLayerId,
     };
@@ -133,24 +130,25 @@ export class DiagramModel {
     return cell;
   }
 
-  deleteCell(cellId: string): boolean {
+  deleteCell(cellId: string): { deleted: boolean; cascadedEdgeIds: string[] } {
     const cell = this.cells.get(cellId);
-    if (!cell) return false;
+    if (!cell) return { deleted: false, cascadedEdgeIds: [] };
 
     // If deleting a vertex, also remove any edges that reference it
+    const cascadedEdgeIds: string[] = [];
     if (cell.type === "vertex") {
-      const danglingEdgeIds: string[] = [];
       for (const [id, c] of this.cells) {
         if (c.type === "edge" && (c.sourceId === cellId || c.targetId === cellId)) {
-          danglingEdgeIds.push(id);
+          cascadedEdgeIds.push(id);
         }
       }
-      for (const id of danglingEdgeIds) {
+      for (const id of cascadedEdgeIds) {
         this.cells.delete(id);
       }
     }
 
-    return this.cells.delete(cellId);
+    this.cells.delete(cellId);
+    return { deleted: true, cascadedEdgeIds };
   }
 
   editCell(cellId: string, params: {
@@ -321,20 +319,563 @@ export class DiagramModel {
     return cell;
   }
 
+  // ─── Multi-Page Support ──────────────────────────────────────────
+
   /**
-   * Export the diagram as Draw.io XML format
+   * Save current page state into pageData before switching away.
+   */
+  private saveCurrentPageState(): void {
+    this.pageData.set(this.activePageId, {
+      cells: this.cells,
+      layers: this.layers,
+      activeLayerId: this.activeLayerId,
+      nextId: this.nextId,
+    });
+  }
+
+  /**
+   * Load a page's state from pageData into the active fields.
+   */
+  private loadPageState(pageId: string): void {
+    const data = this.pageData.get(pageId);
+    if (data) {
+      this.cells = data.cells;
+      this.layers = data.layers;
+      this.activeLayerId = data.activeLayerId;
+      this.nextId = data.nextId;
+    }
+  }
+
+  /**
+   * Create a new page in the diagram.
+   */
+  createPage(name: string): Page {
+    const id = `page-${this.pages.length + 1}`;
+    const page: Page = { id, name };
+    this.pages.push(page);
+    // Initialize empty page data
+    this.pageData.set(id, {
+      cells: new Map(),
+      layers: [{ id: "1", name: "Default Layer" }],
+      activeLayerId: "1",
+      nextId: 2,
+    });
+    return page;
+  }
+
+  /**
+   * List all pages.
+   */
+  listPages(): Page[] {
+    return [...this.pages];
+  }
+
+  /**
+   * Get the currently active page.
+   */
+  getActivePage(): Page {
+    return this.pages.find(p => p.id === this.activePageId)!;
+  }
+
+  /**
+   * Switch to a different page.
+   */
+  setActivePage(pageId: string): Page | { error: StructuredError } {
+    const page = this.pages.find(p => p.id === pageId);
+    if (!page) {
+      return {
+        error: {
+          code: "PAGE_NOT_FOUND",
+          message: `Page '${pageId}' not found`,
+          suggestion: "Use list-pages to see available pages",
+        },
+      };
+    }
+    if (pageId === this.activePageId) {
+      return page;
+    }
+    // Save current page state and load the target page
+    this.saveCurrentPageState();
+    this.activePageId = pageId;
+    this.loadPageState(pageId);
+    return page;
+  }
+
+  /**
+   * Rename a page.
+   */
+  renamePage(pageId: string, newName: string): Page | { error: StructuredError } {
+    const page = this.pages.find(p => p.id === pageId);
+    if (!page) {
+      return {
+        error: {
+          code: "PAGE_NOT_FOUND",
+          message: `Page '${pageId}' not found`,
+          suggestion: "Use list-pages to see available pages",
+        },
+      };
+    }
+    page.name = newName;
+    return page;
+  }
+
+  /**
+   * Delete a page. Cannot delete the last remaining page.
+   */
+  deletePage(pageId: string): { deleted: boolean; error?: StructuredError } {
+    if (this.pages.length <= 1) {
+      return {
+        deleted: false,
+        error: {
+          code: "CANNOT_DELETE_LAST_PAGE",
+          message: "Cannot delete the last remaining page",
+          suggestion: "Create another page before deleting this one",
+        },
+      };
+    }
+    const index = this.pages.findIndex(p => p.id === pageId);
+    if (index === -1) {
+      return {
+        deleted: false,
+        error: {
+          code: "PAGE_NOT_FOUND",
+          message: `Page '${pageId}' not found`,
+          suggestion: "Use list-pages to see available pages",
+        },
+      };
+    }
+    this.pages.splice(index, 1);
+    this.pageData.delete(pageId);
+    // If deleting the active page, switch to the first remaining page
+    if (this.activePageId === pageId) {
+      this.activePageId = this.pages[0].id;
+      this.loadPageState(this.activePageId);
+    }
+    return { deleted: true };
+  }
+
+  // ─── Group / Container Support ───────────────────────────────────
+
+  /**
+   * Create a group (container) cell that can hold child cells.
+   */
+  createGroup(params: {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    text?: string;
+    style?: string;
+  }): Cell {
+    const id = this.generateId();
+    const cell: Cell = {
+      id,
+      type: "vertex",
+      value: params.text ?? "",
+      x: params.x ?? 0,
+      y: params.y ?? 0,
+      width: params.width ?? 400,
+      height: params.height ?? 300,
+      style: params.style ?? "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;container=1;collapsible=0;",
+      parent: this.activeLayerId,
+      isGroup: true,
+      children: [],
+    };
+    this.cells.set(id, cell);
+    return cell;
+  }
+
+  /**
+   * Add a cell to a group. The child cell's parent is set to the group.
+   */
+  addCellToGroup(cellId: string, groupId: string): Cell | { error: StructuredError } {
+    const cell = this.cells.get(cellId);
+    if (!cell) {
+      return {
+        error: {
+          code: "CELL_NOT_FOUND",
+          message: `Cell '${cellId}' not found`,
+          cell_id: cellId,
+          suggestion: "Use list-paged-model to see available cells",
+        },
+      };
+    }
+    const group = this.cells.get(groupId);
+    if (!group) {
+      return {
+        error: {
+          code: "GROUP_NOT_FOUND",
+          message: `Group '${groupId}' not found`,
+          cell_id: groupId,
+          suggestion: "Use list-paged-model to see available groups",
+        },
+      };
+    }
+    if (!group.isGroup) {
+      return {
+        error: {
+          code: "NOT_A_GROUP",
+          message: `Cell '${groupId}' is not a group/container`,
+          cell_id: groupId,
+          suggestion: "Use create-group to create a group first",
+        },
+      };
+    }
+    if (cellId === groupId) {
+      return {
+        error: {
+          code: "SELF_REFERENCE",
+          message: "Cannot add a group to itself",
+          cell_id: cellId,
+          suggestion: "Provide a different cell_id and group_id",
+        },
+      };
+    }
+    cell.parent = groupId;
+    if (!group.children) {
+      group.children = [];
+    }
+    if (!group.children.includes(cellId)) {
+      group.children.push(cellId);
+    }
+    return cell;
+  }
+
+  /**
+   * Remove a cell from its group, returning it to the active layer.
+   */
+  removeCellFromGroup(cellId: string): Cell | { error: StructuredError } {
+    const cell = this.cells.get(cellId);
+    if (!cell) {
+      return {
+        error: {
+          code: "CELL_NOT_FOUND",
+          message: `Cell '${cellId}' not found`,
+          cell_id: cellId,
+          suggestion: "Use list-paged-model to see available cells",
+        },
+      };
+    }
+    // Check if the cell is currently in a group (parent is a cell, not a layer)
+    const parentCell = this.cells.get(cell.parent!);
+    if (!parentCell || !parentCell.isGroup) {
+      return {
+        error: {
+          code: "NOT_IN_GROUP",
+          message: `Cell '${cellId}' is not inside a group`,
+          cell_id: cellId,
+          suggestion: "Cell is already at the layer level",
+        },
+      };
+    }
+    // Remove from parent's children list
+    if (parentCell.children) {
+      parentCell.children = parentCell.children.filter(id => id !== cellId);
+    }
+    // Return to the active layer
+    cell.parent = this.activeLayerId;
+    return cell;
+  }
+
+  /**
+   * List the children of a group.
+   */
+  listGroupChildren(groupId: string): Cell[] | { error: StructuredError } {
+    const group = this.cells.get(groupId);
+    if (!group) {
+      return {
+        error: {
+          code: "GROUP_NOT_FOUND",
+          message: `Group '${groupId}' not found`,
+          cell_id: groupId,
+          suggestion: "Use list-paged-model to see available groups",
+        },
+      };
+    }
+    if (!group.isGroup) {
+      return {
+        error: {
+          code: "NOT_A_GROUP",
+          message: `Cell '${groupId}' is not a group/container`,
+          cell_id: groupId,
+          suggestion: "Use create-group to create a group first",
+        },
+      };
+    }
+    return group.children!
+      .map(id => this.cells.get(id))
+      .filter((c): c is Cell => c !== undefined);
+  }
+
+  // ─── Import / Load XML ───────────────────────────────────────────
+
+  /**
+   * Unescape XML entities back to plain text.
+   */
+  private unescapeXml(str: string): string {
+    return str
+      .replace(/&apos;/g, "'")
+      .replace(/&quot;/g, '"')
+      .replace(/&gt;/g, ">")
+      .replace(/&lt;/g, "<")
+      .replace(/&amp;/g, "&");
+  }
+
+  /**
+   * Import a Draw.io XML string, replacing the current diagram state.
+   * Supports single-page and multi-page documents.
+   * Returns the number of imported pages, cells, and layers.
+   */
+  importXml(xml: string): { pages: number; cells: number; layers: number } | { error: StructuredError } {
+    // Basic validation
+    if (!xml || !xml.trim()) {
+      return {
+        error: {
+          code: "EMPTY_XML",
+          message: "XML string is empty",
+          suggestion: "Provide a valid Draw.io XML string",
+        },
+      };
+    }
+
+    if (!xml.includes("<mxfile") && !xml.includes("<mxGraphModel")) {
+      return {
+        error: {
+          code: "INVALID_XML",
+          message: "XML does not appear to be a Draw.io file",
+          suggestion: "Provide XML that contains <mxfile> or <mxGraphModel> elements",
+        },
+      };
+    }
+
+    // Extract diagram elements (multi-page support)
+    const diagramRegex = /<diagram\s+([^>]*)>([\s\S]*?)<\/diagram>/gi;
+    const diagrams: Array<{ id: string; name: string; content: string }> = [];
+    let diagramMatch;
+
+    while ((diagramMatch = diagramRegex.exec(xml)) !== null) {
+      const attrs = diagramMatch[1];
+      const content = diagramMatch[2];
+      const idMatch = attrs.match(/id="([^"]*)"/);
+      const nameMatch = attrs.match(/name="([^"]*)"/);
+      diagrams.push({
+        id: idMatch ? idMatch[1] : `page-${diagrams.length + 1}`,
+        name: nameMatch ? this.unescapeXml(nameMatch[1]) : `Page-${diagrams.length + 1}`,
+        content,
+      });
+    }
+
+    // If no <diagram> wrapper, treat entire XML as single page
+    if (diagrams.length === 0) {
+      diagrams.push({ id: "page-1", name: "Page-1", content: xml });
+    }
+
+    // Reset state entirely
+    this.pages = [];
+    this.pageData.clear();
+    this.activePageId = "";
+
+    let totalCells = 0;
+    let totalLayers = 0;
+
+    for (let di = 0; di < diagrams.length; di++) {
+      const diag = diagrams[di];
+      const pageId = `page-${di + 1}`;
+      this.pages.push({ id: pageId, name: diag.name });
+
+      const { cells, layers, nextId } = this.parseMxGraphContent(diag.content);
+      totalCells += cells.size;
+      totalLayers += layers.length;
+
+      this.pageData.set(pageId, {
+        cells,
+        layers,
+        activeLayerId: layers[0].id,
+        nextId,
+      });
+    }
+
+    // Activate the first page
+    this.activePageId = this.pages[0].id;
+    this.loadPageState(this.activePageId);
+
+    return {
+      pages: this.pages.length,
+      cells: totalCells,
+      layers: totalLayers,
+    };
+  }
+
+  /**
+   * Parse mxGraphModel content and extract cells and layers.
+   */
+  private parseMxGraphContent(content: string): { cells: Map<string, Cell>; layers: Layer[]; nextId: number } {
+    const cells = new Map<string, Cell>();
+    const layers: Layer[] = [{ id: "1", name: "Default Layer" }];
+    let maxId = 1;
+
+    // Extract mxCell elements
+    const cellRegex = /<mxCell\s+([\s\S]*?)(?:\/>|>([\s\S]*?)<\/mxCell>)/gi;
+    let cellMatch;
+
+    // Collect cells that may be layers (parent="0", no vertex/edge)
+    const rawCells: Array<{ attrs: string; innerContent: string }> = [];
+
+    while ((cellMatch = cellRegex.exec(content)) !== null) {
+      rawCells.push({ attrs: cellMatch[1], innerContent: cellMatch[2] || "" });
+    }
+
+    // Also match UserObject elements (for cells with custom data)
+    const userObjRegex = /<UserObject\s+([\s\S]*?)>([\s\S]*?)<\/UserObject>/gi;
+    let userObjMatch;
+    while ((userObjMatch = userObjRegex.exec(content)) !== null) {
+      rawCells.push({ attrs: userObjMatch[1], innerContent: userObjMatch[2] || "" });
+    }
+
+    for (const raw of rawCells) {
+      const attrs = raw.attrs;
+      const innerContent = raw.innerContent;
+
+      const idMatch = attrs.match(/id="([^"]*)"/);
+      const valueMatch = attrs.match(/value="([^"]*)"/);
+      const styleMatch = attrs.match(/style="([^"]*)"/);
+      const parentMatch = attrs.match(/parent="([^"]*)"/);
+      const sourceMatch = attrs.match(/source="([^"]*)"/);
+      const targetMatch = attrs.match(/target="([^"]*)"/);
+      const isVertex = /vertex="1"/.test(attrs);
+      const isEdge = /edge="1"/.test(attrs);
+
+      const id = idMatch ? idMatch[1] : "";
+      const value = valueMatch ? this.unescapeXml(valueMatch[1]) : "";
+      const style = styleMatch ? this.unescapeXml(styleMatch[1]) : "";
+      const parent = parentMatch ? parentMatch[1] : "";
+
+      // Skip root cells (id=0 or id=1)
+      if (id === "0") continue;
+      if (id === "1" && parent === "0") continue;
+
+      // Track numeric IDs for nextId
+      const numMatch = id.match(/\d+/);
+      if (numMatch) {
+        maxId = Math.max(maxId, parseInt(numMatch[0], 10));
+      }
+
+      // Layer detection: parent="0", not a vertex or edge
+      if (parent === "0" && !isVertex && !isEdge) {
+        // It's a layer (unless it's the default one we already added)
+        if (id !== "1") {
+          layers.push({ id, name: value || id });
+        }
+        continue;
+      }
+
+      // Parse geometry from inner content
+      let x: number | undefined;
+      let y: number | undefined;
+      let width: number | undefined;
+      let height: number | undefined;
+
+      const geoMatch = innerContent.match(/<mxGeometry\s+([^>]*)/);
+      if (geoMatch) {
+        const geoAttrs = geoMatch[1];
+        const xMatch = geoAttrs.match(/x="([^"]*)"/);
+        const yMatch = geoAttrs.match(/y="([^"]*)"/);
+        const wMatch = geoAttrs.match(/width="([^"]*)"/);
+        const hMatch = geoAttrs.match(/height="([^"]*)"/);
+        if (xMatch) x = parseFloat(xMatch[1]);
+        if (yMatch) y = parseFloat(yMatch[1]);
+        if (wMatch) width = parseFloat(wMatch[1]);
+        if (hMatch) height = parseFloat(hMatch[1]);
+      }
+
+      // Determine if it's a group/container
+      const isGroup = style.includes("container=1") || /swimlane/i.test(style);
+
+      if (isEdge) {
+        const cell: Cell = {
+          id,
+          type: "edge",
+          value,
+          style,
+          sourceId: sourceMatch ? sourceMatch[1] : undefined,
+          targetId: targetMatch ? targetMatch[1] : undefined,
+          parent: parent || "1",
+        };
+        cells.set(id, cell);
+      } else {
+        const cell: Cell = {
+          id,
+          type: "vertex",
+          value,
+          x: x ?? 0,
+          y: y ?? 0,
+          width: width ?? 200,
+          height: height ?? 100,
+          style,
+          parent: parent || "1",
+          ...(isGroup && { isGroup: true, children: [] }),
+        };
+        cells.set(id, cell);
+      }
+    }
+
+    // Post-process: populate children arrays for groups
+    for (const cell of cells.values()) {
+      if (cell.parent && cells.has(cell.parent)) {
+        const parentCell = cells.get(cell.parent)!;
+        if (parentCell.isGroup) {
+          parentCell.children!.push(cell.id);
+        }
+      }
+    }
+
+    return { cells, layers, nextId: maxId + 1 };
+  }
+
+  /**
+   * Export the diagram as Draw.io XML format (supports multi-page)
    */
   toXml(): string {
+    // Save current page state so all pages have up-to-date data
+    this.saveCurrentPageState();
+
+    const diagramsXml = this.pages.map(page => {
+      const data = this.pageData.get(page.id)!;
+      const pageXml = this.renderPageXml(data.cells, data.layers);
+      return `    <diagram id="${this.escapeXml(page.id)}" name="${this.escapeXml(page.name)}">
+        <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+${pageXml}
+            </root>
+        </mxGraphModel>
+    </diagram>`;
+    }).join("\n");
+
+    return `<mxfile host="drawio-mcp-server">
+${diagramsXml}
+</mxfile>`;
+  }
+
+  /**
+   * Render cells and layers for a single page.
+   */
+  private renderPageXml(cells: Map<string, Cell>, layers: Layer[]): string {
     // Emit custom layer cells (skip the default layer id="1" which is always present)
-    const layerCellsXml = this.layers
+    const layerCellsXml = layers
       .filter(l => l.id !== "1")
       .map(l => `                <mxCell id="${this.escapeXml(l.id)}" value="${this.escapeXml(l.name)}" style="" parent="0"/>`)
       .join("\n");
 
-    const cellsXml = Array.from(this.cells.values())
+    const cellsXml = Array.from(cells.values())
       .map(cell => {
         if (cell.type === "vertex") {
-          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style!)}" vertex="1" parent="${cell.parent!}">
+          const groupAttrs = cell.isGroup ? ' connectable="0"' : '';
+          const containerStyle = cell.isGroup && cell.style && !cell.style.includes("container=1")
+            ? cell.style + "container=1;"
+            : cell.style;
+          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(containerStyle!)}" vertex="1"${groupAttrs} parent="${cell.parent!}">
                     <mxGeometry x="${cell.x!}" y="${cell.y!}" width="${cell.width!}" height="${cell.height!}" as="geometry"/>
                 </mxCell>`;
         } else {
@@ -345,17 +886,7 @@ export class DiagramModel {
       })
       .join("\n");
 
-    return `<mxfile host="drawio-mcp-server">
-    <diagram id="diagram1" name="Page-1">
-        <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
-            <root>
-                <mxCell id="0"/>
-                <mxCell id="1" parent="0"/>
-${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
-            </root>
-        </mxGraphModel>
-    </diagram>
-</mxfile>`;
+    return `${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}`;
   }
 
   private escapeXml(str: string): string {
@@ -368,21 +899,48 @@ ${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
   }
 
   /**
-   * Clear all cells and reset the diagram
+   * Clear all cells and reset the diagram (including pages)
    */
-  clear(): void {
-    this.cells.clear();
+  clear(): { vertices: number; edges: number } {
+    // Count cells across all pages
+    this.saveCurrentPageState();
+    let vertices = 0;
+    let edges = 0;
+    for (const data of this.pageData.values()) {
+      for (const c of data.cells.values()) {
+        if (c.type === "vertex") vertices++;
+        else edges++;
+      }
+    }
+
+    // Reset to single empty page
+    this.cells = new Map();
+    this.layers = [{ id: "1", name: "Default Layer" }];
+    this.activeLayerId = "1";
     this.nextId = 2;
+    this.pages = [{ id: "page-1", name: "Page-1" }];
+    this.activePageId = "page-1";
+    this.pageData.clear();
+    this.pageData.set("page-1", {
+      cells: this.cells,
+      layers: this.layers,
+      activeLayerId: this.activeLayerId,
+      nextId: this.nextId,
+    });
+    return { vertices, edges };
   }
 
   /**
-   * Get statistics about the current diagram
+   * Get statistics about the current diagram (active page)
    */
   getStats(): {
     total_cells: number;
     vertices: number;
     edges: number;
+    groups: number;
     layers: number;
+    pages: number;
+    active_page: string;
     bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
     cells_with_text: number;
     cells_without_text: number;
@@ -391,6 +949,7 @@ ${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
     const cells = Array.from(this.cells.values());
     const vertices = cells.filter(c => c.type === "vertex");
     const edges = cells.filter(c => c.type === "edge");
+    const groups = cells.filter(c => c.isGroup).length;
 
     // Calculate bounding box
     let bounds: { minX: number; minY: number; maxX: number; maxY: number } | null = null;
@@ -420,7 +979,10 @@ ${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}
       total_cells: cells.length,
       vertices: vertices.length,
       edges: edges.length,
+      groups,
       layers: this.layers.length,
+      pages: this.pages.length,
+      active_page: this.activePageId,
       bounds,
       cells_with_text: cellsWithText,
       cells_without_text: cellsWithoutText,

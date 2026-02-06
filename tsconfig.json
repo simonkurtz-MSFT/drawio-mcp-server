@@ -11,7 +11,7 @@
 
     // Emit
     "outDir": "./build",
-    "rootDir": "./src",
+    "rootDir": ".",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -29,8 +29,9 @@
     "noFallthroughCasesInSwitch": true,
 
     // Completeness
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["vitest/globals"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "build", "tests"]
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "build"]
 }

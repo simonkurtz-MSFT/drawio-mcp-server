@@ -98,6 +98,19 @@ describe("tool handlers", () => {
       const result = await handlers["delete-cell-by-id"]({ cell_id: "nope" });
       expect(result.isError).toBe(true);
     });
+
+    it("should report cascaded edge deletions", async () => {
+      const a = await handlers["add-rectangle"]({ text: "A" });
+      const b = await handlers["add-rectangle"]({ text: "B" });
+      const aId = parseResult(a).data.cell.id;
+      const bId = parseResult(b).data.cell.id;
+      await handlers["add-edge"]({ source_id: aId, target_id: bId });
+
+      const result = await handlers["delete-cell-by-id"]({ cell_id: aId });
+      const parsed = parseResult(result);
+      expect(parsed.data.deleted).toBe(aId);
+      expect(parsed.data.cascaded_edges).toHaveLength(1);
+    });
   });
 
   describe("edit-cell", () => {
@@ -368,6 +381,8 @@ describe("tool handlers", () => {
     it("should return error for unknown category", async () => {
       const result = await handlers["get-shapes-in-category"]({ category_id: "nonexistent" });
       expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("CATEGORY_NOT_FOUND");
     });
 
     it("should return shapes for an Azure category", async () => {
@@ -398,6 +413,8 @@ describe("tool handlers", () => {
     it("should return error for unknown shape", async () => {
       const result = await handlers["get-shape-by-name"]({ shape_name: "xyznonexistent" });
       expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("SHAPE_NOT_FOUND");
     });
 
     it("should find Azure shapes by exact title", async () => {
@@ -452,6 +469,8 @@ describe("tool handlers", () => {
         shape_name: "xyznonexistent",
       });
       expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("SHAPE_NOT_FOUND");
     });
 
     it("should add an Azure shape by exact name and include info", async () => {
@@ -607,6 +626,8 @@ describe("tool handlers", () => {
         cells: [],
       });
       expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("INVALID_INPUT");
     });
 
     it("should add Azure shape cells with info", async () => {
@@ -623,6 +644,18 @@ describe("tool handlers", () => {
       expect(parsed.data.results[0].info).toContain("Azure icon");
     });
 
+    it("should include confidence for fuzzy-matched Azure shapes", async () => {
+      const result = await handlers["batch-add-cells-of-shape"]({
+        cells: [
+          { shape_name: "storage account", x: 100, y: 100 },
+        ],
+      });
+      const parsed = parseResult(result);
+      expect(parsed.data.summary.succeeded).toBe(1);
+      expect(parsed.data.results[0].info).toContain("matched from search");
+      expect(parsed.data.results[0].confidence).toBeGreaterThan(0);
+    });
+
     it("should handle mixed success and failure in batch", async () => {
       const result = await handlers["batch-add-cells-of-shape"]({
         cells: [
@@ -636,7 +669,7 @@ describe("tool handlers", () => {
       expect(parsed.data.summary.failed).toBe(1);
       expect(parsed.data.success).toBe(false);
       expect(parsed.data.results[1].success).toBe(false);
-      expect(parsed.data.results[1].error).toContain("Unknown shape");
+      expect(parsed.data.results[1].error.code).toBe("SHAPE_NOT_FOUND");
     });
 
     it("should use custom dimensions over shape defaults", async () => {
@@ -672,6 +705,8 @@ describe("tool handlers", () => {
     it("should error when neither query nor queries provided", async () => {
       const result = await handlers["search-shapes"]({});
       expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("INVALID_INPUT");
     });
 
     it("should error when both query and queries provided", async () => {
@@ -680,6 +715,8 @@ describe("tool handlers", () => {
         queries: ["y"],
       });
       expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("INVALID_INPUT");
     });
 
     it("should respect custom limit", async () => {
@@ -733,6 +770,8 @@ describe("tool handlers", () => {
     it("should error when no arguments provided", async () => {
       const result = await handlers["set-cell-shape"]({});
       expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("INVALID_INPUT");
     });
 
     it("should error when both single and batch params provided", async () => {
@@ -745,6 +784,8 @@ describe("tool handlers", () => {
         cells: [{ cell_id: cellId, shape_name: "ellipse" }],
       });
       expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("INVALID_INPUT");
     });
 
     it("should error for unknown single shape name", async () => {
@@ -756,6 +797,8 @@ describe("tool handlers", () => {
         shape_name: "xyznonexistent",
       });
       expect(result.isError).toBe(true);
+      const parsed = parseResult(result);
+      expect(parsed.error.code).toBe("SHAPE_NOT_FOUND");
     });
 
     it("should report errors for unknown shapes in batch", async () => {
@@ -769,6 +812,7 @@ describe("tool handlers", () => {
       });
       const parsed = parseResult(result);
       expect(parsed.data.summary.failed).toBe(1);
+      expect(parsed.data.results[0].error.code).toBe("SHAPE_NOT_FOUND");
     });
 
     it("should report errors for non-existent cell in batch", async () => {

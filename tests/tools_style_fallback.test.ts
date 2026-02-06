@@ -66,6 +66,7 @@ describe("resolveShape style ?? fallback", () => {
         width: 60,
         height: 60,
         score: 0.8,
+        xml: "<mxGraphModel/>",
       },
     ]);
 

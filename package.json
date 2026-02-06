@@ -9,10 +9,10 @@
     "drawio-mcp-server": "./build/index.js"
   },
   "scripts": {
-    "build": "pnpm run clean && tsc",
+    "build": "pnpm run clean && tsc -p tsconfig.build.json",
     "ci": "pnpm install --frozen-lockfile",
     "clean": "node -e \"import('fs').then(fs => fs.rmSync('build', { recursive: true, force: true }))\"",
-    "dev": "tsc --watch",
+    "dev": "tsc -p tsconfig.build.json --watch",
     "inspect": "HOST=0.0.0.0 pnpx @modelcontextprotocol/inspector --config ./inspector.json --server drawio",
     "prepublishOnly": "pnpm run build",
     "lint": "tsc --noEmit",

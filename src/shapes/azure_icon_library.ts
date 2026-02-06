@@ -21,6 +21,7 @@ export interface AzureIconShape {
   height: number;
   xml: string; // Full mxGraphModel XML
   style?: string; // Draw.io style string (if extracted)
+  category?: string; // Azure service category (e.g., "Compute", "Networking")
 }
 
 export interface AzureIconLibrary {
@@ -208,6 +209,13 @@ export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
     const shapes = parseLibraryXml(content);
     const categories = categorizeShapes(shapes);
 
+    // Set category on each shape for downstream consumers
+    for (const [category, categoryShapes] of categories) {
+      for (const shape of categoryShapes) {
+        shape.category = category;
+      }
+    }
+
     const indexByTitle = new Map<string, AzureIconShape>();
     shapes.forEach((shape) => {
       indexByTitle.set(shape.title.toLowerCase(), shape);
@@ -234,17 +242,35 @@ export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
  */
 let cachedLibrary: AzureIconLibrary | null = null;
 let cachedSearchIndex: FuzzySearch<SearchableShape> | null = null;
+let configuredLibraryPath: string | undefined;
 
 type SearchableShape = AzureIconShape & {
   searchTitle: string;
   searchId: string;
 };
 
+/**
+ * Set a custom path for the Azure icon library file.
+ * Must be called before the library is first loaded (i.e. before any tool call).
+ */
+export function setAzureIconLibraryPath(libraryPath: string): void {
+  configuredLibraryPath = libraryPath;
+}
+
 export function getAzureIconLibrary(): AzureIconLibrary {
   if (!cachedLibrary) {
-    cachedLibrary = loadAzureIconLibrary();
+    cachedLibrary = loadAzureIconLibrary(configuredLibraryPath);
   }
   return cachedLibrary;
+}
+
+/**
+ * Release the cached icon library and search index so memory can be reclaimed.
+ * The next call to getAzureIconLibrary() will reload from disk.
+ */
+export function resetAzureIconLibrary(): void {
+  cachedLibrary = null;
+  cachedSearchIndex = null;
 }
 
 /**

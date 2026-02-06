@@ -7,7 +7,8 @@ import { z } from "zod";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
-import { buildConfig, shouldShowHelp, VERSION, type ServerConfig } from "./config.js";
+import type { ServerType } from "@hono/node-server";
+import { buildConfig, shouldShowHelp, parseLoggerType, VERSION, type ServerConfig } from "./config.js";
 import {
   create_logger as create_console_logger } from "./loggers/mcp_console_logger.js";
 import {
@@ -16,6 +17,8 @@ import {
 } from "./loggers/mcp_server_logger.js";
 import { handlers } from "./tools.js";
 import { createToolHandlerFactory } from "./tool_handler.js";
+import { setAzureIconLibraryPath, resetAzureIconLibrary } from "./shapes/azure_icon_library.js";
+import { diagram } from "./diagram_model.js";
 
 /**
  * Display help message and exit
@@ -31,6 +34,12 @@ Options:
   --transport <type>       Transport type: stdio, http, or stdio,http (default: stdio)
   --help, -h              Show this help message
 
+Environment variables:
+  HTTP_PORT                Same as --http-port (CLI takes precedence)
+  TRANSPORT                Same as --transport (CLI takes precedence)
+  LOGGER_TYPE              Logger type: console or mcp_server (default: console)
+  AZURE_ICON_LIBRARY_PATH  Path to Azure icon library XML file (auto-detected if unset)
+
 Examples:
   drawio-mcp-server                           # Use stdio transport
   drawio-mcp-server --transport http          # Use HTTP transport on port 8080
@@ -40,12 +49,16 @@ Examples:
   process.exit(0);
 }
 
-const logger_type = process.env.LOGGER_TYPE;
+// Resolve logger type early so server capabilities are set correctly.
+// Validation is centralized in config.ts via parseLoggerType.
+const loggerTypeResult = parseLoggerType(process.env.LOGGER_TYPE);
+const loggerType = loggerTypeResult instanceof Error ? "console" : loggerTypeResult;
+
 let capabilities: any = {
   resources: {},
   tools: {},
 };
-if (logger_type === "mcp_server") {
+if (loggerType === "mcp_server") {
   capabilities = {
     ...capabilities,
     logging: {
@@ -67,7 +80,7 @@ const server = new McpServer(
 );
 
 const log =
-  logger_type === "mcp_server"
+  loggerType === "mcp_server"
     ? create_server_logger(server)
     : create_console_logger();
 
@@ -502,6 +515,145 @@ server.registerTool(
   createToolHandler(TOOL_clear_diagram),
 );
 
+// ─── Multi-Page Tools ──────────────────────────────────────────
+
+const TOOL_create_page = "create-page";
+server.registerTool(
+  TOOL_create_page,
+  {
+    description: "Create a new page (tab) in the diagram. Each page has its own cells, layers, and canvas.",
+    inputSchema: {
+      name: z.string().describe("Name for the new page"),
+    },
+  },
+  createToolHandler(TOOL_create_page, true),
+);
+
+const TOOL_list_pages = "list-pages";
+server.registerTool(
+  TOOL_list_pages,
+  {
+    description: "List all pages in the diagram with IDs and names.",
+  },
+  createToolHandler(TOOL_list_pages),
+);
+
+const TOOL_get_active_page = "get-active-page";
+server.registerTool(
+  TOOL_get_active_page,
+  {
+    description: "Get the currently active page.",
+  },
+  createToolHandler(TOOL_get_active_page),
+);
+
+const TOOL_set_active_page = "set-active-page";
+server.registerTool(
+  TOOL_set_active_page,
+  {
+    description: "Switch to a different page. All cell and layer operations apply to the active page.",
+    inputSchema: {
+      page_id: z.string().describe("ID of the page to switch to"),
+    },
+  },
+  createToolHandler(TOOL_set_active_page, true),
+);
+
+const TOOL_rename_page = "rename-page";
+server.registerTool(
+  TOOL_rename_page,
+  {
+    description: "Rename an existing page.",
+    inputSchema: {
+      page_id: z.string().describe("ID of the page to rename"),
+      name: z.string().describe("New name for the page"),
+    },
+  },
+  createToolHandler(TOOL_rename_page, true),
+);
+
+const TOOL_delete_page = "delete-page";
+server.registerTool(
+  TOOL_delete_page,
+  {
+    description: "Delete a page from the diagram. Cannot delete the last remaining page.",
+    inputSchema: {
+      page_id: z.string().describe("ID of the page to delete"),
+    },
+  },
+  createToolHandler(TOOL_delete_page, true),
+);
+
+// ─── Group / Container Tools ───────────────────────────────────
+
+const TOOL_create_group = "create-group";
+server.registerTool(
+  TOOL_create_group,
+  {
+    description: "Create a group/container cell that can hold child cells. Used for visual grouping (e.g., VNet containing subnets, resource groups). Children are positioned relative to the group.",
+    inputSchema: {
+      x: z.number().optional().describe("X-axis position of the group").default(0),
+      y: z.number().optional().describe("Y-axis position of the group").default(0),
+      width: z.number().optional().describe("Width of the group container").default(400),
+      height: z.number().optional().describe("Height of the group container").default(300),
+      text: z.string().optional().describe("Label text for the group").default(""),
+      style: z.string().optional().describe("Draw.io style string for the group container"),
+    },
+  },
+  createToolHandler(TOOL_create_group, true),
+);
+
+const TOOL_add_cell_to_group = "add-cell-to-group";
+server.registerTool(
+  TOOL_add_cell_to_group,
+  {
+    description: "Add an existing cell into a group/container. The cell becomes a child of the group and is positioned relative to it.",
+    inputSchema: {
+      cell_id: z.string().describe("ID of the cell to add to the group"),
+      group_id: z.string().describe("ID of the group/container cell"),
+    },
+  },
+  createToolHandler(TOOL_add_cell_to_group, true),
+);
+
+const TOOL_remove_cell_from_group = "remove-cell-from-group";
+server.registerTool(
+  TOOL_remove_cell_from_group,
+  {
+    description: "Remove a cell from its group, returning it to the active layer.",
+    inputSchema: {
+      cell_id: z.string().describe("ID of the cell to remove from its group"),
+    },
+  },
+  createToolHandler(TOOL_remove_cell_from_group, true),
+);
+
+const TOOL_list_group_children = "list-group-children";
+server.registerTool(
+  TOOL_list_group_children,
+  {
+    description: "List all cells that are children of a group/container.",
+    inputSchema: {
+      group_id: z.string().describe("ID of the group/container cell"),
+    },
+  },
+  createToolHandler(TOOL_list_group_children, true),
+);
+
+// ─── Import Tool ───────────────────────────────────────────────
+
+const TOOL_import_diagram = "import-diagram";
+server.registerTool(
+  TOOL_import_diagram,
+  {
+    description: "Import a Draw.io XML string, replacing the current diagram. Supports single-page and multi-page documents. Use this to load and modify existing .drawio files.",
+    inputSchema: {
+      xml: z.string().describe("The Draw.io XML string to import"),
+    },
+  },
+  createToolHandler(TOOL_import_diagram, true),
+);
+
 const TOOL_get_diagram_stats = "get-diagram-stats";
 server.registerTool(
   TOOL_get_diagram_stats,
@@ -581,6 +733,70 @@ server.registerTool(
   createToolHandler(TOOL_search_shapes, true),
 );
 
+// ─── Shutdown Infrastructure ───────────────────────────────────
+
+/** HTTP server reference, captured for graceful shutdown */
+let httpServer: ServerType | undefined;
+
+/** Guard against double-shutdown (signal re-delivery, etc.) */
+let isShuttingDown = false;
+
+/**
+ * Gracefully shut down all resources.
+ * Idempotent — safe to call more than once.
+ */
+async function shutdown(reason: string): Promise<void> {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+
+  log.debug(`Shutting down (reason: ${reason})`);
+
+  // 1. Stop accepting new HTTP connections
+  if (httpServer) {
+    await new Promise<void>((resolve) => {
+      httpServer!.close(() => resolve());
+      // Force-close after 5 s so we don't hang indefinitely
+      setTimeout(resolve, 5_000).unref();
+    });
+    httpServer = undefined;
+    log.debug("HTTP server closed");
+  }
+
+  // 2. Close the MCP server (flushes pending messages, disconnects transport)
+  try {
+    await server.close();
+    log.debug("MCP server closed");
+  } catch {
+    // best-effort — transport may already be gone
+  }
+
+  // 3. Release cached resources so memory is freed immediately
+  diagram.clear();
+  resetAzureIconLibrary();
+
+  log.debug("Shutdown complete");
+}
+
+// ─── Signal & Process Error Handlers ───────────────────────────
+
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+  process.on(signal, () => {
+    shutdown(signal).finally(() => process.exit(0));
+  });
+}
+
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught exception:", error);
+  shutdown("uncaughtException").finally(() => process.exit(1));
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled rejection:", reason);
+  shutdown("unhandledRejection").finally(() => process.exit(1));
+});
+
+// ─── Transport Startup ────────────────────────────────────────
+
 async function start_stdio_transport() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
@@ -618,7 +834,7 @@ async function start_streamable_http_transport(http_port: number) {
 
   await server.connect(transport);
 
-  serve({
+  httpServer = serve({
     fetch: app.fetch,
     port: http_port,
   });
@@ -644,6 +860,11 @@ async function main() {
   }
 
   const config: ServerConfig = configResult;
+
+  // Apply Azure icon library path from config if specified
+  if (config.azureIconLibraryPath) {
+    setAzureIconLibraryPath(config.azureIconLibraryPath);
+  }
 
   log.debug(`Draw.io MCP Server v${VERSION} starting`);
   log.debug(`Transports: ${config.transports.join(", ")}`);

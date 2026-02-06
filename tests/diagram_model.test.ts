@@ -499,19 +499,21 @@ describe("DiagramModel", () => {
       expect(cell.id).toBe("cell-2");
     });
 
-    it("should not reset layers or activeLayerId", () => {
+    it("should reset layers and pages to defaults", () => {
       const layer = model.createLayer("Custom");
       model.setActiveLayer(layer.id);
       model.addRectangle({ text: "A" });
       model.clear();
 
-      // Layers still exist after clear
-      expect(model.listLayers()).toHaveLength(2);
-      // Active layer is still the custom layer
-      expect(model.getActiveLayer().id).toBe(layer.id);
-      // New cells are parented to the custom layer
+      // Layers reset to just the default layer
+      expect(model.listLayers()).toHaveLength(1);
+      expect(model.getActiveLayer().id).toBe("1");
+      // New cells are parented to the default layer
       const cell = model.addRectangle({ text: "B" });
-      expect(cell.parent).toBe(layer.id);
+      expect(cell.parent).toBe("1");
+      // Pages reset to single default page
+      expect(model.listPages()).toHaveLength(1);
+      expect(model.getActivePage().id).toBe("page-1");
     });
   });
 
@@ -543,13 +545,15 @@ describe("DiagramModel", () => {
   });
 
   describe("deleteCell", () => {
-    it("should return false for non-existent cell", () => {
-      expect(model.deleteCell("does-not-exist")).toBe(false);
+    it("should return deleted false for non-existent cell", () => {
+      expect(model.deleteCell("does-not-exist").deleted).toBe(false);
     });
 
     it("should delete a vertex", () => {
       const cell = model.addRectangle({ text: "A" });
-      expect(model.deleteCell(cell.id)).toBe(true);
+      const result = model.deleteCell(cell.id);
+      expect(result.deleted).toBe(true);
+      expect(result.cascadedEdgeIds).toHaveLength(0);
       expect(model.getCell(cell.id)).toBeUndefined();
     });
 
@@ -563,7 +567,9 @@ describe("DiagramModel", () => {
       expect("error" in edgeBC).toBe(false);
 
       // Delete B — should remove both edges connected to B
-      model.deleteCell(b.id);
+      const result = model.deleteCell(b.id);
+      expect(result.deleted).toBe(true);
+      expect(result.cascadedEdgeIds).toHaveLength(2);
       expect(model.getCell(b.id)).toBeUndefined();
       if (!("error" in edgeAB)) {
         expect(model.getCell(edgeAB.id)).toBeUndefined();

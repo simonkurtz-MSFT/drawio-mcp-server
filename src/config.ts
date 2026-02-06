@@ -2,7 +2,7 @@
  * Application version — single source of truth.
  * Keep in sync with package.json version.
  */
-export const VERSION = "1.6.1";
+export const VERSION = "1.0.0";
 
 /**
  * Application configuration interface
@@ -10,9 +10,12 @@ export const VERSION = "1.6.1";
 export interface ServerConfig {
   readonly httpPort: number;
   readonly transports: TransportType[];
+  readonly loggerType: LoggerType;
+  readonly azureIconLibraryPath: string | undefined;
 }
 
 export type TransportType = "stdio" | "http";
+export type LoggerType = "console" | "mcp_server";
 
 /**
  * Default configuration values
@@ -20,6 +23,8 @@ export type TransportType = "stdio" | "http";
 const DEFAULT_CONFIG: ServerConfig = {
   httpPort: 8080,
   transports: ["stdio"],
+  loggerType: "console",
+  azureIconLibraryPath: undefined,
 } as const;
 
 /**
@@ -29,6 +34,8 @@ const PORT_RANGE = {
   min: 1,
   max: 65535,
 } as const;
+
+const VALID_LOGGER_TYPES: readonly LoggerType[] = ["console", "mcp_server"] as const;
 
 /**
  * Parse http port value from string - pure function
@@ -53,6 +60,24 @@ export const parseHttpPortValue = (
   }
 
   return port;
+};
+
+/**
+ * Parse logger type value - pure function
+ */
+export const parseLoggerType = (
+  value: string | undefined,
+): LoggerType | Error => {
+  if (!value || value.trim().length === 0) {
+    return DEFAULT_CONFIG.loggerType;
+  }
+  const normalized = value.trim().toLowerCase();
+  if (VALID_LOGGER_TYPES.includes(normalized as LoggerType)) {
+    return normalized as LoggerType;
+  }
+  return new Error(
+    `Invalid logger type "${value}". Supported types: ${VALID_LOGGER_TYPES.join(", ")}`,
+  );
 };
 
 export const parseTransports = (
@@ -119,7 +144,10 @@ export const shouldShowHelp = (args: readonly string[]): boolean => {
  * Parse command line arguments into configuration object
  * Pure function - no side effects, deterministic output
  */
-export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
+export const parseConfig = (
+  args: readonly string[],
+  env: Record<string, string | undefined> = {},
+): ServerConfig | Error => {
   // Walk arguments so repeated flags allow "last wins" semantics
   let httpPortValue: string | undefined;
   let parsedHttpPort: number | undefined;
@@ -149,6 +177,10 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
     }
   }
 
+  // ── HTTP port: CLI > env > default ──
+  if (httpPortValue === undefined && env.HTTP_PORT) {
+    httpPortValue = env.HTTP_PORT;
+  }
   if (httpPortValue !== undefined) {
     const httpPort = parseHttpPortValue(httpPortValue);
     if (httpPort instanceof Error) {
@@ -157,16 +189,31 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
     parsedHttpPort = httpPort;
   }
 
+  // ── Transport: CLI > env > default ──
+  if (transportValues === undefined && env.TRANSPORT) {
+    transportValues = [env.TRANSPORT];
+  }
   const transports = parseTransports(transportValues);
   if (transports instanceof Error) {
     return transports;
   }
+
+  // ── Logger type: env only (no CLI flag) ──
+  const loggerType = parseLoggerType(env.LOGGER_TYPE);
+  if (loggerType instanceof Error) {
+    return loggerType;
+  }
+
+  // ── Azure icon library path: env only ──
+  const azureIconLibraryPath = env.AZURE_ICON_LIBRARY_PATH?.trim() || undefined;
 
   return {
     ...DEFAULT_CONFIG,
     httpPort:
       parsedHttpPort !== undefined ? parsedHttpPort : DEFAULT_CONFIG.httpPort,
     transports,
+    loggerType,
+    azureIconLibraryPath,
   };
 };
 
@@ -177,5 +224,5 @@ export const parseConfig = (args: readonly string[]): ServerConfig | Error => {
  */
 export const buildConfig = (): ServerConfig | Error => {
   const args = process.argv.slice(2);
-  return parseConfig(args);
+  return parseConfig(args, process.env);
 };

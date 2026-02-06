@@ -8,6 +8,8 @@ import {
   getAzureCategories,
   getShapesInCategory,
   getAzureShapeByName,
+  resetAzureIconLibrary,
+  setAzureIconLibraryPath,
 } from "../src/shapes/azure_icon_library.js";
 import type { AzureIconLibrary } from "../src/shapes/azure_icon_library.js";
 
@@ -318,5 +320,44 @@ describe("getAzureShapeByName", () => {
 
   test("returns undefined for unknown name", () => {
     expect(getAzureShapeByName("does-not-exist-at-all")).toBeUndefined();
+  });
+});
+
+describe("setAzureIconLibraryPath", () => {
+  test("updates the configured library path", () => {
+    const customPath = "/tmp/custom-icons.xml";
+    setAzureIconLibraryPath(customPath);
+    // Reset so the next getAzureIconLibrary call uses the new path
+    resetAzureIconLibrary();
+    // Restore default path so other tests are unaffected
+    setAzureIconLibraryPath(path.resolve("assets/azure-public-service-icons/000 all azure public service icons.xml"));
+    resetAzureIconLibrary();
+    // Verify library still loads from the restored path
+    const lib = getAzureIconLibrary();
+    expect(lib.shapes.length).toBeGreaterThan(0);
+  });
+});
+
+describe("resetAzureIconLibrary", () => {
+  test("clears cached library and search index", () => {
+    // Ensure cache is populated
+    const lib1 = getAzureIconLibrary();
+    expect(lib1.shapes.length).toBeGreaterThan(0);
+
+    // Reset
+    resetAzureIconLibrary();
+
+    // After reset, getAzureIconLibrary reloads from disk (fresh instance)
+    const lib2 = getAzureIconLibrary();
+    expect(lib2.shapes.length).toBeGreaterThan(0);
+    // lib2 should be a different instance than lib1
+    expect(lib2).not.toBe(lib1);
+  });
+
+  test("search still works after reset", () => {
+    resetAzureIconLibrary();
+    // The search index must be rebuilt on next query
+    const results = searchAzureIcons("virtual machine", 5);
+    expect(results.length).toBeGreaterThan(0);
   });
 });
