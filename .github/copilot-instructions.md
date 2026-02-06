@@ -22,6 +22,7 @@ This is a **TypeScript MCP (Model Context Protocol) server** for programmatic Dr
   - `src/tool_handler.ts` — Factory that wires handlers to the MCP server
   - `src/diagram_model.ts` — Core diagram model (cells, layers, pages, XML generation)
   - `src/config.ts` — CLI/env configuration parsing (pure functions)
+  - `src/utils.ts` — Shared utilities (`esmDirname`, `readRelativeFile` — ESM path helpers)
   - `src/instructions.md` — Server instructions sent to MCP clients during initialization
   - `src/shapes/` — Shape libraries (Azure icons, basic shapes)
   - `src/loggers/` — Logger implementations (console, MCP server)
@@ -36,6 +37,7 @@ This is a **TypeScript MCP (Model Context Protocol) server** for programmatic Dr
 - **Tool naming**: Tool name constants are centralized in the `TOOL_NAMES` object in `tool_registrations.ts` using `UPPER_SNAKE_CASE` keys (e.g., `TOOL_NAMES.ADD_RECTANGLE`). Tool names exposed to MCP clients use `kebab-case` (e.g., `add-rectangle`).
 - **Input validation**: All tool inputs are validated with Zod schemas at registration time in `tool_registrations.ts`.
 - **Shape resolution order**: When resolving shape names, the code checks in order: basic shapes (exact, case-insensitive) → Azure exact match (by title/ID) → Azure fuzzy search (top result). This priority prevents fuzzy search from hijacking basic shape names like "start" or "end".
+- **ESM path helpers**: Use `esmDirname(import.meta.url)` (from `src/utils.ts`) instead of the raw `dirname(fileURLToPath(import.meta.url))` boilerplate for `__dirname`. Use `readRelativeFile(import.meta.url, ...segments)` to read a text file relative to the calling module.
 
 ## Adding New Tools
 

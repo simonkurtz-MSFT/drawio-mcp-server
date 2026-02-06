@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { parseArgs } from "node:util";
 
 const require = createRequire(import.meta.url);
 const pkg = require("../package.json") as { version: string };
@@ -40,6 +41,16 @@ const PORT_RANGE = {
 } as const;
 
 const VALID_LOGGER_TYPES: readonly LoggerType[] = ["console", "mcp_server"] as const;
+
+/**
+ * CLI option definitions for node:util parseArgs.
+ * Declared once so parseConfig and shouldShowHelp share the same schema.
+ */
+const CLI_OPTIONS = {
+  "http-port": { type: "string", multiple: true },
+  transport: { type: "string", multiple: true },
+  help: { type: "boolean", short: "h" },
+} as const;
 
 /**
  * Parse http port value from string - pure function
@@ -117,74 +128,49 @@ export const parseTransports = (
 };
 
 /**
- * Find argument value by flag name - pure function
- */
-export const findArgValue = (
-  args: readonly string[],
-  ...flags: string[]
-): string | undefined => {
-  const index = args.findIndex((arg) => flags.includes(arg));
-  return index !== -1 ? args[index + 1] : undefined;
-};
-
-/**
- * Check if any flag exists in arguments - pure function
- */
-export const hasFlag = (
-  args: readonly string[],
-  ...flags: string[]
-): boolean => {
-  return args.some((arg) => flags.includes(arg));
-};
-
-/**
  * Check if help was requested - pure function
  */
 export const shouldShowHelp = (args: readonly string[]): boolean => {
-  return hasFlag(args, "--help", "-h");
+  return args.includes("--help") || args.includes("-h");
 };
 
 /**
- * Parse command line arguments into configuration object
- * Pure function - no side effects, deterministic output
+ * Parse command line arguments into configuration object.
+ * Uses node:util parseArgs for robust argument parsing.
+ * Pure function - no side effects, deterministic output.
  */
 export const parseConfig = (
   args: readonly string[],
   env: Record<string, string | undefined> = {},
 ): ServerConfig | Error => {
-  // Walk arguments so repeated flags allow "last wins" semantics
-  let httpPortValue: string | undefined;
-  let parsedHttpPort: number | undefined;
-  let transportValues: string[] | undefined;
+  // Parse CLI arguments using Node.js built-in parser.
+  // strict:false silently ignores unknown flags and turns "--flag" (missing
+  // value) into boolean `true` instead of throwing, so no try-catch needed.
+  const { values } = parseArgs({
+    args: args as string[],
+    options: CLI_OPTIONS,
+    strict: false,
+  });
 
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i];
+  // parseArgs with strict:false silently turns --flag (no value) into boolean `true`.
+  // Detect that and surface a clear error before passing values onward.
+  const httpPortArr = values["http-port"] as (string | boolean)[] | undefined;
+  const transportArr = values.transport as (string | boolean)[] | undefined;
 
-    if (arg === "--http-port") {
-      const nextValue = args[i + 1];
-
-      if (nextValue === undefined) {
-        return new Error("--http-port flag requires a port number");
-      }
-
-      httpPortValue = nextValue;
-      i += 1;
-    } else if (arg === "--transport") {
-      const nextValue = args[i + 1];
-
-      if (nextValue === undefined) {
-        return new Error("--transport flag requires a transport name");
-      }
-
-      transportValues = [nextValue];
-      i += 1;
-    }
+  if (httpPortArr?.some((v) => typeof v !== "string")) {
+    return new Error("--http-port flag requires a port number");
+  }
+  if (transportArr?.some((v) => typeof v !== "string")) {
+    return new Error("--transport flag requires a transport name");
   }
 
+  // Last-wins semantics for repeated flags
   // ── HTTP port: CLI > env > default ──
+  let httpPortValue = (httpPortArr as string[] | undefined)?.at(-1);
   if (httpPortValue === undefined && env.HTTP_PORT) {
     httpPortValue = env.HTTP_PORT;
   }
+  let parsedHttpPort: number | undefined;
   if (httpPortValue !== undefined) {
     const httpPort = parseHttpPortValue(httpPortValue);
     if (httpPort instanceof Error) {
@@ -194,6 +180,9 @@ export const parseConfig = (
   }
 
   // ── Transport: CLI > env > default ──
+  let transportValues = (transportArr as string[] | undefined)?.length
+    ? [(transportArr as string[]).at(-1)!]
+    : undefined;
   if (transportValues === undefined && env.TRANSPORT) {
     transportValues = [env.TRANSPORT];
   }

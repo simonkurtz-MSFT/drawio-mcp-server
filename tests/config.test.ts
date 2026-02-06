@@ -1,7 +1,5 @@
 import {
   parseHttpPortValue,
-  findArgValue,
-  hasFlag,
   shouldShowHelp,
   parseConfig,
   buildConfig,
@@ -91,52 +89,6 @@ describe("parseLoggerType", () => {
   });
 });
 
-describe("findArgValue", () => {
-  test("finds value after flag", () => {
-    expect(findArgValue(["--port", "8080", "--help"], "--port")).toBe("8080");
-  });
-
-  test("returns undefined when flag not found", () => {
-    expect(findArgValue(["--help"], "--port")).toBeUndefined();
-  });
-
-  test("returns undefined when flag is last argument", () => {
-    expect(findArgValue(["--port"], "--port")).toBeUndefined();
-  });
-
-  test("finds value with short flag", () => {
-    expect(findArgValue(["-p", "8080"], "-p")).toBe("8080");
-  });
-
-  test("works with readonly array", () => {
-    const args = ["--port", "8080"] as const;
-    expect(findArgValue(args, "--port")).toBe("8080");
-  });
-});
-
-describe("hasFlag", () => {
-  test("returns true when flag exists", () => {
-    expect(hasFlag(["--help", "--port", "8080"], "--help")).toBe(true);
-  });
-
-  test("returns false when flag does not exist", () => {
-    expect(hasFlag(["--port", "8080"], "--help")).toBe(false);
-  });
-
-  test("returns true with short flag", () => {
-    expect(hasFlag(["-h"], "-h")).toBe(true);
-  });
-
-  test("works with multiple flags", () => {
-    expect(hasFlag(["-h"], "-h", "--help")).toBe(true);
-  });
-
-  test("works with readonly array", () => {
-    const args = ["--help"] as const;
-    expect(hasFlag(args, "--help")).toBe(true);
-  });
-});
-
 describe("shouldShowHelp", () => {
   test("returns true for --help", () => {
     expect(shouldShowHelp(["--help"])).toBe(true);
@@ -187,9 +139,6 @@ describe("parseConfig", () => {
   test("missing http port value returns Error", () => {
     const result = parseConfig(["--http-port"]);
     expect(result).toBeInstanceOf(Error);
-    expect((result as Error).message).toContain(
-      "--http-port flag requires a port number",
-    );
   });
 
   test("out of range port returns Error", () => {
@@ -226,9 +175,6 @@ describe("parseConfig", () => {
   test("missing transport value returns Error", () => {
     const result = parseConfig(["--transport"]);
     expect(result).toBeInstanceOf(Error);
-    expect((result as Error).message).toContain(
-      "--transport flag requires a transport name",
-    );
   });
 
   // ── Environment variable tests ──

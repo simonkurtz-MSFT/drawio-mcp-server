@@ -6,13 +6,11 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
 import FuzzySearch from "fuzzy-search";
+import { esmDirname } from "../utils.js";
 
-// Define __dirname for ESM compatibility
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// ESM __dirname via shared utility
+const __dirname = esmDirname(import.meta.url);
 
 export interface AzureIconShape {
   id: string;

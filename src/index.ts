@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -22,6 +19,7 @@ import { createToolHandlerFactory } from "./tool_handler.js";
 import { setAzureIconLibraryPath, resetAzureIconLibrary } from "./shapes/azure_icon_library.js";
 import { diagram } from "./diagram_model.js";
 import { registerTools } from "./tool_registrations.js";
+import { readRelativeFile } from "./utils.js";
 
 /**
  * Display help message and exit
@@ -75,11 +73,7 @@ if (loggerType === "mcp_server") {
 // Loaded from src/instructions.md and sent to MCP clients during
 // initialization so the calling model follows diagram-generation
 // conventions without extra round trips.
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SERVER_INSTRUCTIONS = readFileSync(
-  resolve(__dirname, "instructions.md"),
-  "utf-8",
-);
+const SERVER_INSTRUCTIONS = readRelativeFile(import.meta.url, "instructions.md");
 
 // Create server instance
 const server = new McpServer(
