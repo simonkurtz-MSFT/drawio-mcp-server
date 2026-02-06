@@ -3,6 +3,16 @@
  * the browser extension or Draw.io application.
  */
 
+import { XMLParser } from "fast-xml-parser";
+
+/** Shared XML parser instance for importing Draw.io XML */
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "",
+  isArray: (name: string) => name === "diagram" || name === "mxCell" || name === "UserObject",
+  processEntities: true,
+});
+
 export interface StructuredError {
   code: string;
   message: string;
@@ -39,6 +49,19 @@ export interface Page {
   name: string;
 }
 
+/** Normalised attributes extracted from an mxCell or UserObject XML element */
+interface ParsedCellAttrs {
+  id: string;
+  value: string;
+  style: string;
+  parent: string;
+  source?: string;
+  target?: string;
+  isVertex: boolean;
+  isEdge: boolean;
+  geometry?: Record<string, unknown>;
+}
+
 export class DiagramModel {
   private cells: Map<string, Cell> = new Map();
   private layers: Layer[] = [{ id: "1", name: "Default Layer" }];
@@ -46,6 +69,10 @@ export class DiagramModel {
   private nextId: number = 2;
   private pages: Page[] = [{ id: "page-1", name: "Page-1" }];
   private activePageId: string = "page-1";
+  /** Monotonic counter for page IDs — prevents collisions after deletions */
+  private nextPageId: number = 2;
+  /** Monotonic counter for layer IDs — prevents collisions after deletions */
+  private nextLayerId: number = 2;
   /** Per-page storage: pageId → { cells, layers, activeLayerId, nextId } */
   private pageData: Map<string, { cells: Map<string, Cell>; layers: Layer[]; activeLayerId: string; nextId: number }> = new Map();
 
@@ -264,7 +291,7 @@ export class DiagramModel {
   }
 
   createLayer(name: string): Layer {
-    const id = `layer-${this.layers.length + 1}`;
+    const id = `layer-${this.nextLayerId++}`;
     const layer: Layer = { id, name };
     this.layers.push(layer);
     return layer;
@@ -350,7 +377,7 @@ export class DiagramModel {
    * Create a new page in the diagram.
    */
   createPage(name: string): Page {
-    const id = `page-${this.pages.length + 1}`;
+    const id = `page-${this.nextPageId++}`;
     const page: Page = { id, name };
     this.pages.push(page);
     // Initialize empty page data
@@ -610,18 +637,6 @@ export class DiagramModel {
   // ─── Import / Load XML ───────────────────────────────────────────
 
   /**
-   * Unescape XML entities back to plain text.
-   */
-  private unescapeXml(str: string): string {
-    return str
-      .replace(/&apos;/g, "'")
-      .replace(/&quot;/g, '"')
-      .replace(/&gt;/g, ">")
-      .replace(/&lt;/g, "<")
-      .replace(/&amp;/g, "&");
-  }
-
-  /**
    * Import a Draw.io XML string, replacing the current diagram state.
    * Supports single-page and multi-page documents.
    * Returns the number of imported pages, cells, and layers.
@@ -648,42 +663,39 @@ export class DiagramModel {
       };
     }
 
-    // Extract diagram elements (multi-page support)
-    const diagramRegex = /<diagram\s+([^>]*)>([\s\S]*?)<\/diagram>/gi;
-    const diagrams: Array<{ id: string; name: string; content: string }> = [];
-    let diagramMatch;
+    const parsed = xmlParser.parse(xml) as Record<string, unknown>;
 
-    while ((diagramMatch = diagramRegex.exec(xml)) !== null) {
-      const attrs = diagramMatch[1];
-      const content = diagramMatch[2];
-      const idMatch = attrs.match(/id="([^"]*)"/);
-      const nameMatch = attrs.match(/name="([^"]*)"/);
-      diagrams.push({
-        id: idMatch ? idMatch[1] : `page-${diagrams.length + 1}`,
-        name: nameMatch ? this.unescapeXml(nameMatch[1]) : `Page-${diagrams.length + 1}`,
-        content,
-      });
-    }
+    // Extract diagram elements
+    let diagramElements: Array<Record<string, unknown>> = [];
 
-    // If no <diagram> wrapper, treat entire XML as single page
-    if (diagrams.length === 0) {
-      diagrams.push({ id: "page-1", name: "Page-1", content: xml });
+    const mxfile = parsed.mxfile as Record<string, unknown> | undefined;
+    if (mxfile?.diagram) {
+      diagramElements = mxfile.diagram as Array<Record<string, unknown>>;
+    } else if (parsed.mxGraphModel) {
+      // Bare mxGraphModel without mxfile wrapper — wrap it as a single diagram
+      diagramElements = [{ mxGraphModel: parsed.mxGraphModel }];
+    } else {
+      // mxfile without diagram children (e.g., <mxfile></mxfile>)
+      diagramElements = [parsed];
     }
 
     // Reset state entirely
     this.pages = [];
     this.pageData.clear();
     this.activePageId = "";
+    this.nextPageId = 1;
+    this.nextLayerId = 2;
 
     let totalCells = 0;
     let totalLayers = 0;
 
-    for (let di = 0; di < diagrams.length; di++) {
-      const diag = diagrams[di];
-      const pageId = `page-${di + 1}`;
-      this.pages.push({ id: pageId, name: diag.name });
+    for (let di = 0; di < diagramElements.length; di++) {
+      const diag = diagramElements[di];
+      const pageId = `page-${this.nextPageId++}`;
+      const pageName = String(diag.name ?? `Page-${di + 1}`);
+      this.pages.push({ id: pageId, name: pageName });
 
-      const { cells, layers, nextId } = this.parseMxGraphContent(diag.content);
+      const { cells, layers, nextId } = this.parseMxGraphContent(diag);
       totalCells += cells.size;
       totalLayers += layers.length;
 
@@ -707,115 +719,132 @@ export class DiagramModel {
   }
 
   /**
-   * Parse mxGraphModel content and extract cells and layers.
+   * Extract attributes common to mxCell / UserObject elements.
    */
-  private parseMxGraphContent(content: string): { cells: Map<string, Cell>; layers: Layer[]; nextId: number } {
+  private extractCellAttrs(
+    obj: Record<string, unknown>,
+    geometry: Record<string, unknown> | undefined,
+  ): ParsedCellAttrs {
+    return {
+      id: String(obj.id ?? ""),
+      value: String(obj.value ?? obj.label ?? ""),
+      style: String(obj.style ?? ""),
+      parent: String(obj.parent ?? ""),
+      source: obj.source !== undefined ? String(obj.source) : undefined,
+      target: obj.target !== undefined ? String(obj.target) : undefined,
+      isVertex: String(obj.vertex) === "1",
+      isEdge: String(obj.edge) === "1",
+      geometry,
+    };
+  }
+
+  /**
+   * Parse mxGraphModel content from a parsed XML object and extract cells and layers.
+   */
+  private parseMxGraphContent(diagramObj: Record<string, unknown>): { cells: Map<string, Cell>; layers: Layer[]; nextId: number } {
     const cells = new Map<string, Cell>();
     const layers: Layer[] = [{ id: "1", name: "Default Layer" }];
     let maxId = 1;
 
-    // Extract mxCell elements
-    const cellRegex = /<mxCell\s+([\s\S]*?)(?:\/>|>([\s\S]*?)<\/mxCell>)/gi;
-    let cellMatch;
-
-    // Collect cells that may be layers (parent="0", no vertex/edge)
-    const rawCells: Array<{ attrs: string; innerContent: string }> = [];
-
-    while ((cellMatch = cellRegex.exec(content)) !== null) {
-      rawCells.push({ attrs: cellMatch[1], innerContent: cellMatch[2] || "" });
+    // Navigate to root element: diagramObj.mxGraphModel.root
+    const mxGraphModel = diagramObj.mxGraphModel as Record<string, unknown> | undefined;
+    const root = mxGraphModel?.root as Record<string, unknown> | undefined;
+    if (!root) {
+      return { cells, layers, nextId: maxId + 1 };
     }
 
-    // Also match UserObject elements (for cells with custom data)
-    const userObjRegex = /<UserObject\s+([\s\S]*?)>([\s\S]*?)<\/UserObject>/gi;
-    let userObjMatch;
-    while ((userObjMatch = userObjRegex.exec(content)) !== null) {
-      rawCells.push({ attrs: userObjMatch[1], innerContent: userObjMatch[2] || "" });
+    // Collect normalised cell entries from mxCell and UserObject arrays
+    const rawElements: ParsedCellAttrs[] = [];
+
+    // Process mxCell elements
+    const mxCells = (root.mxCell ?? []) as Array<Record<string, unknown>>;
+    for (const cell of mxCells) {
+      rawElements.push(
+        this.extractCellAttrs(cell, cell.mxGeometry as Record<string, unknown> | undefined),
+      );
     }
 
-    for (const raw of rawCells) {
-      const attrs = raw.attrs;
-      const innerContent = raw.innerContent;
+    // Process UserObject elements
+    const userObjects = (root.UserObject ?? []) as Array<Record<string, unknown>>;
+    for (const uo of userObjects) {
+      // Geometry may live on the nested mxCell child
+      let geometry: Record<string, unknown> | undefined;
+      const innerCells = uo.mxCell as Array<Record<string, unknown>> | undefined;
+      if (innerCells && innerCells.length > 0) {
+        const innerCell = innerCells[0];
+        geometry = innerCell.mxGeometry as Record<string, unknown> | undefined;
+        // Merge inner mxCell attributes that weren't set on the UserObject itself
+        for (const key of ["style", "vertex", "edge", "parent", "source", "target"]) {
+          if (innerCell[key] !== undefined && uo[key] === undefined) {
+            uo[key] = innerCell[key];
+          }
+        }
+      }
+      rawElements.push(this.extractCellAttrs(uo, geometry));
+    }
 
-      const idMatch = attrs.match(/id="([^"]*)"/);
-      const valueMatch = attrs.match(/value="([^"]*)"/);
-      const styleMatch = attrs.match(/style="([^"]*)"/);
-      const parentMatch = attrs.match(/parent="([^"]*)"/);
-      const sourceMatch = attrs.match(/source="([^"]*)"/);
-      const targetMatch = attrs.match(/target="([^"]*)"/);
-      const isVertex = /vertex="1"/.test(attrs);
-      const isEdge = /edge="1"/.test(attrs);
-
-      const id = idMatch ? idMatch[1] : "";
-      const value = valueMatch ? this.unescapeXml(valueMatch[1]) : "";
-      const style = styleMatch ? this.unescapeXml(styleMatch[1]) : "";
-      const parent = parentMatch ? parentMatch[1] : "";
-
-      // Skip root cells (id=0 or id=1)
-      if (id === "0") continue;
-      if (id === "1" && parent === "0") continue;
+    // Process all collected elements
+    for (const elem of rawElements) {
+      // Skip root cells (id=0 or id=1 with parent=0)
+      if (elem.id === "0") continue;
+      if (elem.id === "1" && elem.parent === "0") continue;
 
       // Track numeric IDs for nextId
-      const numMatch = id.match(/\d+/);
+      const numMatch = elem.id.match(/\d+/);
       if (numMatch) {
         maxId = Math.max(maxId, parseInt(numMatch[0], 10));
       }
 
       // Layer detection: parent="0", not a vertex or edge
-      if (parent === "0" && !isVertex && !isEdge) {
-        // It's a layer (unless it's the default one we already added)
-        if (id !== "1") {
-          layers.push({ id, name: value || id });
+      if (elem.parent === "0" && !elem.isVertex && !elem.isEdge) {
+        if (elem.id !== "1") {
+          layers.push({ id: elem.id, name: elem.value || elem.id });
         }
         continue;
       }
 
-      // Parse geometry from inner content
+      // Parse geometry
       let x: number | undefined;
       let y: number | undefined;
       let width: number | undefined;
       let height: number | undefined;
 
-      const geoMatch = innerContent.match(/<mxGeometry\s+([^>]*)/);
-      if (geoMatch) {
-        const geoAttrs = geoMatch[1];
-        const xMatch = geoAttrs.match(/x="([^"]*)"/);
-        const yMatch = geoAttrs.match(/y="([^"]*)"/);
-        const wMatch = geoAttrs.match(/width="([^"]*)"/);
-        const hMatch = geoAttrs.match(/height="([^"]*)"/);
-        if (xMatch) x = parseFloat(xMatch[1]);
-        if (yMatch) y = parseFloat(yMatch[1]);
-        if (wMatch) width = parseFloat(wMatch[1]);
-        if (hMatch) height = parseFloat(hMatch[1]);
+      if (elem.geometry) {
+        const geo = elem.geometry;
+        if (geo.x !== undefined) x = parseFloat(String(geo.x));
+        if (geo.y !== undefined) y = parseFloat(String(geo.y));
+        if (geo.width !== undefined) width = parseFloat(String(geo.width));
+        if (geo.height !== undefined) height = parseFloat(String(geo.height));
       }
 
       // Determine if it's a group/container
-      const isGroup = style.includes("container=1") || /swimlane/i.test(style);
+      const isGroup = elem.style.includes("container=1") || /swimlane/i.test(elem.style);
 
-      if (isEdge) {
+      if (elem.isEdge) {
         const cell: Cell = {
-          id,
+          id: elem.id,
           type: "edge",
-          value,
-          style,
-          sourceId: sourceMatch ? sourceMatch[1] : undefined,
-          targetId: targetMatch ? targetMatch[1] : undefined,
-          parent: parent || "1",
+          value: elem.value,
+          style: elem.style,
+          sourceId: elem.source,
+          targetId: elem.target,
+          parent: elem.parent || "1",
         };
-        cells.set(id, cell);
+        cells.set(elem.id, cell);
       } else {
         const cell: Cell = {
-          id,
+          id: elem.id,
           type: "vertex",
-          value,
+          value: elem.value,
           x: x ?? 0,
           y: y ?? 0,
           width: width ?? 200,
           height: height ?? 100,
-          style,
-          parent: parent || "1",
+          style: elem.style,
+          parent: elem.parent || "1",
           ...(isGroup && { isGroup: true, children: [] }),
         };
-        cells.set(id, cell);
+        cells.set(elem.id, cell);
       }
     }
 
@@ -920,6 +949,8 @@ ${diagramsXml}
     this.layers = [{ id: "1", name: "Default Layer" }];
     this.activeLayerId = "1";
     this.nextId = 2;
+    this.nextPageId = 2;
+    this.nextLayerId = 2;
     this.pages = [{ id: "page-1", name: "Page-1" }];
     this.activePageId = "page-1";
     this.pageData.clear();

@@ -617,6 +617,35 @@ describe("DiagramModel importXml", () => {
       expect(cell!.width).toBe(200);
       expect(cell!.height).toBe(100);
     });
+
+    it("should merge inner mxCell attributes onto UserObject when not present on outer element", () => {
+      const xml = `<mxfile host="test">
+    <diagram id="d1" name="Page">
+        <mxGraphModel>
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <UserObject id="u3" label="Merged">
+                    <mxCell style="fillColor=#f0f0f0;" vertex="1" parent="1">
+                        <mxGeometry x="10" y="20" width="130" height="70" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>`;
+      model.importXml(xml);
+      const cell = model.getCell("u3");
+      expect(cell).toBeDefined();
+      expect(cell!.value).toBe("Merged");
+      expect(cell!.style).toBe("fillColor=#f0f0f0;");
+      expect(cell!.type).toBe("vertex");
+      expect(cell!.parent).toBe("1");
+      expect(cell!.x).toBe(10);
+      expect(cell!.y).toBe(20);
+      expect(cell!.width).toBe(130);
+      expect(cell!.height).toBe(70);
+    });
   });
 
   describe("import group with existing container=1 in style", () => {
@@ -627,6 +656,87 @@ describe("DiagramModel importXml", () => {
       // Ensure no "container=1;container=1;" duplication
       expect(xml).not.toContain("container=1;container=1;");
       expect(xml).toContain("container=1");
+    });
+  });
+
+  describe("import root without mxCell elements", () => {
+    it("should handle root containing only UserObject elements", () => {
+      const xml = `<mxfile host="test">
+    <diagram id="d1" name="Page">
+        <mxGraphModel>
+            <root>
+                <UserObject id="u1" value="Only UO" style="fillColor=#dae8fc;" vertex="1" parent="1">
+                    <mxCell>
+                        <mxGeometry x="10" y="20" width="100" height="50" as="geometry"/>
+                    </mxCell>
+                </UserObject>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>`;
+      const result = model.importXml(xml);
+      expect("error" in result).toBe(false);
+      if (!("error" in result)) {
+        expect(result.cells).toBe(1);
+      }
+      const cell = model.getCell("u1");
+      expect(cell).toBeDefined();
+      expect(cell!.value).toBe("Only UO");
+    });
+  });
+
+  describe("import mxfile without diagram children", () => {
+    it("should handle empty mxfile gracefully", () => {
+      const xml = `<mxfile host="test"></mxfile>`;
+      const result = model.importXml(xml);
+      // Should not error — returns a page with zero cells
+      expect("error" in result).toBe(false);
+      if (!("error" in result)) {
+        expect(result.pages).toBe(1);
+        expect(result.cells).toBe(0);
+      }
+    });
+  });
+
+  describe("import diagram without mxGraphModel root", () => {
+    it("should handle diagram with no root element gracefully", () => {
+      const xml = `<mxfile host="test">
+    <diagram id="d1" name="Empty">
+        <mxGraphModel>
+        </mxGraphModel>
+    </diagram>
+</mxfile>`;
+      const result = model.importXml(xml);
+      expect("error" in result).toBe(false);
+      if (!("error" in result)) {
+        expect(result.pages).toBe(1);
+        expect(result.cells).toBe(0);
+        expect(result.layers).toBe(1);
+      }
+    });
+  });
+
+  describe("ID collision prevention", () => {
+    it("should not produce duplicate page IDs after delete and create", () => {
+      const p2 = model.createPage("Page 2");
+      model.deletePage(p2.id);
+      const p3 = model.createPage("Page 3");
+      // p3 should NOT reuse p2's ID
+      expect(p3.id).not.toBe(p2.id);
+      const pages = model.listPages();
+      const ids = pages.map(p => p.id);
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it("should not produce duplicate layer IDs after page switch and create", () => {
+      const l1 = model.createLayer("Layer A");
+      const l2 = model.createLayer("Layer B");
+      // Switch to a new page and create layers there
+      const p2 = model.createPage("Page 2");
+      model.setActivePage(p2.id);
+      const l3 = model.createLayer("Layer C");
+      // All layer IDs should be unique
+      expect(new Set([l1.id, l2.id, l3.id]).size).toBe(3);
     });
   });
 });

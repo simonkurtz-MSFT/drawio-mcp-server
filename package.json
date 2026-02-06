@@ -19,9 +19,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "start": "node ./build/index.js",
-    "start:http": "node ./build/index.js --transport http",
-    "start:both": "node ./build/index.js --transport stdio,http"
+    "start": "pnpm run build && node ./build/index.js",
+    "start:http": "pnpm run build && node ./build/index.js --transport http",
+    "start:both": "pnpm run build && node ./build/index.js --transport stdio,http"
   },
   "engines": {
     "node": ">=24.0.0"
@@ -47,6 +47,7 @@
   "dependencies": {
     "@hono/node-server": "1.19.7",
     "@modelcontextprotocol/sdk": "1.25.1",
+    "fast-xml-parser": "^5.3.4",
     "fuzzy-search": "3.2.1",
     "hono": "4.11.1",
     "zod": "4.2.1"
