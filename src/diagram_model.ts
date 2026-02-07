@@ -906,20 +906,10 @@ export class DiagramModel {
     const diagramsXml = this.pages.map(page => {
       const data = this.pageData.get(page.id)!;
       const pageXml = this.renderPageXml(data.cells, data.layers);
-      return `    <diagram id="${this.escapeXml(page.id)}" name="${this.escapeXml(page.name)}">
-        <mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
-            <root>
-                <mxCell id="0"/>
-                <mxCell id="1" parent="0"/>
-${pageXml}
-            </root>
-        </mxGraphModel>
-    </diagram>`;
-    }).join("\n");
+      return `<diagram id="${this.escapeXml(page.id)}" name="${this.escapeXml(page.name)}"><mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>${pageXml}</root></mxGraphModel></diagram>`;
+    }).join("");
 
-    return `<mxfile host="drawio-mcp-server">
-${diagramsXml}
-</mxfile>`;
+    return `<mxfile host="drawio-mcp-server">${diagramsXml}</mxfile>`;
   }
 
   /**
@@ -929,8 +919,8 @@ ${diagramsXml}
     // Emit custom layer cells (skip the default layer id="1" which is always present)
     const layerCellsXml = layers
       .filter(l => l.id !== "1")
-      .map(l => `                <mxCell id="${this.escapeXml(l.id)}" value="${this.escapeXml(l.name)}" style="" parent="0"/>`)
-      .join("\n");
+      .map(l => `<mxCell id="${this.escapeXml(l.id)}" value="${this.escapeXml(l.name)}" style="" parent="0"/>`)
+      .join("");
 
     const cellsXml = Array.from(cells.values())
       .map(cell => {
@@ -939,20 +929,16 @@ ${diagramsXml}
           const containerStyle = cell.isGroup && cell.style && !cell.style.includes("container=1")
             ? cell.style + "container=1;"
             : cell.style;
-          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(containerStyle!)}" vertex="1"${groupAttrs} parent="${cell.parent!}">
-                    <mxGeometry x="${cell.x!}" y="${cell.y!}" width="${cell.width!}" height="${cell.height!}" as="geometry"/>
-                </mxCell>`;
+          return `<mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(containerStyle!)}" vertex="1"${groupAttrs} parent="${cell.parent!}"><mxGeometry x="${cell.x!}" y="${cell.y!}" width="${cell.width!}" height="${cell.height!}" as="geometry"/></mxCell>`;
         } else {
           const sourceAttr = cell.sourceId ? ` source="${cell.sourceId}"` : "";
           const targetAttr = cell.targetId ? ` target="${cell.targetId}"` : "";
-          return `                <mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style!)}" edge="1" parent="${cell.parent!}"${sourceAttr}${targetAttr}>
-                    <mxGeometry relative="1" as="geometry"/>
-                </mxCell>`;
+          return `<mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style!)}" edge="1" parent="${cell.parent!}"${sourceAttr}${targetAttr}><mxGeometry relative="1" as="geometry"/></mxCell>`;
         }
       })
-      .join("\n");
+      .join("");
 
-    return `${layerCellsXml ? layerCellsXml + "\n" : ""}${cellsXml}`;
+    return `${layerCellsXml}${cellsXml}`;
   }
 
   private escapeXml(str: string): string {
