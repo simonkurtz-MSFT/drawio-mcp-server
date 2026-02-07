@@ -698,7 +698,7 @@ export const handlers = {
       edges: {
         solid: "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;",
         dashed: "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;",
-        curved: "edgeStyle=entityRelationEdgeStyle;rounded=1;html=1;",
+        curved: "edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;",
         arrow: "edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;",
       },
     };
