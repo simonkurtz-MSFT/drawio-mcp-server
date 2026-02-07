@@ -225,10 +225,17 @@ export const handlers = {
     return successResult({ cell: result });
   },
 
-  "export-diagram": async (): Promise<CallToolResult> => {
-    const xml = diagram.toXml();
+  "export-diagram": async (args: { compress?: boolean }): Promise<CallToolResult> => {
+    const compressed = args?.compress ?? false;
+    const xml = diagram.toXml({ compress: compressed });
     const stats = diagram.getStats();
-    return successResult({ xml, stats });
+    return successResult({
+      xml,
+      stats,
+      compression: compressed
+        ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" }
+        : { enabled: false },
+    });
   },
 
   "get-diagram-stats": async (): Promise<CallToolResult> => {

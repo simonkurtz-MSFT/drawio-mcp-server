@@ -3,6 +3,7 @@
  * the browser extension or Draw.io application.
  */
 
+import { deflateRawSync, inflateRawSync } from "node:zlib";
 import { XMLParser } from "fast-xml-parser";
 
 /** Shared XML parser instance for importing Draw.io XML */
@@ -725,10 +726,18 @@ export class DiagramModel {
     let totalLayers = 0;
 
     for (let di = 0; di < diagramElements.length; di++) {
-      const diag = diagramElements[di];
+      let diag = diagramElements[di];
       const pageId = `page-${this.nextPageId++}`;
       const pageName = String(diag.name ?? `Page-${di + 1}`);
       this.pages.push({ id: pageId, name: pageName });
+
+      // Detect compressed diagram content: when the diagram element has a text
+      // node instead of an mxGraphModel child, it contains deflate+base64 data.
+      if (!diag.mxGraphModel && typeof diag["#text"] === "string") {
+        const decompressedXml = DiagramModel.decompressXml(diag["#text"]);
+        const innerParsed = xmlParser.parse(decompressedXml) as Record<string, unknown>;
+        diag = { ...diag, mxGraphModel: innerParsed.mxGraphModel };
+      }
 
       const { cells, layers, nextId } = this.parseMxGraphContent(diag);
       totalCells += cells.size;
@@ -897,19 +906,46 @@ export class DiagramModel {
   }
 
   /**
-   * Export the diagram as Draw.io XML format (supports multi-page)
+   * Export the diagram as Draw.io XML format (supports multi-page).
+   *
+   * @param options.compress - If `true`, deflate-compress and base64-encode the
+   *   `<mxGraphModel>` content inside each `<diagram>` element. This matches the
+   *   format used by the Draw.io desktop application and typically achieves 60-80%
+   *   size reduction. Defaults to `false` (plain XML).
    */
-  toXml(): string {
+  toXml(options?: { compress?: boolean }): string {
+    const compress = options?.compress ?? false;
     // Save current page state so all pages have up-to-date data
     this.saveCurrentPageState();
 
     const diagramsXml = this.pages.map(page => {
       const data = this.pageData.get(page.id)!;
       const pageXml = this.renderPageXml(data.cells, data.layers);
-      return `<diagram id="${this.escapeXml(page.id)}" name="${this.escapeXml(page.name)}"><mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>${pageXml}</root></mxGraphModel></diagram>`;
+      const graphModelXml = `<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>${pageXml}</root></mxGraphModel>`;
+      const diagramContent = compress ? DiagramModel.compressXml(graphModelXml) : graphModelXml;
+      return `<diagram id="${this.escapeXml(page.id)}" name="${this.escapeXml(page.name)}">${diagramContent}</diagram>`;
     }).join("");
 
     return `<mxfile host="drawio-mcp-server">${diagramsXml}</mxfile>`;
+  }
+
+  /**
+   * Compress an XML string using the Draw.io format: deflateRaw → encodeURIComponent → base64.
+   */
+  static compressXml(xml: string): string {
+    const deflated = deflateRawSync(Buffer.from(xml, "utf-8"));
+    const uriEncoded = encodeURIComponent(deflated.toString("base64"));
+    return Buffer.from(uriEncoded, "utf-8").toString("base64");
+  }
+
+  /**
+   * Decompress a Draw.io compressed diagram string: base64 → decodeURIComponent → inflateRaw.
+   */
+  static decompressXml(compressed: string): string {
+    const uriEncoded = Buffer.from(compressed, "base64").toString("utf-8");
+    const deflatedBase64 = decodeURIComponent(uriEncoded);
+    const inflated = inflateRawSync(Buffer.from(deflatedBase64, "base64"));
+    return inflated.toString("utf-8");
   }
 
   /**

@@ -21,7 +21,7 @@ export type ToolHandlerMap = Record<string, (args: any) => Promise<CallToolResul
  * Creates a factory function that produces MCP tool handlers with logging.
  *
  * Each returned handler:
- * 1. Extracts session/request metadata from the `extra` parameter
+ * 1. Extracts request metadata from the `extra` parameter
  * 2. Logs the tool invocation
  * 3. Dispatches to the matching handler in `handlerMap`
  * 4. Logs success/error and duration
@@ -38,9 +38,9 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
     return async (...params: any[]) => {
       const extra = hasArgs ? params[1] : params[0];
       const args = hasArgs ? params[0] : {};
-      const sessionId = extra?.sessionId ?? "no-session";
       const requestId = extra?.requestId;
-      log.debug(`[tool:${toolName}] called (session=${sessionId}, req=${requestId})`);
+      const prefix = `[tool:${toolName}]`.padEnd(30);
+      log.debug(`${prefix} called (req=${requestId})`);
 
       const handler = handlerMap[toolName];
       if (handler) {
@@ -48,10 +48,10 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
         const result = await handler(args);
         const duration = Date.now() - start;
         const isError = result.isError ?? false;
-        log.debug(`[tool:${toolName}] ${isError ? "error" : "ok"} in ${duration}ms (session=${sessionId}, req=${requestId})`);
+        log.debug(`${prefix} ${isError ? "error" : "ok"} in ${duration}ms (req=${requestId})`);
         return result;
       }
-      log.debug(`[tool:${toolName}] not found (session=${sessionId}, req=${requestId})`);
+      log.debug(`${prefix} not found (req=${requestId})`);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ error: `Tool ${toolName} not available` }) }],
         isError: true,

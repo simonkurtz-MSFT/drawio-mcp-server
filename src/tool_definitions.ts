@@ -422,8 +422,11 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "EXPORT_DIAGRAM",
     name: "export-diagram",
-    description: "Export the diagram as Draw.io XML with diagram statistics. The XML is in the response payload's `xml` property. Save the output to a .drawio file.",
-    hasArgs: false,
+    description: "Export the diagram as Draw.io XML with diagram statistics. The XML is in the response payload's `xml` property. Save the output to a .drawio file. When `compress` is true, the mxGraphModel content inside each <diagram> element is deflate-compressed and base64-encoded (the format used by the Draw.io desktop app), typically achieving 60-80% size reduction. Compressed output is fully compatible with Draw.io and can be re-imported.",
+    hasArgs: true,
+    inputSchema: {
+      compress: z.boolean().optional().default(false).describe("When true, deflate-compress and base64-encode the diagram content inside each <diagram> element (Draw.io native format). Reduces output size by 60-80%. Defaults to false (plain XML)."),
+    },
   },
   {
     key: "CLEAR_DIAGRAM",

@@ -78,15 +78,14 @@ describe("createToolHandlerFactory", () => {
       const handler = createToolHandler("logged-tool", true);
       await handler({}, mockExtra);
 
-      expect(log.debug).toHaveBeenCalledWith(
-        expect.stringContaining("session=test-session"),
-      );
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      expect(debugCalls.every((msg: string) => !msg.includes("session="))).toBe(true);
       expect(log.debug).toHaveBeenCalledWith(
         expect.stringContaining("req=req-1"),
       );
     });
 
-    it("should use 'no-session' when sessionId is missing", async () => {
+    it("should handle missing sessionId without logging session", async () => {
       const mockResult = {
         content: [{ type: "text" as const, text: "{}" }],
       };
@@ -98,12 +97,14 @@ describe("createToolHandlerFactory", () => {
       const handler = createToolHandler("tool", true);
       await handler({}, { requestId: "r1" });
 
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      expect(debugCalls.every((msg: string) => !msg.includes("session="))).toBe(true);
       expect(log.debug).toHaveBeenCalledWith(
-        expect.stringContaining("session=no-session"),
+        expect.stringContaining("req=r1"),
       );
     });
 
-    it("should use 'no-session' when extra is undefined", async () => {
+    it("should handle undefined extra without logging session", async () => {
       const mockResult = {
         content: [{ type: "text" as const, text: "{}" }],
       };
@@ -115,9 +116,8 @@ describe("createToolHandlerFactory", () => {
       const handler = createToolHandler("tool");
       await handler(undefined);
 
-      expect(log.debug).toHaveBeenCalledWith(
-        expect.stringContaining("session=no-session"),
-      );
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      expect(debugCalls.every((msg: string) => !msg.includes("session="))).toBe(true);
     });
 
     it("should log 'ok' for successful handler results", async () => {
@@ -183,6 +183,29 @@ describe("createToolHandlerFactory", () => {
       const resultLog = debugCalls.find((msg: string) => msg.includes("ms"));
       expect(resultLog).toBeDefined();
       expect(resultLog).toMatch(/\d+ms/);
+    });
+
+    it("should pad tool prefix to align status words", async () => {
+      const mockResult = {
+        content: [{ type: "text" as const, text: "{}" }],
+      };
+      const handlerMap: ToolHandlerMap = {
+        "a": vi.fn().mockResolvedValue(mockResult),
+      };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("a", true);
+      await handler({}, mockExtra);
+
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const calledLog = debugCalls.find((msg: string) => msg.includes("called"));
+      const okLog = debugCalls.find((msg: string) => msg.includes("ok in"));
+      // Both lines should have the prefix padded to the same width (30 chars)
+      expect(calledLog).toMatch(/^\[tool:a\]\s+called/);
+      expect(okLog).toMatch(/^\[tool:a\]\s+ok in/);
+      // The prefix "[tool:a]" (8 chars) padded to 30, plus a space separator = status starts at 31
+      expect(calledLog!.indexOf("called")).toBe(31);
+      expect(okLog!.indexOf("ok in")).toBe(31);
     });
   });
 });
