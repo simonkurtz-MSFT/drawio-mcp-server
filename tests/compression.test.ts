@@ -346,10 +346,10 @@ describe("DiagramModel compression", () => {
       const reductionLog = debugCalls.find((msg: string) => msg.includes("compression reduced size by"));
 
       expect(originalSizeLog).toBeDefined();
-      expect(originalSizeLog).toMatch(/^\d{4}-\d{2}-\d{2}T.*\[export-diagram\] original size: [\d.]+ KB$/);
+      expect(originalSizeLog).toMatch(/^\d{4}-\d{2}-\d{2}T.*\[tool:export-diagram\]\s+original size: [\d.]+ KB$/);
 
       expect(reductionLog).toBeDefined();
-      expect(reductionLog).toMatch(/^\d{4}-\d{2}-\d{2}T.*\[export-diagram\] compression reduced size by -?\d+\.\d{2}%/);
+      expect(reductionLog).toMatch(/^\d{4}-\d{2}-\d{2}T.*\[tool:export-diagram\]\s+compression reduced size by -?\d+\.\d{2}%/);
       expect(reductionLog).toContain("\u2192");
     });
 

@@ -108,11 +108,10 @@ describe("createToolHandlerFactory", () => {
       const handler = createToolHandler("logged-tool", true);
       await handler({}, mockExtra);
 
-      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      expect(debugCalls.every((msg: string) => !msg.includes("session="))).toBe(true);
-      expect(log.debug).toHaveBeenCalledWith(
-        expect.stringContaining("req=req-1"),
-      );
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls;
+      const firstCallArgs = debugCalls[0];
+      expect(firstCallArgs[0]).not.toContain("session=");
+      expect(firstCallArgs[0]).toContain("req=req-1");
     });
 
     it("should handle missing sessionId without logging session", async () => {
@@ -127,11 +126,10 @@ describe("createToolHandlerFactory", () => {
       const handler = createToolHandler("tool", true);
       await handler({}, { requestId: "r1" });
 
-      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      expect(debugCalls.every((msg: string) => !msg.includes("session="))).toBe(true);
-      expect(log.debug).toHaveBeenCalledWith(
-        expect.stringContaining("req=r1"),
-      );
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls;
+      const firstCallMsg = debugCalls[0][0];
+      expect(firstCallMsg).not.toContain("session=");
+      expect(firstCallMsg).toContain("req=r1");
     });
 
     it("should handle undefined extra without logging session", async () => {
@@ -146,8 +144,45 @@ describe("createToolHandlerFactory", () => {
       const handler = createToolHandler("tool");
       await handler(undefined);
 
-      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
-      expect(debugCalls.every((msg: string) => !msg.includes("session="))).toBe(true);
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls;
+      const firstCallMsg = debugCalls[0][0];
+      expect(firstCallMsg).not.toContain("session=");
+    });
+
+    it("should log input args as JSON in the called log line", async () => {
+      const mockResult = {
+        content: [{ type: "text" as const, text: "{}" }],
+      };
+      const handlerMap: ToolHandlerMap = {
+        "args-tool": vi.fn().mockResolvedValue(mockResult),
+      };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("args-tool", true);
+      await handler({ x: 100, text: "hello" }, mockExtra);
+
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls;
+      const calledCall = debugCalls.find(c => (c[0] as string).includes("called"));
+      expect(calledCall).toBeDefined();
+      expect(calledCall![1]).toBe(JSON.stringify({ x: 100, text: "hello" }));
+    });
+
+    it("should log empty args when hasArgs is false", async () => {
+      const mockResult = {
+        content: [{ type: "text" as const, text: "{}" }],
+      };
+      const handlerMap: ToolHandlerMap = {
+        "no-args": vi.fn().mockResolvedValue(mockResult),
+      };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("no-args");
+      await handler(mockExtra);
+
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls;
+      const calledCall = debugCalls.find(c => (c[0] as string).includes("called"));
+      expect(calledCall).toBeDefined();
+      expect(calledCall![1]).toBe("{}");
     });
 
     it("should log 'ok' with payload size for successful handler results", async () => {

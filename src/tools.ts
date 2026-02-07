@@ -234,12 +234,13 @@ export function createHandlers(log: ToolLogger) {
     const stats = diagram.getStats();
 
     if (compressed) {
+      const prefix = "[tool:export-diagram]".padEnd(30);
       const originalXml = diagram.toXml({ compress: false });
       const originalSize = Buffer.byteLength(originalXml, "utf-8");
       const compressedSize = Buffer.byteLength(xml, "utf-8");
       const reduction = ((1 - compressedSize / originalSize) * 100).toFixed(2);
-      log.debug(`${timestamp()} [export-diagram] original size: ${formatBytes(originalSize)}`);
-      log.debug(`${timestamp()} [export-diagram] compression reduced size by ${reduction}% (${formatBytes(originalSize)} → ${formatBytes(compressedSize)})`);
+      log.debug(`${timestamp()} ${prefix} original size: ${formatBytes(originalSize)}`);
+      log.debug(`${timestamp()} ${prefix} compression reduced size by ${reduction}% (${formatBytes(originalSize)} → ${formatBytes(compressedSize)})`);
     }
 
     return successResult({
@@ -487,7 +488,7 @@ export function createHandlers(log: ToolLogger) {
           width: resolved.width,
           height: resolved.height,
           source: resolved.source,
-          ...(resolved.score !== undefined && { confidence: resolved.score }),
+          ...(resolved.score !== undefined && { confidence: parseFloat(resolved.score.toFixed(3)) }),
         },
       });
     }
@@ -548,7 +549,7 @@ export function createHandlers(log: ToolLogger) {
         ...(resolved.source === "azure-exact" && { info: `Added Azure icon: ${resolved.name}` }),
         ...(resolved.source === "azure-fuzzy" && {
           info: `Added Azure icon (matched from search): ${resolved.name}`,
-          confidence: resolved.score,
+          confidence: parseFloat(resolved.score!.toFixed(3)),
         }),
       };
     });
@@ -751,7 +752,7 @@ export function createHandlers(log: ToolLogger) {
         category: r.category,
         width: r.width,
         height: r.height,
-        confidence: r.score,
+        confidence: parseFloat(r.score.toFixed(3)),
       }));
 
       // Combine: basic shapes first (higher priority), then Azure, respect limit

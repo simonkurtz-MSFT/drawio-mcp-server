@@ -48,7 +48,7 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
       const args = hasArgs ? params[0] : {};
       const requestId = extra?.requestId;
       const prefix = `[tool:${toolName}]`.padEnd(30);
-      log.debug(`${timestamp()} ${prefix} called (req=${requestId})`);
+      log.debug(`${timestamp()} ${prefix} called (req=${requestId})`, JSON.stringify(args));
 
       const handler = handlerMap[toolName];
       if (handler) {

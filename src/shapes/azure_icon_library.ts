@@ -343,16 +343,16 @@ export function searchAzureIcons(
   _options?: { caseSensitive?: boolean }
 ): SearchResult[] {
   const searcher = getSearchIndex();
-  let results = searcher.search(query).slice(0, limit);
+  const normalizedQuery = normalizeForSearch(query);
+  let results = searcher.search(normalizedQuery).slice(0, limit);
 
   // Calculate confidence scores based on match position and query length
   const searchResults: SearchResult[] = results.map((item, index) => {
     const { searchTitle, searchId, ...shape } = item;
     // Score: 1.0 for exact match, decreases with position in results
     // Exact matches on title get boost
-    const titleMatch =
-      shape.title.toLowerCase() === query.toLowerCase() ? 1.0 : 0;
-    const idMatch = shape.id.toLowerCase() === query.toLowerCase() ? 0.95 : 0;
+    const titleMatch = searchTitle === normalizedQuery ? 1.0 : 0;
+    const idMatch = searchId === normalizedQuery ? 0.95 : 0;
     const positionDecay = 1 - index / results.length * 0.2; // Up to 20% decay
     const score = Math.max(titleMatch, idMatch) || 0.5 + 0.3 * positionDecay;
 
