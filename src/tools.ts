@@ -12,6 +12,8 @@ import {
   searchAzureIcons,
 } from "./shapes/azure_icon_library.js";
 import { BASIC_SHAPES, BASIC_SHAPE_CATEGORIES, getBasicShape } from "./shapes/basic_shapes.js";
+import type { ToolLogger } from "./tool_handler.js";
+import { formatBytes, timestamp } from "./tool_handler.js";
 
 /**
  * Resolved shape with unified dimensions and style, regardless of source (basic or Azure).
@@ -88,7 +90,8 @@ function errorResult(error: StructuredError): CallToolResult {
   };
 }
 
-export const handlers = {
+export function createHandlers(log: ToolLogger) {
+  return {
   "delete-cell-by-id": async (args: {
     cell_id: string;
   }): Promise<CallToolResult> => {
@@ -229,6 +232,16 @@ export const handlers = {
     const compressed = args?.compress ?? false;
     const xml = diagram.toXml({ compress: compressed });
     const stats = diagram.getStats();
+
+    if (compressed) {
+      const originalXml = diagram.toXml({ compress: false });
+      const originalSize = Buffer.byteLength(originalXml, "utf-8");
+      const compressedSize = Buffer.byteLength(xml, "utf-8");
+      const reduction = ((1 - compressedSize / originalSize) * 100).toFixed(2);
+      log.debug(`${timestamp()} [export-diagram] original size: ${formatBytes(originalSize)}`);
+      log.debug(`${timestamp()} [export-diagram] compression reduced size by ${reduction}% (${formatBytes(originalSize)} → ${formatBytes(compressedSize)})`);
+    }
+
     return successResult({
       xml,
       stats,
@@ -757,3 +770,7 @@ export const handlers = {
     });
   },
 };
+}
+
+/** Default handlers instance with a no-op logger, for backward compatibility in tests. */
+export const handlers = createHandlers({ debug: () => {} });

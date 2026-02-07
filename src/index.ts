@@ -14,7 +14,7 @@ import {
   create_logger as create_server_logger,
   validLogLevels,
 } from "./loggers/mcp_server_logger.js";
-import { handlers } from "./tools.js";
+import { createHandlers } from "./tools.js";
 import { createToolHandlerFactory } from "./tool_handler.js";
 import { initializeShapes, resetAzureIconLibrary } from "./shapes/azure_icon_library.js";
 import { diagram } from "./diagram_model.js";
@@ -95,6 +95,7 @@ const log =
 /**
  * Create tool handler factory that logs session/request metadata and delegates to handlers.
  */
+const handlers = createHandlers(log);
 const createToolHandler = createToolHandlerFactory(handlers, log);
 
 // Register all MCP tools (schemas + descriptions)
@@ -235,7 +236,7 @@ async function main() {
   // initializeShapes also verifies the file is readable; getAzureIconLibrary()
   // will re-attempt loading on subsequent calls if shapes are still empty.
   const shapeLibrary = initializeShapes(config.azureIconLibraryPath);
-  log.debug(`Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} category/ies`);
+  log.debug(`Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} categories`);
 
   if (config.transports.indexOf("stdio") > -1) {
     await start_stdio_transport();

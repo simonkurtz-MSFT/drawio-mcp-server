@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { DiagramModel } from "../src/diagram_model.js";
-import { handlers } from "../src/tools.js";
+import { handlers, createHandlers } from "../src/tools.js";
 import { diagram } from "../src/diagram_model.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
@@ -322,6 +322,57 @@ describe("DiagramModel compression", () => {
       const imported = parseResult(importResult);
       expect(imported.data.pages).toBe(1);
       expect(imported.data.cells).toBe(3);
+    });
+  });
+
+  // ─── Compression debug logging ──────────────────────────────
+
+  describe("export-diagram compression debug logging", () => {
+    let logSpy: { debug: ReturnType<typeof vi.fn> };
+    let loggedHandlers: ReturnType<typeof createHandlers>;
+
+    beforeEach(() => {
+      diagram.clear();
+      logSpy = { debug: vi.fn() };
+      loggedHandlers = createHandlers(logSpy);
+    });
+
+    it("should log original size and reduction when compress is true", async () => {
+      await loggedHandlers["add-cells"]({ cells: [{ type: "vertex", text: "Compression Log Test" }] });
+      await loggedHandlers["export-diagram"]({ compress: true });
+
+      const debugCalls = logSpy.debug.mock.calls.map(c => c[0]);
+      const originalSizeLog = debugCalls.find((msg: string) => msg.includes("original size:"));
+      const reductionLog = debugCalls.find((msg: string) => msg.includes("compression reduced size by"));
+
+      expect(originalSizeLog).toBeDefined();
+      expect(originalSizeLog).toMatch(/^\d{4}-\d{2}-\d{2}T.*\[export-diagram\] original size: [\d.]+ KB$/);
+
+      expect(reductionLog).toBeDefined();
+      expect(reductionLog).toMatch(/^\d{4}-\d{2}-\d{2}T.*\[export-diagram\] compression reduced size by -?\d+\.\d{2}%/);
+      expect(reductionLog).toContain("\u2192");
+    });
+
+    it("should not log compression details when compress is false", async () => {
+      await loggedHandlers["add-cells"]({ cells: [{ type: "vertex", text: "No Compress" }] });
+      await loggedHandlers["export-diagram"]({ compress: false });
+
+      const debugCalls = logSpy.debug.mock.calls.map(c => c[0]);
+      const compressionLogs = debugCalls.filter((msg: string) =>
+        msg.includes("original size:") || msg.includes("compression reduced size by")
+      );
+      expect(compressionLogs).toHaveLength(0);
+    });
+
+    it("should not log compression details when compress is omitted", async () => {
+      await loggedHandlers["add-cells"]({ cells: [{ type: "vertex", text: "Default" }] });
+      await loggedHandlers["export-diagram"]({});
+
+      const debugCalls = logSpy.debug.mock.calls.map(c => c[0]);
+      const compressionLogs = debugCalls.filter((msg: string) =>
+        msg.includes("original size:") || msg.includes("compression reduced size by")
+      );
+      expect(compressionLogs).toHaveLength(0);
     });
   });
 });

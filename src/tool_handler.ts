@@ -35,6 +35,10 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / 1024).toFixed(2)} KB`;
 }
 
+export function timestamp(): string {
+  return new Date().toISOString();
+}
+
 export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLogger) {
   function createToolHandler(toolName: string, hasArgs: true): (args: any, extra: any) => Promise<any>;
   function createToolHandler(toolName: string, hasArgs?: false): (extra: any) => Promise<any>;
@@ -44,7 +48,7 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
       const args = hasArgs ? params[0] : {};
       const requestId = extra?.requestId;
       const prefix = `[tool:${toolName}]`.padEnd(30);
-      log.debug(`${prefix} called (req=${requestId})`);
+      log.debug(`${timestamp()} ${prefix} called (req=${requestId})`);
 
       const handler = handlerMap[toolName];
       if (handler) {
@@ -53,10 +57,10 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
         const duration = Date.now() - start;
         const isError = result.isError ?? false;
         const payloadSize = formatBytes(JSON.stringify(result).length);
-        log.debug(`${prefix} ${isError ? "error" : "ok"} in ${duration}ms, ${payloadSize} (req=${requestId})`);
+        log.debug(`${timestamp()} ${prefix} ${isError ? "error" : "ok"} in ${duration}ms, ${payloadSize} (req=${requestId})`);
         return result;
       }
-      log.debug(`${prefix} not found (req=${requestId})`);
+      log.debug(`${timestamp()} ${prefix} not found (req=${requestId})`);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ error: `Tool ${toolName} not available` }) }],
         isError: true,

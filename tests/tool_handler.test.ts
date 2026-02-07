@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createToolHandlerFactory, formatBytes, type ToolLogger, type ToolHandlerMap } from "../src/tool_handler.js";
+import { createToolHandlerFactory, formatBytes, timestamp, type ToolLogger, type ToolHandlerMap } from "../src/tool_handler.js";
 
 describe("createToolHandlerFactory", () => {
   let log: ToolLogger;
@@ -20,6 +20,22 @@ describe("createToolHandlerFactory", () => {
 
     it("should format large values in KB", () => {
       expect(formatBytes(1048576)).toBe("1024.00 KB");
+    });
+  });
+
+  describe("timestamp", () => {
+    it("should return an ISO 8601 string", () => {
+      const ts = timestamp();
+      expect(ts).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    });
+
+    it("should return a recent timestamp", () => {
+      const before = Date.now();
+      const ts = timestamp();
+      const after = Date.now();
+      const parsed = new Date(ts).getTime();
+      expect(parsed).toBeGreaterThanOrEqual(before);
+      expect(parsed).toBeLessThanOrEqual(after);
     });
   });
 
@@ -235,12 +251,11 @@ describe("createToolHandlerFactory", () => {
       const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
       const calledLog = debugCalls.find((msg: string) => msg.includes("called"));
       const okLog = debugCalls.find((msg: string) => msg.includes("ok in"));
-      // Both lines should have the prefix padded to the same width (30 chars)
-      expect(calledLog).toMatch(/^\[tool:a\]\s+called/);
-      expect(okLog).toMatch(/^\[tool:a\]\s+ok in/);
-      // The prefix "[tool:a]" (8 chars) padded to 30, plus a space separator = status starts at 31
-      expect(calledLog!.indexOf("called")).toBe(31);
-      expect(okLog!.indexOf("ok in")).toBe(31);
+      // Both lines should start with an ISO timestamp followed by the padded tool prefix
+      expect(calledLog).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[tool:a\]\s+called/);
+      expect(okLog).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[tool:a\]\s+ok in/);
+      // "called" and "ok in" should start at the same column (aligned by padEnd)
+      expect(calledLog!.indexOf("called")).toBe(okLog!.indexOf("ok in"));
     });
   });
 });

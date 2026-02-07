@@ -245,7 +245,7 @@ describe("tool handlers", () => {
   describe("export-diagram", () => {
     it("should return valid XML", async () => {
       await addVertex({ text: "Test" });
-      const result = await handlers["export-diagram"]();
+      const result = await handlers["export-diagram"]({});
       const parsed = parseResult(result);
       expect(parsed.data.xml).toContain("<mxfile");
       expect(parsed.data.xml).toContain("Test");
