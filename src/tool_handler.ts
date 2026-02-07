@@ -31,6 +31,10 @@ export type ToolHandlerMap = Record<string, (args: any) => Promise<CallToolResul
  * @param log - Logger instance for debug output
  * @returns A `createToolHandler` function for registering tools
  */
+export function formatBytes(bytes: number): string {
+  return `${(bytes / 1024).toFixed(2)} KB`;
+}
+
 export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLogger) {
   function createToolHandler(toolName: string, hasArgs: true): (args: any, extra: any) => Promise<any>;
   function createToolHandler(toolName: string, hasArgs?: false): (extra: any) => Promise<any>;
@@ -48,7 +52,8 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
         const result = await handler(args);
         const duration = Date.now() - start;
         const isError = result.isError ?? false;
-        log.debug(`${prefix} ${isError ? "error" : "ok"} in ${duration}ms (req=${requestId})`);
+        const payloadSize = formatBytes(JSON.stringify(result).length);
+        log.debug(`${prefix} ${isError ? "error" : "ok"} in ${duration}ms, ${payloadSize} (req=${requestId})`);
         return result;
       }
       log.debug(`${prefix} not found (req=${requestId})`);

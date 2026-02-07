@@ -565,6 +565,45 @@ describe("tool handlers", () => {
       const parsed = parseResult(result);
       expect(parsed.data.results[0].matches.length).toBeLessThanOrEqual(3);
     });
+
+    it("should include basic shapes in results", async () => {
+      const result = await handlers["search-shapes"]({ queries: ["rectangle"] });
+      const parsed = parseResult(result);
+      const matches = parsed.data.results[0].matches;
+      expect(matches.length).toBeGreaterThan(0);
+      expect(matches[0].name).toBe("rectangle");
+      expect(matches[0].category).toBe("basic");
+      expect(matches[0].confidence).toBe(1.0);
+    });
+
+    it("should return basic shapes before Azure icons for matching queries", async () => {
+      const result = await handlers["search-shapes"]({ queries: ["diamond"] });
+      const parsed = parseResult(result);
+      const matches = parsed.data.results[0].matches;
+      expect(matches.length).toBeGreaterThan(0);
+      expect(matches[0].category).toBe("basic");
+    });
+
+    it("should find basic shapes with partial match", async () => {
+      const result = await handlers["search-shapes"]({ queries: ["rect"] });
+      const parsed = parseResult(result);
+      const matches = parsed.data.results[0].matches;
+      const basicMatch = matches.find((m: any) => m.name === "rectangle");
+      expect(basicMatch).toBeDefined();
+      expect(basicMatch.category).toBe("basic");
+    });
+
+    it("should combine basic and Azure results in a single query", async () => {
+      const result = await handlers["search-shapes"]({ queries: ["circle", "storage"] });
+      const parsed = parseResult(result);
+      expect(parsed.data.results).toHaveLength(2);
+      // "circle" query should have a basic shape match
+      const circleMatches = parsed.data.results[0].matches;
+      expect(circleMatches.some((m: any) => m.category === "basic")).toBe(true);
+      // "storage" query should have Azure matches
+      const storageMatches = parsed.data.results[1].matches;
+      expect(storageMatches.length).toBeGreaterThan(0);
+    });
   });
 
   describe("get-style-presets", () => {

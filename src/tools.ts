@@ -719,17 +719,34 @@ export const handlers = {
     }
 
     const results = args.queries.map(q => {
-      const matches = searchAzureIcons(q, limit);
+      // Check basic shapes first (exact, case-insensitive)
+      const basicMatches = Object.values(BASIC_SHAPES)
+        .filter(s => s.name.toLowerCase().includes(q.toLowerCase()))
+        .map(s => ({
+          name: s.name,
+          id: s.name,
+          category: "basic",
+          width: s.defaultWidth,
+          height: s.defaultHeight,
+          confidence: s.name.toLowerCase() === q.toLowerCase() ? 1.0 : 0.8,
+        }));
+
+      // Then search Azure icons
+      const azureMatches = searchAzureIcons(q, limit).map(r => ({
+        name: r.title,
+        id: r.id,
+        category: r.category,
+        width: r.width,
+        height: r.height,
+        confidence: r.score,
+      }));
+
+      // Combine: basic shapes first (higher priority), then Azure, respect limit
+      const matches = [...basicMatches, ...azureMatches].slice(0, limit);
+
       return {
         query: q,
-        matches: matches.map(r => ({
-          name: r.title,
-          id: r.id,
-          category: r.category,
-          width: r.width,
-          height: r.height,
-          confidence: r.score,
-        })),
+        matches,
         total: matches.length,
       };
     });

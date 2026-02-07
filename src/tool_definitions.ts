@@ -136,7 +136,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "GET_SHAPE_CATEGORIES",
     name: "get-shape-categories",
-    description: "Get available shape categories (General, Flowchart, Azure icons). Use search-shapes for faster fuzzy lookup.",
+    description: "Get available shape categories (General, Flowchart, Azure icons). For discovering specific shapes, prefer search-shapes.",
     hasArgs: false,
   },
   {
@@ -155,7 +155,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "GET_SHAPE_BY_NAME",
     name: "get-shape-by-name",
-    description: "Get a shape by exact name. For fuzzy matching, use search-shapes instead.",
+    description: "Get a shape by exact name from any library (basic shapes or Azure icons). For discovery or fuzzy matching, use search-shapes instead.",
     hasArgs: true,
     inputSchema: {
       shape_name: z
@@ -204,10 +204,10 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "SEARCH_SHAPES",
     name: "search-shapes",
-    description: "Fuzzy search for shapes across 700+ Azure icons and basic shapes. Returns names for use with add-cells-of-shape. Call this tool exactly ONCE with ALL shape names in the queries array — never call it multiple times.",
+    description: "Search for any shape — basic shapes (rectangle, circle, diamond, start, end, process, cylinder, etc.) and 700+ Azure icons. This is the primary way to discover shapes for use with add-cells-of-shape. Call this tool exactly ONCE with ALL shape names in the queries array — never call it multiple times.",
     hasArgs: true,
     inputSchema: {
-      queries: z.array(z.string()).describe("Array of ALL search terms. Gather every shape name you need and pass them all here. Example: ['front door', 'container apps', 'app service', 'key vault', 'dns zone', 'nsg', 'log analytics']"),
+      queries: z.array(z.string()).describe("Array of ALL search terms. Gather every shape name you need and pass them all here. Example: ['rectangle', 'diamond', 'front door', 'container apps', 'app service', 'key vault', 'cylinder', 'start', 'end']"),
       limit: z.number().min(1).max(50).optional().default(10).describe("Maximum results to return per query (1-50)"),
     },
   },

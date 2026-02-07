@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createToolHandlerFactory, type ToolLogger, type ToolHandlerMap } from "../src/tool_handler.js";
+import { createToolHandlerFactory, formatBytes, type ToolLogger, type ToolHandlerMap } from "../src/tool_handler.js";
 
 describe("createToolHandlerFactory", () => {
   let log: ToolLogger;
@@ -7,6 +7,20 @@ describe("createToolHandlerFactory", () => {
 
   beforeEach(() => {
     log = { debug: vi.fn() };
+  });
+
+  describe("formatBytes", () => {
+    it("should format small values in KB", () => {
+      expect(formatBytes(500)).toBe("0.49 KB");
+    });
+
+    it("should format exact kilobytes", () => {
+      expect(formatBytes(2048)).toBe("2.00 KB");
+    });
+
+    it("should format large values in KB", () => {
+      expect(formatBytes(1048576)).toBe("1024.00 KB");
+    });
   });
 
   describe("handler dispatch", () => {
@@ -120,7 +134,7 @@ describe("createToolHandlerFactory", () => {
       expect(debugCalls.every((msg: string) => !msg.includes("session="))).toBe(true);
     });
 
-    it("should log 'ok' for successful handler results", async () => {
+    it("should log 'ok' with payload size for successful handler results", async () => {
       const successResult = {
         content: [{ type: "text" as const, text: "{}" }],
       };
@@ -136,9 +150,10 @@ describe("createToolHandlerFactory", () => {
       const resultLog = debugCalls.find((msg: string) => msg.includes("ok in"));
       expect(resultLog).toBeDefined();
       expect(resultLog).toContain("[tool:ok-tool]");
+      expect(resultLog).toMatch(/[\d.]+ KB/);
     });
 
-    it("should log 'error' for handler results with isError=true", async () => {
+    it("should log 'error' with payload size for handler results with isError=true", async () => {
       const errorResult = {
         content: [{ type: "text" as const, text: '{"error":"fail"}' }],
         isError: true,
@@ -155,6 +170,7 @@ describe("createToolHandlerFactory", () => {
       const resultLog = debugCalls.find((msg: string) => msg.includes("error in"));
       expect(resultLog).toBeDefined();
       expect(resultLog).toContain("[tool:error-tool]");
+      expect(resultLog).toMatch(/[\d.]+ KB/);
     });
 
     it("should log 'not found' for unknown tools", async () => {
@@ -165,6 +181,25 @@ describe("createToolHandlerFactory", () => {
       expect(log.debug).toHaveBeenCalledWith(
         expect.stringContaining("not found"),
       );
+    });
+
+    it("should format payload size in KB for larger payloads", async () => {
+      const largeText = "x".repeat(2048);
+      const largeResult = {
+        content: [{ type: "text" as const, text: largeText }],
+      };
+      const handlerMap: ToolHandlerMap = {
+        "large-tool": vi.fn().mockResolvedValue(largeResult),
+      };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("large-tool", true);
+      await handler({}, mockExtra);
+
+      const debugCalls = (log.debug as ReturnType<typeof vi.fn>).mock.calls.map(c => c[0]);
+      const resultLog = debugCalls.find((msg: string) => msg.includes("ok in"));
+      expect(resultLog).toBeDefined();
+      expect(resultLog).toMatch(/[\d.]+ KB/);
     });
 
     it("should include duration in success log", async () => {
