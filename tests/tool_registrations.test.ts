@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerTools, TOOL_NAMES } from "../src/tool_registrations.js";
+import { registerTools, TOOL_NAMES, TOOL_DEFINITIONS } from "../src/tool_registrations.js";
 import { createToolHandlerFactory, type ToolHandlerMap, type ToolLogger } from "../src/tool_handler.js";
 
 describe("TOOL_NAMES", () => {
@@ -26,6 +26,34 @@ describe("TOOL_NAMES", () => {
     const upperSnakePattern = /^[A-Z]+(_[A-Z]+)*$/;
     for (const key of Object.keys(TOOL_NAMES)) {
       expect(key, `key "${key}" should be UPPER_SNAKE_CASE`).toMatch(upperSnakePattern);
+    }
+  });
+});
+
+describe("TOOL_DEFINITIONS", () => {
+  it("should contain 32 tool definitions", () => {
+    expect(TOOL_DEFINITIONS.length).toBe(32);
+  });
+
+  it("should have matching TOOL_NAMES derived from TOOL_DEFINITIONS", () => {
+    for (const def of TOOL_DEFINITIONS) {
+      expect(TOOL_NAMES[def.key], `TOOL_NAMES.${def.key} should equal "${def.name}"`).toBe(def.name);
+    }
+  });
+
+  it("should have non-empty descriptions for all tools", () => {
+    for (const def of TOOL_DEFINITIONS) {
+      expect(def.description.length, `${def.name} description should be non-empty`).toBeGreaterThan(0);
+    }
+  });
+
+  it("should have inputSchema when hasArgs is true and not when false", () => {
+    for (const def of TOOL_DEFINITIONS) {
+      if (def.hasArgs) {
+        expect("inputSchema" in def, `${def.name} should have inputSchema when hasArgs is true`).toBe(true);
+      } else {
+        expect("inputSchema" in def, `${def.name} should not have inputSchema when hasArgs is false`).toBe(false);
+      }
     }
   });
 });
