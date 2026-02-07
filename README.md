@@ -180,13 +180,13 @@ The `.env` file supports:
 
 ## Tools
 
-> **Performance tip**: Prefer batch tools (`batch-add-cells`, `batch-add-cells-of-shape`, `batch-edit-cells`) and array parameters (`queries`, `cells`) over repeated single-call usage.
+> **Performance tip**: All cell-manipulation tools accept arrays — pass ALL items in a single call rather than calling a tool repeatedly.
 
 ### Shape Discovery
 
 | Tool | Description |
 |---|---|
-| `search-shapes` | Fuzzy search for shapes including 700+ Azure icons. Supports `queries` array for batch lookup. |
+| `search-shapes` | Fuzzy search for shapes including 700+ Azure icons. Pass all queries in the `queries` array. |
 | `get-shape-categories` | List all shape categories (General, Flowchart, Azure categories). |
 | `get-shapes-in-category` | List all shapes in a category by `category_id`. |
 | `get-shape-by-name` | Get a specific shape by exact name. |
@@ -196,37 +196,57 @@ The `.env` file supports:
 
 | Tool | Description |
 |---|---|
-| `batch-add-cells` | Add multiple raw vertex and edge cells in one call. Supports `temp_id` for within-batch references. |
-| `batch-add-cells-of-shape` | Add multiple shape-library cells (Azure icons, basic shapes) in one call. |
-| `batch-edit-cells` | Update multiple vertex cells' properties in one call. |
-| `add-cell-of-shape` | Add a vertex cell using a shape from the library. |
-| `add-rectangle` | Add a rectangle vertex cell with custom position, size, text, and style. |
-| `add-edge` | Create an edge (connection) between two vertex cells. |
-| `set-cell-shape` | Apply a library shape's style to an existing cell. Supports `cells` array for batch updates. |
-| `edit-cell` | Update a vertex cell's properties (position, size, text, style). |
+| `add-cells` | Add vertices and/or edges. Supports `temp_id` for within-batch references and `dry_run` validation. |
+| `add-cells-of-shape` | Add shape-library cells (Azure icons, basic shapes). |
+| `edit-cells` | Update vertex cell properties (position, size, text, style). |
 | `edit-edge` | Update an edge's properties (text, source, target, style). |
-| `delete-cell-by-id` | Remove a cell (vertex or edge) by ID. |
+| `set-cell-shape` | Apply library shape styles to existing cells. |
+| `delete-cell-by-id` | Remove a cell (vertex or edge) by ID. Cascade-deletes connected edges for vertices. |
+| `delete-edge` | Remove an edge by ID (validates that the target is an edge). |
 
 ### Diagram Inspection
 
 | Tool | Description |
 |---|---|
-| `list-paged-model` | Paginated view of all cells with filtering by type and attributes. |
+| `list-paged-model` | Paginated view of all cells with filtering by type. |
 | `get-diagram-stats` | Statistics about cell counts, bounds, and layer distribution. |
 | `export-diagram` | Export the diagram as Draw.io XML. |
+| `import-diagram` | Import a Draw.io XML string, replacing the current diagram. |
 | `clear-diagram` | Clear all cells and reset the diagram. |
 
 ### Layer Management
 
 | Tool | Description |
 |---|---|
-| `list-layers` | List all layers with IDs, names, and visibility. |
+| `list-layers` | List all layers with IDs and names. |
 | `get-active-layer` | Get the currently active layer. |
 | `set-active-layer` | Set the active layer for new elements. |
 | `create-layer` | Create a new layer. |
 | `move-cell-to-layer` | Move a cell to a different layer. |
 
-### Batch Add Example
+### Page Management
+
+| Tool | Description |
+|---|---|
+| `create-page` | Create a new page (tab) in the diagram. |
+| `list-pages` | List all pages with IDs and names. |
+| `get-active-page` | Get the currently active page. |
+| `set-active-page` | Switch to a different page. |
+| `rename-page` | Rename an existing page. |
+| `delete-page` | Delete a page and all its contents. Cannot delete the last page. |
+
+### Group / Container Management
+
+| Tool | Description |
+|---|---|
+| `create-groups` | Create group/container cells for VNets, subnets, resource groups, etc. |
+| `add-cells-to-group` | Assign cells to groups. |
+| `remove-cell-from-group` | Remove a cell from its group, returning it to the active layer. |
+| `list-group-children` | List all cells contained in a group. |
+
+### Add Cells Example
+
+Use `add-cells` with `temp_id` references to create vertices and edges in a single call:
 
 ```json
 {

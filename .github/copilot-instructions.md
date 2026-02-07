@@ -17,7 +17,8 @@ This is a **TypeScript MCP (Model Context Protocol) server** for programmatic Dr
 
 - `src/` — Source code
   - `src/index.ts` — Entry point, server lifecycle (startup, shutdown, transport)
-  - `src/tool_registrations.ts` — MCP tool registrations (Zod schemas, descriptions, `TOOL_NAMES` constant)
+  - `src/tool_definitions.ts` — Centralized tool metadata (names, descriptions, Zod input schemas, `TOOL_NAMES` constant)
+  - `src/tool_registrations.ts` — Loops over `TOOL_DEFINITIONS` to register all tools on the MCP server
   - `src/tools.ts` — Tool handler implementations (the `handlers` object)
   - `src/tool_handler.ts` — Factory that wires handlers to the MCP server
   - `src/diagram_model.ts` — Core diagram model (cells, layers, pages, XML generation)
@@ -34,8 +35,8 @@ This is a **TypeScript MCP (Model Context Protocol) server** for programmatic Dr
 
 - **Error handling**: Return `Error | T` union types instead of throwing exceptions. See `parseConfig()`, `parseHttpPortValue()`, and `parseLoggerType()` in `config.ts` for examples. In tool handlers, return `errorResult()` with a `StructuredError` containing `code`, `message`, and `suggestion` fields.
 - **Pure functions**: Prefer pure functions with no side effects for logic (config parsing, validation). Side effects are isolated to `index.ts`.
-- **Tool naming**: Tool name constants are centralized in the `TOOL_NAMES` object in `tool_registrations.ts` using `UPPER_SNAKE_CASE` keys (e.g., `TOOL_NAMES.ADD_RECTANGLE`). Tool names exposed to MCP clients use `kebab-case` (e.g., `add-rectangle`).
-- **Input validation**: All tool inputs are validated with Zod schemas at registration time in `tool_registrations.ts`.
+- **Tool naming**: Tool name constants are centralized in the `TOOL_NAMES` object in `tool_definitions.ts` using `UPPER_SNAKE_CASE` keys (e.g., `TOOL_NAMES.ADD_CELLS`). Tool names exposed to MCP clients use `kebab-case` (e.g., `add-cells`).
+- **Input validation**: All tool inputs are validated with Zod schemas defined in `tool_definitions.ts` and applied at registration time in `tool_registrations.ts`.
 - **Shape resolution order**: When resolving shape names, the code checks in order: basic shapes (exact, case-insensitive) → Azure exact match (by title/ID) → Azure fuzzy search (top result). This priority prevents fuzzy search from hijacking basic shape names like "start" or "end".
 - **ESM path helpers**: Use `esmDirname(import.meta.url)` (from `src/utils.ts`) instead of the raw `dirname(fileURLToPath(import.meta.url))` boilerplate for `__dirname`. Use `readRelativeFile(import.meta.url, ...segments)` to read a text file relative to the calling module.
 
@@ -43,9 +44,11 @@ This is a **TypeScript MCP (Model Context Protocol) server** for programmatic Dr
 
 Follow this 3-step pattern:
 
-1. **Add the handler** in `src/tools.ts` — add a new entry to the `handlers` object with the tool's `kebab-case` name as the key.
-2. **Register the tool** in `src/tool_registrations.ts` — add a `TOOL_NAMES` entry and call `server.registerTool()` with a description and Zod `inputSchema`, wired via `createToolHandler()`.
+1. **Define the tool** in `src/tool_definitions.ts` — add a `TOOL_DEFINITIONS` entry with key, name, description, `hasArgs`, and (if applicable) `inputSchema`.
+2. **Add the handler** in `src/tools.ts` — add a new entry to the `handlers` object with the tool's `kebab-case` name as the key.
 3. **Add tests** in `tests/` — create or extend a `*.test.ts` file covering the new handler logic.
+
+`tool_registrations.ts` loops over `TOOL_DEFINITIONS` automatically — no manual registration step needed.
 
 ## Testing
 
