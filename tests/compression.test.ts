@@ -276,6 +276,11 @@ describe("DiagramModel compression", () => {
       expect(parsed.data.xml).not.toContain("<mxGraphModel");
       expect(parsed.data.xml).not.toContain("Test");
       expect(parsed.data.stats.total_cells).toBe(1);
+      expect(parsed.data.compression).toEqual({
+        enabled: true,
+        algorithm: "deflate-raw",
+        encoding: "base64",
+      });
     });
 
     it("should return plain XML when compress is false", async () => {
@@ -284,6 +289,7 @@ describe("DiagramModel compression", () => {
       const parsed = parseResult(result);
       expect(parsed.data.xml).toContain("<mxGraphModel");
       expect(parsed.data.xml).toContain("Test");
+      expect(parsed.data.compression).toEqual({ enabled: false });
     });
 
     it("should return plain XML when compress is not provided", async () => {
@@ -292,6 +298,7 @@ describe("DiagramModel compression", () => {
       const parsed = parseResult(result);
       expect(parsed.data.xml).toContain("<mxGraphModel");
       expect(parsed.data.xml).toContain("Test");
+      expect(parsed.data.compression).toEqual({ enabled: false });
     });
 
     it("should produce importable compressed output via handler", async () => {
@@ -304,6 +311,11 @@ describe("DiagramModel compression", () => {
       });
       const exportResult = await handlers["export-diagram"]({ compress: true });
       const exported = parseResult(exportResult);
+      expect(exported.data.compression).toEqual({
+        enabled: true,
+        algorithm: "deflate-raw",
+        encoding: "base64",
+      });
 
       // Import compressed output
       const importResult = await handlers["import-diagram"]({ xml: exported.data.xml });

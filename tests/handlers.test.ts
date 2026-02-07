@@ -249,6 +249,7 @@ describe("tool handlers", () => {
       const parsed = parseResult(result);
       expect(parsed.data.xml).toContain("<mxfile");
       expect(parsed.data.xml).toContain("Test");
+      expect(parsed.data.compression).toEqual({ enabled: false });
     });
   });
 
