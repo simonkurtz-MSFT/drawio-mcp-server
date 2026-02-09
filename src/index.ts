@@ -235,6 +235,7 @@ async function start_streamable_http_transport(http_port: number) {
       return c.json({ error: "Request body too large" }, 413);
     }
     await next();
+    return;
   });
 
   // ─── Request timeout (30 seconds) ──────────────────────────
