@@ -4,6 +4,8 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for pro
 
 <!--[![Build project](https://github.com/simonkurtz-MSFT/drawio-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/simonkurtz-MSFT/drawio-mcp-server/actions/workflows/ci.yml)-->
 
+[![Docker Hub](https://img.shields.io/docker/v/simonkurtzmsft/drawio-mcp-server?label=Docker%20Hub&logo=docker&sort=semver)](https://hub.docker.com/r/simonkurtzmsft/drawio-mcp-server)
+
 ## Features
 
 - **700+ Azure Architecture Icons** — Official Microsoft icons with embedded SVG data, organized into ~20 categories (Compute, Networking, Storage, Databases, AI + ML, Security, and more)
@@ -159,6 +161,67 @@ Health check: `curl http://localhost:8080/health`
 ### Docker
 
 The Docker image uses `deno compile` to produce a self-contained native binary, then runs it on a minimal [distroless](https://github.com/GoogleContainerTools/distroless) base image (~20MB) with no shell, no package manager, and a non-root user.
+
+#### Pulling from Docker Hub
+
+A pre-built image is available on [Docker Hub](https://hub.docker.com/r/simonkurtzmsft/drawio-mcp-server). This is the fastest way to get started — no cloning or building required.
+
+**1. Pull the latest image:**
+
+```sh
+docker pull simonkurtzmsft/drawio-mcp-server:latest
+```
+
+**2. Start the container:**
+
+```sh
+docker run -d --name drawio-mcp-server -p 8080:8080 simonkurtzmsft/drawio-mcp-server:latest
+```
+
+This starts the server in the background, exposing the HTTP transport on port 8080.
+
+**3. Verify the server is running:**
+
+```sh
+curl http://localhost:8080/health
+```
+
+You should receive an `OK` response, confirming the server is healthy and ready to accept connections.
+
+**4. Point your MCP client to the running container.** For example, in VS Code (`.vscode/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+Or in Claude Desktop (`claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "url": "http://localhost:8080/mcp"
+    }
+  }
+}
+```
+
+**5. To stop and remove the container:**
+
+```sh
+docker stop drawio-mcp-server
+docker rm drawio-mcp-server
+```
+
+#### Building Locally
+
+To build the image from source instead of pulling from Docker Hub:
 
 ```sh
 # Build
