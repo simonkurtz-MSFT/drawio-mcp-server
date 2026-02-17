@@ -152,7 +152,7 @@ function withDiagramState<T extends StatefulArgs>(
   args: T | undefined,
   operation: (diagram: DiagramModel) => CallToolResult,
 ): CallToolResult {
-  const normalizedArgs = args ?? {};
+  const normalizedArgs: StatefulArgs = args ?? {};
   const diagram = new DiagramModel();
 
   if (normalizedArgs.diagram_xml) {
