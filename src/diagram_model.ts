@@ -246,7 +246,8 @@ export class DiagramModel {
     };
 
     const onSegment = (a: Point, b: Point, c: Point): boolean => {
-      return b.x <= Math.max(a.x, c.x) && b.x >= Math.min(a.x, c.x) && b.y <= Math.max(a.y, c.y) && b.y >= Math.min(a.y, c.y);
+      return b.x <= Math.max(a.x, c.x) && b.x >= Math.min(a.x, c.x) && b.y <= Math.max(a.y, c.y) &&
+        b.y >= Math.min(a.y, c.y);
     };
 
     const o1 = orientation(p1, p2, q1);

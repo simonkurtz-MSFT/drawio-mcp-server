@@ -267,7 +267,9 @@ describe("DiagramModel groups", () => {
       assertEquals("error" in edge, false);
       if (!("error" in edge)) {
         const xml = model.toXml();
-        const edgeRegex = new RegExp(`id=\\"${edge.id}\\"[^>]*><mxGeometry relative=\\"1\\" as=\\"geometry\\"><Array as=\\"points\\">`);
+        const edgeRegex = new RegExp(
+          `id=\\"${edge.id}\\"[^>]*><mxGeometry relative=\\"1\\" as=\\"geometry\\"><Array as=\\"points\\">`,
+        );
         assert(edgeRegex.test(xml));
         // Sanity check that the group exists in the test shape
         assert(xml.includes(`id="${group.id}"`));
@@ -284,7 +286,9 @@ describe("DiagramModel groups", () => {
       assertEquals("error" in edge, false);
       if (!("error" in edge)) {
         const xml = model.toXml();
-        const edgeRegex = new RegExp(`id=\\"${edge.id}\\"[^>]*><mxGeometry relative=\\"1\\" as=\\"geometry\\"><Array as=\\"points\\">`);
+        const edgeRegex = new RegExp(
+          `id=\\"${edge.id}\\"[^>]*><mxGeometry relative=\\"1\\" as=\\"geometry\\"><Array as=\\"points\\">`,
+        );
         assertEquals(edgeRegex.test(xml), false);
       }
     });
