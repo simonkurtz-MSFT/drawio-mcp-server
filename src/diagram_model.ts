@@ -8,12 +8,9 @@
  * `TextDecoder` — no Node.js `Buffer` dependency.
  *
  * Known optimization opportunities (deferred):
- * - INCREMENTAL STATS: `getStats()` rebuilds cell counts on every call. An
- *   incremental approach (maintaining counters on add/delete/move) would give
- *   O(1) stats but touches many methods and risks subtle bugs.
- * - EDGE REVERSE-INDEX: `deleteCell` linearly scans all cells for edge cascade.
- *   A `Map<string, Set<string>>` mapping vertex→edges would enable O(1) lookups
- *   but requires per-page storage and updates across add/delete/edit/import.
+ * - INCREMENTAL BOUNDS/LAYER STATS: Full bounds and layer distribution are
+ *   still derived from current cells. A fully incremental approach would need
+ *   additional bookkeeping, especially for deletes and moves.
  * - ASYNC COMPRESSION: `deflateRawSync` blocks the event loop. Using the async
  *   `deflateRaw` would require making `toXml` async, rippling through handlers.
  */
@@ -61,6 +58,18 @@ export interface Layer {
   name: string;
 }
 
+interface Point {
+  x: number;
+  y: number;
+}
+
+interface Rect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 /** Normalised attributes extracted from an mxCell or UserObject XML element */
 interface ParsedCellAttrs {
   id: string;
@@ -74,8 +83,22 @@ interface ParsedCellAttrs {
   geometry?: Record<string, unknown>;
 }
 
+interface DiagramStats {
+  total_cells: number;
+  vertices: number;
+  edges: number;
+  groups: number;
+  layers: number;
+  bounds: { minX: number; minY: number; maxX: number; maxY: number } | null;
+  cells_with_text: number;
+  cells_without_text: number;
+  cells_by_layer: Record<string, number>;
+}
+
 export class DiagramModel {
   private cells: Map<string, Cell> = new Map();
+  private vertexEdgeIndex: Map<string, Set<string>> = new Map();
+  private cachedStats: DiagramStats | null = null;
   private layers: Layer[] = [{ id: "1", name: "Default Layer" }];
   private activeLayerId: string = "1";
   private nextId: number = 2;
@@ -84,6 +107,266 @@ export class DiagramModel {
 
   private generateId(): string {
     return `cell-${this.nextId++}`;
+  }
+
+  private invalidateStatsCache(): void {
+    this.cachedStats = null;
+  }
+
+  private cloneStats(stats: DiagramStats): DiagramStats {
+    return {
+      ...stats,
+      bounds: stats.bounds ? { ...stats.bounds } : null,
+      cells_by_layer: { ...stats.cells_by_layer },
+    };
+  }
+
+  private addEdgeReference(vertexId: string | undefined, edgeId: string): void {
+    if (!vertexId) return;
+    const edgeIds = this.vertexEdgeIndex.get(vertexId) ?? new Set<string>();
+    edgeIds.add(edgeId);
+    this.vertexEdgeIndex.set(vertexId, edgeIds);
+  }
+
+  private removeEdgeReference(vertexId: string | undefined, edgeId: string): void {
+    if (!vertexId) return;
+    const edgeIds = this.vertexEdgeIndex.get(vertexId);
+    if (!edgeIds) return;
+    edgeIds.delete(edgeId);
+    if (edgeIds.size === 0) {
+      this.vertexEdgeIndex.delete(vertexId);
+    }
+  }
+
+  private addEdgeToIndex(edge: Cell): void {
+    if (edge.type !== "edge") return;
+    this.addEdgeReference(edge.sourceId, edge.id);
+    this.addEdgeReference(edge.targetId, edge.id);
+  }
+
+  private removeEdgeFromIndex(edge: Cell): void {
+    if (edge.type !== "edge") return;
+    this.removeEdgeReference(edge.sourceId, edge.id);
+    this.removeEdgeReference(edge.targetId, edge.id);
+  }
+
+  private normalizeEdgeLabel(text: string): string {
+    return text.trim().replace(/\s+/g, " ").toLowerCase();
+  }
+
+  /**
+   * Build a dedupe key for edge labels based on flattened geometry.
+   *
+   * For orthogonal edges with no explicit route points, Draw.io visually flattens
+   * identical endpoint pairs to the same line. To avoid overlapping duplicate
+   * transport labels (e.g. "https" twice on the same visual line), we treat
+   * source/target as an unordered pair and include a normalized label.
+   */
+  private getFlattenedEdgeLabelKey(edge: Cell): string | null {
+    if (edge.type !== "edge" || !edge.sourceId || !edge.targetId) {
+      return null;
+    }
+
+    const normalizedLabel = this.normalizeEdgeLabel(edge.value);
+    if (!normalizedLabel) {
+      return null;
+    }
+
+    const [first, second] = edge.sourceId < edge.targetId
+      ? [edge.sourceId, edge.targetId]
+      : [edge.targetId, edge.sourceId];
+    const parent = edge.parent ?? "";
+
+    return `${parent}|${first}|${second}|${normalizedLabel}`;
+  }
+
+  private getAbsoluteBounds(cellId: string): Rect | null {
+    const cell = this.cells.get(cellId);
+    if (!cell || cell.type !== "vertex") {
+      return null;
+    }
+
+    let x = cell.x ?? 0;
+    let y = cell.y ?? 0;
+    const width = cell.width ?? 0;
+    const height = cell.height ?? 0;
+
+    let parentId = cell.parent;
+    while (parentId) {
+      const parentCell = this.cells.get(parentId);
+      if (!parentCell || parentCell.type !== "vertex" || !parentCell.isGroup) {
+        break;
+      }
+      x += parentCell.x ?? 0;
+      y += parentCell.y ?? 0;
+      parentId = parentCell.parent;
+    }
+
+    return { x, y, width, height };
+  }
+
+  private getCellCenter(cellId: string): Point | null {
+    const bounds = this.getAbsoluteBounds(cellId);
+    if (!bounds) {
+      return null;
+    }
+
+    return {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2,
+    };
+  }
+
+  private isCellInsideGroup(cellId: string, groupId: string): boolean {
+    if (cellId === groupId) {
+      return true;
+    }
+
+    let current = this.cells.get(cellId);
+    while (current?.parent) {
+      if (current.parent === groupId) {
+        return true;
+      }
+      current = this.cells.get(current.parent);
+      if (!current || !current.isGroup) {
+        break;
+      }
+    }
+
+    return false;
+  }
+
+  private pointInsideRect(point: Point, rect: Rect): boolean {
+    return point.x >= rect.x && point.x <= rect.x + rect.width && point.y >= rect.y && point.y <= rect.y + rect.height;
+  }
+
+  private lineSegmentsIntersect(p1: Point, p2: Point, q1: Point, q2: Point): boolean {
+    const orientation = (a: Point, b: Point, c: Point): number => {
+      return (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
+    };
+
+    const onSegment = (a: Point, b: Point, c: Point): boolean => {
+      return b.x <= Math.max(a.x, c.x) && b.x >= Math.min(a.x, c.x) && b.y <= Math.max(a.y, c.y) && b.y >= Math.min(a.y, c.y);
+    };
+
+    const o1 = orientation(p1, p2, q1);
+    const o2 = orientation(p1, p2, q2);
+    const o3 = orientation(q1, q2, p1);
+    const o4 = orientation(q1, q2, p2);
+
+    if ((o1 > 0 && o2 < 0 || o1 < 0 && o2 > 0) && (o3 > 0 && o4 < 0 || o3 < 0 && o4 > 0)) {
+      return true;
+    }
+
+    if (o1 === 0 && onSegment(p1, q1, p2)) return true;
+    if (o2 === 0 && onSegment(p1, q2, p2)) return true;
+    if (o3 === 0 && onSegment(q1, p1, q2)) return true;
+    if (o4 === 0 && onSegment(q1, p2, q2)) return true;
+
+    return false;
+  }
+
+  private segmentIntersectsRect(start: Point, end: Point, rect: Rect): boolean {
+    if (this.pointInsideRect(start, rect) || this.pointInsideRect(end, rect)) {
+      return true;
+    }
+
+    const topLeft = { x: rect.x, y: rect.y };
+    const topRight = { x: rect.x + rect.width, y: rect.y };
+    const bottomLeft = { x: rect.x, y: rect.y + rect.height };
+    const bottomRight = { x: rect.x + rect.width, y: rect.y + rect.height };
+
+    return this.lineSegmentsIntersect(start, end, topLeft, topRight) ||
+      this.lineSegmentsIntersect(start, end, topRight, bottomRight) ||
+      this.lineSegmentsIntersect(start, end, bottomRight, bottomLeft) ||
+      this.lineSegmentsIntersect(start, end, bottomLeft, topLeft);
+  }
+
+  private getGroupAvoidanceWaypoints(edge: Cell): Point[] {
+    if (edge.type !== "edge" || !edge.sourceId || !edge.targetId) {
+      return [];
+    }
+
+    const sourceCenter = this.getCellCenter(edge.sourceId);
+    const targetCenter = this.getCellCenter(edge.targetId);
+    if (!sourceCenter || !targetCenter) {
+      return [];
+    }
+
+    const groups = Array.from(this.cells.values())
+      .filter((cell) => cell.type === "vertex" && cell.isGroup)
+      .map((group) => ({
+        id: group.id,
+        bounds: this.getAbsoluteBounds(group.id),
+      }))
+      .filter((entry): entry is { id: string; bounds: Rect } => entry.bounds !== null);
+
+    const intersectingGroup = groups.find((group) => {
+      if (this.isCellInsideGroup(edge.sourceId!, group.id) || this.isCellInsideGroup(edge.targetId!, group.id)) {
+        return false;
+      }
+
+      return this.segmentIntersectsRect(sourceCenter, targetCenter, group.bounds);
+    });
+
+    if (!intersectingGroup) {
+      return [];
+    }
+
+    const margin = 30;
+    const { bounds } = intersectingGroup;
+
+    const routeAboveY = bounds.y - margin;
+    const routeBelowY = bounds.y + bounds.height + margin;
+    const aboveCost = Math.abs(sourceCenter.y - routeAboveY) + Math.abs(targetCenter.y - routeAboveY);
+    const belowCost = Math.abs(sourceCenter.y - routeBelowY) + Math.abs(targetCenter.y - routeBelowY);
+    const routeY = aboveCost <= belowCost ? routeAboveY : routeBelowY;
+
+    return [
+      { x: sourceCenter.x, y: routeY },
+      { x: targetCenter.x, y: routeY },
+    ];
+  }
+
+  private hasStyleKey(style: string, key: string): boolean {
+    return new RegExp(`(?:^|;)${key}=`).test(style);
+  }
+
+  private withSymmetricEdgeAnchors(edge: Cell): string {
+    const baseStyle = edge.style ?? "";
+    const hasExplicitAnchors = this.hasStyleKey(baseStyle, "exitX") || this.hasStyleKey(baseStyle, "exitY") ||
+      this.hasStyleKey(baseStyle, "entryX") || this.hasStyleKey(baseStyle, "entryY");
+    if (hasExplicitAnchors || !edge.sourceId || !edge.targetId) {
+      return baseStyle;
+    }
+
+    const sourceCenter = this.getCellCenter(edge.sourceId);
+    const targetCenter = this.getCellCenter(edge.targetId);
+    if (!sourceCenter || !targetCenter) {
+      return baseStyle;
+    }
+
+    const dx = targetCenter.x - sourceCenter.x;
+    const dy = targetCenter.y - sourceCenter.y;
+
+    const styleWithTerminator = baseStyle.endsWith(";") || baseStyle.length === 0 ? baseStyle : `${baseStyle};`;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      return dx >= 0
+        ? `${styleWithTerminator}exitX=1;exitY=0.5;entryX=0;entryY=0.5;`
+        : `${styleWithTerminator}exitX=0;exitY=0.5;entryX=1;entryY=0.5;`;
+    }
+
+    return dy >= 0
+      ? `${styleWithTerminator}exitX=0.5;exitY=1;entryX=0.5;entryY=0;`
+      : `${styleWithTerminator}exitX=0.5;exitY=0;entryX=0.5;entryY=1;`;
+  }
+
+  private rebuildEdgeIndex(): void {
+    this.vertexEdgeIndex = new Map();
+    for (const cell of this.cells.values()) {
+      this.addEdgeToIndex(cell);
+    }
   }
 
   addRectangle(params: {
@@ -107,6 +390,7 @@ export class DiagramModel {
       parent: this.activeLayerId,
     };
     this.cells.set(id, cell);
+    this.invalidateStatsCache();
     return cell;
   }
 
@@ -149,6 +433,8 @@ export class DiagramModel {
       parent: this.activeLayerId,
     };
     this.cells.set(id, cell);
+    this.addEdgeToIndex(cell);
+    this.invalidateStatsCache();
     return cell;
   }
 
@@ -156,20 +442,26 @@ export class DiagramModel {
     const cell = this.cells.get(cellId);
     if (!cell) return { deleted: false, cascadedEdgeIds: [] };
 
-    // If deleting a vertex, also remove any edges that reference it
     const cascadedEdgeIds: string[] = [];
     if (cell.type === "vertex") {
-      for (const [id, c] of this.cells) {
-        if (c.type === "edge" && (c.sourceId === cellId || c.targetId === cellId)) {
-          cascadedEdgeIds.push(id);
-        }
+      const relatedEdgeIds = this.vertexEdgeIndex.get(cellId);
+      if (relatedEdgeIds) {
+        cascadedEdgeIds.push(...relatedEdgeIds);
       }
       for (const id of cascadedEdgeIds) {
-        this.cells.delete(id);
+        const edge = this.cells.get(id);
+        if (edge?.type === "edge") {
+          this.removeEdgeFromIndex(edge);
+          this.cells.delete(id);
+        }
       }
+      this.vertexEdgeIndex.delete(cellId);
+    } else {
+      this.removeEdgeFromIndex(cell);
     }
 
     this.cells.delete(cellId);
+    this.invalidateStatsCache();
     return { deleted: true, cascadedEdgeIds };
   }
 
@@ -210,6 +502,7 @@ export class DiagramModel {
     if (params.height !== undefined) cell.height = params.height;
     if (params.style !== undefined) cell.style = params.style;
 
+    this.invalidateStatsCache();
     return cell;
   }
 
@@ -253,7 +546,10 @@ export class DiagramModel {
           },
         };
       }
+      this.removeEdgeReference(cell.sourceId, cell.id);
       cell.sourceId = params.sourceId;
+      this.addEdgeReference(cell.sourceId, cell.id);
+      this.invalidateStatsCache();
     }
     if (params.targetId !== undefined) {
       if (!this.cells.has(params.targetId)) {
@@ -266,9 +562,15 @@ export class DiagramModel {
           },
         };
       }
+      this.removeEdgeReference(cell.targetId, cell.id);
       cell.targetId = params.targetId;
+      this.addEdgeReference(cell.targetId, cell.id);
+      this.invalidateStatsCache();
     }
     if (params.style !== undefined) cell.style = params.style;
+    if (params.text !== undefined || params.style !== undefined) {
+      this.invalidateStatsCache();
+    }
 
     return cell;
   }
@@ -289,6 +591,7 @@ export class DiagramModel {
     const id = `layer-${this.nextLayerId++}`;
     const layer: Layer = { id, name };
     this.layers.push(layer);
+    this.invalidateStatsCache();
     return layer;
   }
 
@@ -338,6 +641,7 @@ export class DiagramModel {
       };
     }
     cell.parent = targetLayerId;
+    this.invalidateStatsCache();
     return cell;
   }
 
@@ -370,6 +674,7 @@ export class DiagramModel {
       children: [],
     };
     this.cells.set(id, cell);
+    this.invalidateStatsCache();
     return cell;
   }
 
@@ -446,6 +751,7 @@ export class DiagramModel {
     if (!group.children.includes(cellId)) {
       group.children.push(cellId);
     }
+    this.invalidateStatsCache();
     return cell;
   }
 
@@ -497,6 +803,7 @@ export class DiagramModel {
     }
     // Return to the active layer
     cell.parent = this.activeLayerId;
+    this.invalidateStatsCache();
     return cell;
   }
 
@@ -579,6 +886,8 @@ export class DiagramModel {
 
     // Reset state entirely
     this.cells = new Map();
+    this.vertexEdgeIndex = new Map();
+    this.cachedStats = null;
     this.layers = [{ id: "1", name: "Default Layer" }];
     this.activeLayerId = "1";
     this.nextId = 2;
@@ -618,6 +927,9 @@ export class DiagramModel {
     if (requestedActiveLayerId && this.layers.some((l) => l.id === requestedActiveLayerId)) {
       this.activeLayerId = requestedActiveLayerId;
     }
+
+    this.rebuildEdgeIndex();
+    this.invalidateStatsCache();
 
     return {
       pages: diagramElements.length,
@@ -831,6 +1143,8 @@ export class DiagramModel {
       .map((l) => `<mxCell id="${this.escapeXml(l.id)}" value="${this.escapeXml(l.name)}" style="" parent="0"/>`)
       .join("");
 
+    const emittedFlattenedEdgeLabelKeys = new Set<string>();
+
     const cellsXml = Array.from(cells.values())
       .map((cell) => {
         if (cell.type === "vertex") {
@@ -843,12 +1157,26 @@ export class DiagramModel {
           }" vertex="1"${groupAttrs} parent="${cell.parent!}"><mxGeometry x="${cell.x!}" y="${cell.y!}" width="${cell
             .width!}" height="${cell.height!}" as="geometry"/></mxCell>`;
         } else {
+          const flattenedLabelKey = this.getFlattenedEdgeLabelKey(cell);
+          const shouldHideDuplicateLabel = !!flattenedLabelKey && emittedFlattenedEdgeLabelKeys.has(flattenedLabelKey);
+          if (flattenedLabelKey && !shouldHideDuplicateLabel) {
+            emittedFlattenedEdgeLabelKeys.add(flattenedLabelKey);
+          }
+
+          const edgeValue = shouldHideDuplicateLabel ? "" : cell.value;
+          const edgeStyle = this.withSymmetricEdgeAnchors(cell);
+          const waypoints = this.getGroupAvoidanceWaypoints(cell);
+          const geometryXml = waypoints.length > 0
+            ? `<mxGeometry relative="1" as="geometry"><Array as="points">${
+              waypoints.map((point) => `<mxPoint x="${point.x}" y="${point.y}"/>`).join("")
+            }</Array></mxGeometry>`
+            : `<mxGeometry relative="1" as="geometry"/>`;
           const sourceAttr = cell.sourceId ? ` source="${cell.sourceId}"` : "";
           const targetAttr = cell.targetId ? ` target="${cell.targetId}"` : "";
-          return `<mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${
-            this.escapeXml(cell.style!)
+          return `<mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(edgeValue)}" style="${
+            this.escapeXml(edgeStyle)
           }" edge="1" parent="${cell
-            .parent!}"${sourceAttr}${targetAttr}><mxGeometry relative="1" as="geometry"/></mxCell>`;
+            .parent!}"${sourceAttr}${targetAttr}>${geometryXml}</mxCell>`;
         }
       })
       .join("");
@@ -881,6 +1209,8 @@ export class DiagramModel {
     }
 
     this.cells = new Map();
+    this.vertexEdgeIndex = new Map();
+    this.cachedStats = null;
     this.layers = [{ id: "1", name: "Default Layer" }];
     this.activeLayerId = "1";
     this.nextId = 2;
@@ -902,6 +1232,10 @@ export class DiagramModel {
     cells_without_text: number;
     cells_by_layer: Record<string, number>;
   } {
+    if (this.cachedStats) {
+      return this.cloneStats(this.cachedStats);
+    }
+
     // Single-pass collection of all statistics
     let vertexCount = 0;
     let edgeCount = 0;
@@ -943,7 +1277,7 @@ export class DiagramModel {
 
     const totalCells = vertexCount + edgeCount;
 
-    return {
+    const stats: DiagramStats = {
       total_cells: totalCells,
       vertices: vertexCount,
       edges: edgeCount,
@@ -954,6 +1288,9 @@ export class DiagramModel {
       cells_without_text: totalCells - cellsWithText,
       cells_by_layer: cellsByLayer,
     };
+
+    this.cachedStats = stats;
+    return this.cloneStats(stats);
   }
 
   /**

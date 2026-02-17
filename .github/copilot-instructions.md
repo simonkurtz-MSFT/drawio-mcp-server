@@ -13,6 +13,14 @@ This is a **TypeScript MCP (Model Context Protocol) server** for programmatic Dr
 - **Key dependencies**: `@modelcontextprotocol/sdk`, `hono` (HTTP transport), `zod` (input validation), `fuzzy-search`
 - **Test framework**: Vitest with V8 coverage
 
+### General
+
+- Use the Draw.io MCP server for all diagram generation tasks.
+- When asked to create diagrams such as flowcharts, decision trees, technical architecture diagrams, etc., always use the Draw.io MCP server and XML format.
+- Content returned from the Draw.io MCP server will be in XML format. Take this content and create or update a `.drawio` file in the repository with that content.
+- Prioritize speed, memory footprint, and maintainability in all implementations. The server should be efficient and responsive, even with large diagrams.
+- Follow the coding conventions and project structure outlined below to ensure consistency and readability across the codebase.
+
 ### Repository Structure
 
 - `src/` — Source code
@@ -84,12 +92,6 @@ Follow this 3-step pattern:
 ## Diagrams
 
 > **Runtime conventions**: The diagram generation conventions below are also embedded in the MCP server's `instructions` field, loaded from `src/instructions.md` at startup. Any MCP client automatically receives these guidelines during initialization — no extra round trips. When updating conventions here, keep `src/instructions.md` in sync.
-
-### General
-
-- Use the Draw.io MCP server for all diagram generation tasks.
-- When asked to create diagrams such as flowcharts, decision trees, technical architecture diagrams, etc., always use the Draw.io MCP server and XML format.
-- Content returned from the Draw.io MCP server will be in XML format. Take this content and create or update a `.drawio` file in the repository with that content.
 
 ### Layout
 

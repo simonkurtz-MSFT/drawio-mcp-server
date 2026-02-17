@@ -10,6 +10,7 @@
     "test": "deno test --allow-read --allow-write --allow-env",
     "test:watch": "deno test --allow-read --allow-write --allow-env --watch",
     "test:coverage": "deno test --allow-read --allow-write --allow-env --coverage=coverage/ && deno coverage coverage/ --exclude='index\\.ts' --html",
+    "bench": "deno bench --allow-read --allow-env tests/performance.bench.ts",
     "lint": "deno lint && deno check src/ tests/",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",

@@ -417,6 +417,7 @@ No install step needed — Deno resolves dependencies on first run.
 | `deno task test`          | Run tests                            |
 | `deno task test:watch`    | Run tests in watch mode              |
 | `deno task test:coverage` | Run tests with coverage              |
+| `deno task bench`         | Run focused performance benchmarks   |
 | `deno task lint`          | Lint and type-check                  |
 | `deno task fmt`           | Format code                          |
 | `deno task fmt:check`     | Check formatting without writing     |
