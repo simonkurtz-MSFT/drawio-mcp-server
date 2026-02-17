@@ -9,4 +9,8 @@ updates:
     directory: "/" # Location of package manifests
     schedule:
       interval: "weekly"
+  - package-ecosystem: "docker-compose"
+    directory: "/" # Location of compose manifests
+    schedule:
+      interval: "weekly"
 
