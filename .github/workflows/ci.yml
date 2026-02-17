@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Run test suite
+        run: |
+          mkdir -p test-results
+          deno task test --junit-path=./test-results/junit.xml
+
+      - name: Publish test report
+        if: always()
+        uses: mikepenz/action-junit-report@v6
+        with:
+          report_paths: test-results/junit.xml
+          check_name: Test Results
+          detailed_summary: true
+          include_passed: true
+
+      - name: Upload test results artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-results
+          path: test-results/junit.xml
+          if-no-files-found: warn
