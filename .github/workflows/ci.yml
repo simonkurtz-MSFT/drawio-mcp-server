@@ -14,8 +14,8 @@ permissions:
   checks: write
 
 jobs:
-  test:
-    name: Run tests
+  ci:
+    name: Run Deno CI tasks
     runs-on: ubuntu-latest
 
     steps:
@@ -27,10 +27,22 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Check formatting
+        run: deno task fmt:check
+
+      - name: Run lint and TypeScript checks
+        run: deno task lint
+
       - name: Run test suite
         run: |
           mkdir -p test-results
           deno task test --junit-path=./test-results/junit.xml
+
+      - name: Run coverage suite
+        run: deno task test:coverage
+
+      - name: Validate compile step
+        run: deno task compile
 
       - name: Publish test report
         if: always()
@@ -47,4 +59,12 @@ jobs:
         with:
           name: test-results
           path: test-results/junit.xml
+          if-no-files-found: warn
+
+      - name: Upload coverage report artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-report
+          path: coverage/
           if-no-files-found: warn
