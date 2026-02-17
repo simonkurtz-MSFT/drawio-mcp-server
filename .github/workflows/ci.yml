@@ -45,7 +45,6 @@ jobs:
         run: deno task compile
 
       - name: Publish test report
-        if: always()
         uses: mikepenz/action-junit-report@v6
         with:
           report_paths: test-results/junit.xml
@@ -54,7 +53,6 @@ jobs:
           include_passed: true
 
       - name: Upload test results artifact
-        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: test-results
@@ -62,7 +60,6 @@ jobs:
           if-no-files-found: warn
 
       - name: Upload coverage report artifact
-        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: coverage-report
