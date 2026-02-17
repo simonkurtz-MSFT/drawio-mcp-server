@@ -63,7 +63,9 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
         const textContent = result.content?.[0];
         const payloadLength = textContent && "text" in textContent ? textContent.text.length : 0;
         const payloadSize = formatBytes(payloadLength);
-        log.debug(`${timestamp()} ${prefix} ${isError ? "error" : "ok"} in ${duration}ms, ${payloadSize} (req=${requestId})`);
+        log.debug(
+          `${timestamp()} ${prefix} ${isError ? "error" : "ok"} in ${duration}ms, ${payloadSize} (req=${requestId})`,
+        );
         return result;
       }
       log.debug(`${timestamp()} ${prefix} not found (req=${requestId})`);

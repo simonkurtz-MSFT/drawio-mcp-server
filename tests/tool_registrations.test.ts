@@ -4,10 +4,10 @@
  * and that registerTools wires all 32 tools to the MCP server.
  */
 import { describe, it } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists } from "@std/assert";
+import { assert, assertEquals, assertExists } from "@std/assert";
 import { spy } from "@std/testing/mock";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { registerTools, TOOL_NAMES, TOOL_DEFINITIONS } from "../src/tool_registrations.ts";
+import { registerTools, TOOL_DEFINITIONS, TOOL_NAMES } from "../src/tool_registrations.ts";
 import { createToolHandlerFactory, type ToolHandlerMap, type ToolLogger } from "../src/tool_handler.ts";
 
 describe("TOOL_NAMES", () => {
@@ -81,7 +81,7 @@ describe("registerTools", () => {
       handlerMap[name] = spy((_args: any) =>
         Promise.resolve({
           content: [{ type: "text" as const, text: "{}" }],
-        }),
+        })
       );
     }
 

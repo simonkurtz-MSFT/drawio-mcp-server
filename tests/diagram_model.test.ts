@@ -1,5 +1,5 @@
-import { describe, it, beforeEach } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists, assertGreater, assertNotEquals } from "@std/assert";
+import { beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals, assertExists, assertGreater, assertNotEquals } from "@std/assert";
 import { DiagramModel } from "../src/diagram_model.ts";
 
 describe("DiagramModel", () => {
@@ -40,13 +40,13 @@ describe("DiagramModel", () => {
     });
 
     it("should escape special characters in layer names", () => {
-      model.createLayer("Layer <1> & \"test\"");
+      model.createLayer('Layer <1> & "test"');
       const xml = model.toXml();
       assert(xml.includes("Layer &lt;1&gt; &amp; &quot;test&quot;"));
     });
 
     it("should escape special XML characters in cell text values", () => {
-      model.addRectangle({ text: '<strong>"Hello" & \'World\'</strong>' });
+      model.addRectangle({ text: "<strong>\"Hello\" & 'World'</strong>" });
       const xml = model.toXml();
       assert(xml.includes("&lt;strong&gt;&quot;Hello&quot; &amp; &apos;World&apos;&lt;/strong&gt;"));
     });
@@ -54,7 +54,7 @@ describe("DiagramModel", () => {
     it("should escape special XML characters in cell styles", () => {
       model.addRectangle({ text: "Test", style: 'fillColor=#ff0000;label="<b>bold</b>";' });
       const xml = model.toXml();
-      assert(xml.includes('fillColor=#ff0000;label=&quot;&lt;b&gt;bold&lt;/b&gt;&quot;;'));
+      assert(xml.includes("fillColor=#ff0000;label=&quot;&lt;b&gt;bold&lt;/b&gt;&quot;;"));
     });
 
     it("should produce valid XML with no custom layers", () => {
@@ -386,7 +386,7 @@ describe("DiagramModel", () => {
         { type: "edge", sourceId: "tmp-a", targetId: "nonexistent" },
       ]);
       assertGreater(results.length, 0);
-      assert(results.some(r => !r.success));
+      assert(results.some((r) => !r.success));
     });
 
     it("should support dry run mode", () => {
@@ -415,7 +415,7 @@ describe("DiagramModel", () => {
         { type: "edge", sourceId: "bad-src", targetId: "bad-tgt", tempId: "edge-1" },
       ]);
       assert(results.length >= 1);
-      const sourceErr = results.find(r => !r.success && r.error?.code === "INVALID_SOURCE");
+      const sourceErr = results.find((r) => !r.success && r.error?.code === "INVALID_SOURCE");
       assertExists(sourceErr);
       assertEquals(sourceErr!.tempId, "edge-1");
     });
@@ -530,7 +530,7 @@ describe("DiagramModel", () => {
       model.addEdge({ sourceId: a.id, targetId: b.id });
       const vertices = model.listCells({ cellType: "vertex" });
       assertEquals(vertices.length, 2);
-      assertEquals(vertices.every(c => c.type === "vertex"), true);
+      assertEquals(vertices.every((c) => c.type === "vertex"), true);
     });
 
     it("should filter by edge type", () => {

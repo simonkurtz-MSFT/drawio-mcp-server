@@ -16,13 +16,9 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 
-import { buildConfig, shouldShowHelp, parseLoggerType, VERSION, type ServerConfig } from "./config.ts";
-import {
-  create_logger as create_console_logger } from "./loggers/mcp_console_logger.ts";
-import {
-  create_logger as create_server_logger,
-  validLogLevels,
-} from "./loggers/mcp_server_logger.ts";
+import { buildConfig, parseLoggerType, type ServerConfig, shouldShowHelp, VERSION } from "./config.ts";
+import { create_logger as create_console_logger } from "./loggers/mcp_console_logger.ts";
+import { create_logger as create_server_logger, validLogLevels } from "./loggers/mcp_server_logger.ts";
 import { createHandlers } from "./tools.ts";
 import { createToolHandlerFactory } from "./tool_handler.ts";
 import { initializeShapes, resetAzureIconLibrary } from "./shapes/azure_icon_library.ts";

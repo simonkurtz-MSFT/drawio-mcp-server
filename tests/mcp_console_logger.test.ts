@@ -3,9 +3,9 @@
  * Verifies that log() and debug() correctly delegate to console.error
  * with proper level prefixes and spread data arguments.
  */
-import { describe, it, beforeEach, afterEach } from "@std/testing/bdd";
-import { assertEquals, assert } from "@std/assert";
-import { spy, assertSpyCalls, assertSpyCallArgs, type Spy } from "@std/testing/mock";
+import { afterEach, beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals } from "@std/assert";
+import { assertSpyCallArgs, assertSpyCalls, type Spy, spy } from "@std/testing/mock";
 import { create_logger } from "../src/loggers/mcp_console_logger.ts";
 
 describe("create_logger", () => {

@@ -1,5 +1,5 @@
-import { describe, it, beforeEach } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists, assertNotEquals } from "@std/assert";
+import { beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals, assertExists, assertNotEquals } from "@std/assert";
 import { DiagramModel } from "../src/diagram_model.ts";
 
 describe("DiagramModel groups", () => {
@@ -78,7 +78,7 @@ describe("DiagramModel groups", () => {
 
       model.addCellToGroup(cell.id, group.id);
       model.addCellToGroup(cell.id, group.id); // duplicate
-      assertEquals(group.children!.filter(id => id === cell.id).length, 1);
+      assertEquals(group.children!.filter((id) => id === cell.id).length, 1);
     });
 
     it("should return error for non-existent cell", () => {
@@ -175,8 +175,8 @@ describe("DiagramModel groups", () => {
       assertEquals(Array.isArray(result), true);
       if (Array.isArray(result)) {
         assertEquals(result.length, 2);
-        assert(result.map(c => c.value).includes("Subnet A"));
-        assert(result.map(c => c.value).includes("Subnet B"));
+        assert(result.map((c) => c.value).includes("Subnet A"));
+        assert(result.map((c) => c.value).includes("Subnet B"));
       }
     });
 
@@ -297,7 +297,7 @@ describe("DiagramModel groups", () => {
       model.batchCreateGroups([{ text: "G1" }, { text: "G2" }]);
       const cells = model.listCells();
       assertEquals(cells.length, 2);
-      assertEquals(cells.every(c => c.isGroup), true);
+      assertEquals(cells.every((c) => c.isGroup), true);
     });
 
     it("should create multiple groups", () => {
@@ -342,7 +342,7 @@ describe("DiagramModel groups", () => {
         { cellId: c3.id, groupId: g2.id },
       ]);
       assertEquals(results.length, 3);
-      assertEquals(results.every(r => r.success), true);
+      assertEquals(results.every((r) => r.success), true);
       assertEquals(results[0].cell!.parent, g1.id);
       assertEquals(results[2].cell!.parent, g2.id);
       assert(g1.children!.includes(c1.id));

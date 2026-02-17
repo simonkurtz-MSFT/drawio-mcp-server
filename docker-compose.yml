@@ -15,10 +15,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
+          cpus: "2"
           memory: 1024M
         reservations:
-          cpus: '0.5'
+          cpus: "0.5"
           memory: 512M
 
     # NOTE: The production image uses gcr.io/distroless — it has no shell,

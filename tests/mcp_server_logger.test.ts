@@ -3,9 +3,9 @@
  * Verifies log levels, sendLoggingMessage dispatch, setLevel / setLevels handlers,
  * invalid level handling, and per-logger level management.
  */
-import { describe, it, beforeEach } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists } from "@std/assert";
-import { spy, stub, assertSpyCalls, assertSpyCallArgs, type Spy } from "@std/testing/mock";
+import { beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals, assertExists } from "@std/assert";
+import { assertSpyCallArgs, assertSpyCalls, type Spy, spy, stub } from "@std/testing/mock";
 import { create_logger } from "../src/loggers/mcp_server_logger.ts";
 
 describe("create_logger", () => {

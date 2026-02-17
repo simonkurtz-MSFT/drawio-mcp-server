@@ -11,9 +11,7 @@ export function create_logger(): Logger {
         : console.error(`${level?.toUpperCase()}: ${message}`);
     },
     debug: (message, ...data) => {
-      return data.length > 0
-        ? console.error(`DEBUG: ${message}`, ...data)
-        : console.error(`DEBUG: ${message}`);
+      return data.length > 0 ? console.error(`DEBUG: ${message}`, ...data) : console.error(`DEBUG: ${message}`);
     },
   };
 }

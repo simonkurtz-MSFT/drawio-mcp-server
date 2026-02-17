@@ -47,9 +47,7 @@ export function create_logger(server: McpServer): Logger {
   };
 
   const getEffectiveLogLevel = (loggerName: string): LogLevelValue => {
-    return loggerName in logLevels
-      ? logLevels[loggerName]
-      : logLevels["."];
+    return loggerName in logLevels ? logLevels[loggerName] : logLevels["."];
   };
 
   const shouldLog = (level: McpLogLevel, loggerName: string): boolean => {

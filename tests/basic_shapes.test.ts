@@ -1,11 +1,25 @@
 import { describe, it } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists } from "@std/assert";
-import { BASIC_SHAPES, BASIC_SHAPE_CATEGORIES, getBasicShape } from "../src/shapes/basic_shapes.ts";
+import { assert, assertEquals, assertExists } from "@std/assert";
+import { BASIC_SHAPE_CATEGORIES, BASIC_SHAPES, getBasicShape } from "../src/shapes/basic_shapes.ts";
 
 describe("basic_shapes", () => {
   describe("BASIC_SHAPES", () => {
     it("should define all 13 basic shapes", () => {
-      const expected = ["rectangle", "rounded", "ellipse", "diamond", "circle", "process", "decision", "start", "end", "parallelogram", "hexagon", "cylinder", "triangle"];
+      const expected = [
+        "rectangle",
+        "rounded",
+        "ellipse",
+        "diamond",
+        "circle",
+        "process",
+        "decision",
+        "start",
+        "end",
+        "parallelogram",
+        "hexagon",
+        "cylinder",
+        "triangle",
+      ];
       assertEquals(Object.keys(BASIC_SHAPES).sort(), expected.sort());
     });
 

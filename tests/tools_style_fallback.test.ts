@@ -7,16 +7,17 @@
  * initializeShapes(tempFile), and exercise the `?? ""` fallback on lines 53 and 66
  * through the real handler functions.
  */
-import { describe, it, afterAll } from "@std/testing/bdd";
+import { afterAll, describe, it } from "@std/testing/bdd";
 import { assertEquals } from "@std/assert";
 import { resolve } from "@std/path";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { handlers as baseHandlers, clearResolveShapeCache, setMaxResolveCacheSize, getResolveCacheSize } from "../src/tools.ts";
 import {
-  initializeShapes,
-  setAzureIconLibraryPath,
-  resetAzureIconLibrary,
-} from "../src/shapes/azure_icon_library.ts";
+  clearResolveShapeCache,
+  getResolveCacheSize,
+  handlers as baseHandlers,
+  setMaxResolveCacheSize,
+} from "../src/tools.ts";
+import { initializeShapes, resetAzureIconLibrary, setAzureIconLibraryPath } from "../src/shapes/azure_icon_library.ts";
 
 /** Parse the JSON payload out of a handler result. */
 function parseResult(result: CallToolResult): any {

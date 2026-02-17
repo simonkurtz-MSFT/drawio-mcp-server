@@ -2,25 +2,25 @@
  * Tests for the Azure icon library loading, categorization, search, and alias resolution.
  * Verifies shape parsing from XML, category assignment, fuzzy search, and singleton caching.
  */
-import { describe, it, beforeAll, afterEach } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists } from "@std/assert";
+import { afterEach, beforeAll, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals, assertExists } from "@std/assert";
 import { resolve } from "@std/path";
 import {
-  loadAzureIconLibrary,
-  getAzureIconLibrary,
-  searchAzureIcons,
-  getAzureCategories,
-  getShapesInCategory,
-  getAzureShapeByName,
-  resetAzureIconLibrary,
-  setAzureIconLibraryPath,
-  initializeShapes,
   AZURE_SHAPE_ALIASES,
-  resolveAzureAlias,
-  resolveAllAzureAliases,
   displayTitle,
-  setMaxSearchCacheSize,
+  getAzureCategories,
+  getAzureIconLibrary,
+  getAzureShapeByName,
   getSearchCacheSize,
+  getShapesInCategory,
+  initializeShapes,
+  loadAzureIconLibrary,
+  resetAzureIconLibrary,
+  resolveAllAzureAliases,
+  resolveAzureAlias,
+  searchAzureIcons,
+  setAzureIconLibraryPath,
+  setMaxSearchCacheSize,
 } from "../src/shapes/azure_icon_library.ts";
 import type { AzureIconLibrary } from "../src/shapes/azure_icon_library.ts";
 
@@ -92,7 +92,8 @@ describe("loadAzureIconLibrary", () => {
 
   it("handles shapes without image data URL in XML", () => {
     const tmpFile = Deno.makeTempFileSync({ suffix: ".xml" });
-    const xmlContent = `<mxlibrary>[{"xml":"<mxGraphModel><root><mxCell style=\\"fillColor=#FF0000\\"/></root></mxGraphModel>","w":50,"h":50,"title":"No Image Shape"}]</mxlibrary>`;
+    const xmlContent =
+      `<mxlibrary>[{"xml":"<mxGraphModel><root><mxCell style=\\"fillColor=#FF0000\\"/></root></mxGraphModel>","w":50,"h":50,"title":"No Image Shape"}]</mxlibrary>`;
     try {
       Deno.writeTextFileSync(tmpFile, xmlContent);
       const result = loadAzureIconLibrary(tmpFile);
@@ -150,7 +151,8 @@ describe("loadAzureIconLibrary", () => {
 
   it("handles item with URL-encoded XML (entity references)", () => {
     const tmpFile = Deno.makeTempFileSync({ suffix: ".xml" });
-    const xmlContent = `<mxlibrary>[{"xml":"&lt;mxGraphModel&gt;&lt;root/&gt;&lt;/mxGraphModel&gt;","title":"Encoded","w":30,"h":30}]</mxlibrary>`;
+    const xmlContent =
+      `<mxlibrary>[{"xml":"&lt;mxGraphModel&gt;&lt;root/&gt;&lt;/mxGraphModel&gt;","title":"Encoded","w":30,"h":30}]</mxlibrary>`;
     try {
       Deno.writeTextFileSync(tmpFile, xmlContent);
       const result = loadAzureIconLibrary(tmpFile);
@@ -296,7 +298,7 @@ describe("searchAzureIcons", () => {
   it("exact title match gets score of 1.0", () => {
     const first = library.shapes[0];
     const results = searchAzureIcons(first.title, 10);
-    const exactMatch = results.find(r => r.title === first.title);
+    const exactMatch = results.find((r) => r.title === first.title);
     assertExists(exactMatch);
     assertEquals(exactMatch!.score, 1.0);
   });
@@ -304,7 +306,7 @@ describe("searchAzureIcons", () => {
   it("exact id match gets high score", () => {
     const first = library.shapes[0];
     const results = searchAzureIcons(first.id, 10);
-    const idMatch = results.find(r => r.id === first.id);
+    const idMatch = results.find((r) => r.id === first.id);
     assertExists(idMatch);
     assert(idMatch!.score >= 0.95);
   });
@@ -320,9 +322,9 @@ describe("searchAzureIcons", () => {
 
   it("alias does not duplicate the targets in results", () => {
     const results = searchAzureIcons("Container Apps", 10);
-    const envResults = results.filter(r => r.title.includes("Container-Apps-Environments"));
+    const envResults = results.filter((r) => r.title.includes("Container-Apps-Environments"));
     assertEquals(envResults.length, 1);
-    const workerResults = results.filter(r => r.title.includes("Worker-Container-App"));
+    const workerResults = results.filter((r) => r.title.includes("Worker-Container-App"));
     assertEquals(workerResults.length, 1);
   });
 

@@ -1,5 +1,5 @@
-import { describe, it, beforeEach } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists, assertNotEquals } from "@std/assert";
+import { beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals, assertExists, assertNotEquals } from "@std/assert";
 import { DiagramModel } from "../src/diagram_model.ts";
 
 describe("DiagramModel importXml", () => {
@@ -77,7 +77,6 @@ describe("DiagramModel importXml", () => {
       assertEquals(edges[0].sourceId, "2");
       assertEquals(edges[0].targetId, "3");
     });
-
   });
 
   describe("multi-page import", () => {
@@ -117,8 +116,8 @@ describe("DiagramModel importXml", () => {
       // All cells from both pages merged into single model
       const cells = model.listCells();
       assertEquals(cells.length, 2);
-      assert(cells.some(c => c.value === "Cell on Page 1"));
-      assert(cells.some(c => c.value === "Cell on Page 2"));
+      assert(cells.some((c) => c.value === "Cell on Page 1"));
+      assert(cells.some((c) => c.value === "Cell on Page 2"));
     });
   });
 
@@ -156,8 +155,8 @@ describe("DiagramModel importXml", () => {
 
       // Verify cells are on correct layers
       const cells = model.listCells();
-      const defaultCell = cells.find(c => c.value === "On Default");
-      const bgCell = cells.find(c => c.value === "On Background");
+      const defaultCell = cells.find((c) => c.value === "On Default");
+      const bgCell = cells.find((c) => c.value === "On Background");
       assertExists(defaultCell);
       assertExists(bgCell);
       assertEquals(defaultCell!.parent, "1");
@@ -294,7 +293,7 @@ describe("DiagramModel importXml", () => {
       model.importXml(xml);
       const layers = model.listLayers();
       assertEquals(layers.length, 2);
-      const customLayer = layers.find(l => l.id === "custom-layer");
+      const customLayer = layers.find((l) => l.id === "custom-layer");
       assertExists(customLayer);
       assertEquals(customLayer!.name, "custom-layer");
     });
@@ -375,7 +374,6 @@ describe("DiagramModel importXml", () => {
       assertEquals(cells.length, 1);
       assertEquals(cells[0].value, "New Cell");
     });
-
   });
 
   describe("roundtrip: export then import", () => {
@@ -390,8 +388,8 @@ describe("DiagramModel importXml", () => {
 
       const cells = newModel.listCells();
       assertEquals(cells.length, 2);
-      assert(cells.map(c => c.value).includes("Box A"));
-      assert(cells.map(c => c.value).includes("Box B"));
+      assert(cells.map((c) => c.value).includes("Box A"));
+      assert(cells.map((c) => c.value).includes("Box B"));
     });
 
     it("should preserve edges through export and import", () => {
@@ -417,7 +415,7 @@ describe("DiagramModel importXml", () => {
       const newModel = new DiagramModel();
       newModel.importXml(xml);
 
-      const importedGroup = newModel.listCells().find(c => c.value === "VNet");
+      const importedGroup = newModel.listCells().find((c) => c.value === "VNet");
       assertExists(importedGroup);
       assertEquals(importedGroup!.isGroup, true);
       assert(importedGroup!.children!.length > 0);
@@ -498,8 +496,8 @@ describe("DiagramModel importXml", () => {
 
       // Export and verify no source/target attributes in the XML
       const exportedXml = model.toXml();
-      assert(!exportedXml.includes('source='));
-      assert(!exportedXml.includes('target='));
+      assert(!exportedXml.includes("source="));
+      assert(!exportedXml.includes("target="));
       assert(exportedXml.includes('edge="1"'));
     });
   });

@@ -1,5 +1,5 @@
-import { describe, it, beforeEach } from "@std/testing/bdd";
-import { assertEquals, assert } from "@std/assert";
+import { beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals } from "@std/assert";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { handlers as baseHandlers } from "../src/tools.ts";
 
@@ -34,13 +34,17 @@ const handlers = new Proxy(baseHandlers, {
 }) as unknown as Record<string, (args?: Record<string, unknown>) => Promise<CallToolResult>>;
 
 /** Create a vertex via add-cells and return the cell data. */
-async function addVertex(args: { x?: number; y?: number; width?: number; height?: number; text?: string; style?: string } = {}) {
+async function addVertex(
+  args: { x?: number; y?: number; width?: number; height?: number; text?: string; style?: string } = {},
+) {
   const result = await handlers["add-cells"]({ cells: [{ type: "vertex" as const, ...args }] });
   return parseResult(result).data.results[0].cell;
 }
 
 /** Create a group via create-groups and return the cell data. */
-async function createGroup(args: { x?: number; y?: number; width?: number; height?: number; text?: string; style?: string } = {}) {
+async function createGroup(
+  args: { x?: number; y?: number; width?: number; height?: number; text?: string; style?: string } = {},
+) {
   const result = await handlers["create-groups"]({ groups: [args] });
   return parseResult(result).data.results[0].cell;
 }
@@ -72,8 +76,12 @@ describe("group tool handlers", () => {
     it("should create a single group with custom properties", async () => {
       const result = await handlers["create-groups"]({
         groups: [{
-          x: 50, y: 75, width: 600, height: 400,
-          text: "VNet", style: "fillColor=#e6f2fa;",
+          x: 50,
+          y: 75,
+          width: 600,
+          height: 400,
+          text: "VNet",
+          style: "fillColor=#e6f2fa;",
         }],
       });
       const parsed = parseResult(result);

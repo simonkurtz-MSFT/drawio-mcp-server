@@ -19,7 +19,7 @@
  */
 
 import { deflateRawSync, inflateRawSync } from "node:zlib";
-import { encodeBase64, decodeBase64 } from "@std/encoding/base64";
+import { decodeBase64, encodeBase64 } from "@std/encoding/base64";
 import { XMLParser } from "fast-xml-parser";
 
 /** Shared XML parser instance for importing Draw.io XML */
@@ -280,7 +280,7 @@ export class DiagramModel {
   listCells(filter?: { cellType?: "vertex" | "edge" }): Cell[] {
     let cells = Array.from(this.cells.values());
     if (filter?.cellType) {
-      cells = cells.filter(c => c.type === filter.cellType);
+      cells = cells.filter((c) => c.type === filter.cellType);
     }
     return cells;
   }
@@ -297,7 +297,7 @@ export class DiagramModel {
   }
 
   setActiveLayer(layerId: string): Layer | { error: StructuredError } {
-    const layer = this.layers.find(l => l.id === layerId);
+    const layer = this.layers.find((l) => l.id === layerId);
     if (!layer) {
       return {
         error: {
@@ -312,7 +312,7 @@ export class DiagramModel {
   }
 
   getActiveLayer(): Layer {
-    return this.layers.find(l => l.id === this.activeLayerId)!;
+    return this.layers.find((l) => l.id === this.activeLayerId)!;
   }
 
   moveCellToLayer(cellId: string, targetLayerId: string): Cell | { error: StructuredError } {
@@ -327,7 +327,7 @@ export class DiagramModel {
         },
       };
     }
-    const layer = this.layers.find(l => l.id === targetLayerId);
+    const layer = this.layers.find((l) => l.id === targetLayerId);
     if (!layer) {
       return {
         error: {
@@ -363,7 +363,8 @@ export class DiagramModel {
       y: params.y ?? 0,
       width: params.width ?? 400,
       height: params.height ?? 300,
-      style: params.style ?? "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;container=1;collapsible=0;",
+      style: params.style ??
+        "rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;dashed=1;container=1;collapsible=0;",
       parent: this.activeLayerId,
       isGroup: true,
       children: [],
@@ -492,7 +493,7 @@ export class DiagramModel {
     }
     // Remove from parent's children list
     if (parentCell.children) {
-      parentCell.children = parentCell.children.filter(id => id !== cellId);
+      parentCell.children = parentCell.children.filter((id) => id !== cellId);
     }
     // Return to the active layer
     cell.parent = this.activeLayerId;
@@ -525,7 +526,7 @@ export class DiagramModel {
       };
     }
     return group.children!
-      .map(id => this.cells.get(id))
+      .map((id) => this.cells.get(id))
       .filter((c): c is Cell => c !== undefined);
   }
 
@@ -565,9 +566,7 @@ export class DiagramModel {
     let diagramElements: Array<Record<string, unknown>> = [];
 
     const mxfile = parsed.mxfile as Record<string, unknown> | undefined;
-    const requestedActiveLayerId = typeof mxfile?.activeLayerId === "string"
-      ? mxfile.activeLayerId
-      : undefined;
+    const requestedActiveLayerId = typeof mxfile?.activeLayerId === "string" ? mxfile.activeLayerId : undefined;
     if (mxfile?.diagram) {
       diagramElements = mxfile.diagram as Array<Record<string, unknown>>;
     } else if (parsed.mxGraphModel) {
@@ -605,7 +604,7 @@ export class DiagramModel {
 
       // Merge layers (skip default layer already present)
       for (const layer of layers) {
-        if (layer.id !== "1" && !this.layers.some(l => l.id === layer.id)) {
+        if (layer.id !== "1" && !this.layers.some((l) => l.id === layer.id)) {
           this.layers.push(layer);
         }
       }
@@ -616,7 +615,7 @@ export class DiagramModel {
       }
     }
 
-    if (requestedActiveLayerId && this.layers.some(l => l.id === requestedActiveLayerId)) {
+    if (requestedActiveLayerId && this.layers.some((l) => l.id === requestedActiveLayerId)) {
       this.activeLayerId = requestedActiveLayerId;
     }
 
@@ -650,7 +649,9 @@ export class DiagramModel {
   /**
    * Parse mxGraphModel content from a parsed XML object and extract cells and layers.
    */
-  private parseMxGraphContent(diagramObj: Record<string, unknown>): { cells: Map<string, Cell>; layers: Layer[]; nextId: number } {
+  private parseMxGraphContent(
+    diagramObj: Record<string, unknown>,
+  ): { cells: Map<string, Cell>; layers: Layer[]; nextId: number } {
     const cells = new Map<string, Cell>();
     const layers: Layer[] = [{ id: "1", name: "Default Layer" }];
     let maxId = 1;
@@ -782,10 +783,13 @@ export class DiagramModel {
     const compress = options?.compress ?? false;
 
     const pageXml = this.renderPageXml(this.cells, this.layers);
-    const graphModelXml = `<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>${pageXml}</root></mxGraphModel>`;
+    const graphModelXml =
+      `<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>${pageXml}</root></mxGraphModel>`;
     const diagramContent = compress ? DiagramModel.compressXml(graphModelXml) : graphModelXml;
 
-    return `<mxfile host="drawio-mcp-server" activeLayerId="${this.escapeXml(this.activeLayerId)}"><diagram id="page-1" name="Page-1">${diagramContent}</diagram></mxfile>`;
+    return `<mxfile host="drawio-mcp-server" activeLayerId="${
+      this.escapeXml(this.activeLayerId)
+    }"><diagram id="page-1" name="Page-1">${diagramContent}</diagram></mxfile>`;
   }
 
   /**
@@ -823,22 +827,28 @@ export class DiagramModel {
   private renderPageXml(cells: Map<string, Cell>, layers: Layer[]): string {
     // Emit custom layer cells (skip the default layer id="1" which is always present)
     const layerCellsXml = layers
-      .filter(l => l.id !== "1")
-      .map(l => `<mxCell id="${this.escapeXml(l.id)}" value="${this.escapeXml(l.name)}" style="" parent="0"/>`)
+      .filter((l) => l.id !== "1")
+      .map((l) => `<mxCell id="${this.escapeXml(l.id)}" value="${this.escapeXml(l.name)}" style="" parent="0"/>`)
       .join("");
 
     const cellsXml = Array.from(cells.values())
-      .map(cell => {
+      .map((cell) => {
         if (cell.type === "vertex") {
-          const groupAttrs = cell.isGroup ? ' connectable="0"' : '';
+          const groupAttrs = cell.isGroup ? ' connectable="0"' : "";
           const containerStyle = cell.isGroup && cell.style && !cell.style.includes("container=1")
             ? cell.style + "container=1;"
             : cell.style;
-          return `<mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(containerStyle!)}" vertex="1"${groupAttrs} parent="${cell.parent!}"><mxGeometry x="${cell.x!}" y="${cell.y!}" width="${cell.width!}" height="${cell.height!}" as="geometry"/></mxCell>`;
+          return `<mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${
+            this.escapeXml(containerStyle!)
+          }" vertex="1"${groupAttrs} parent="${cell.parent!}"><mxGeometry x="${cell.x!}" y="${cell.y!}" width="${cell
+            .width!}" height="${cell.height!}" as="geometry"/></mxCell>`;
         } else {
           const sourceAttr = cell.sourceId ? ` source="${cell.sourceId}"` : "";
           const targetAttr = cell.targetId ? ` target="${cell.targetId}"` : "";
-          return `<mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${this.escapeXml(cell.style!)}" edge="1" parent="${cell.parent!}"${sourceAttr}${targetAttr}><mxGeometry relative="1" as="geometry"/></mxCell>`;
+          return `<mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(cell.value)}" style="${
+            this.escapeXml(cell.style!)
+          }" edge="1" parent="${cell
+            .parent!}"${sourceAttr}${targetAttr}><mxGeometry relative="1" as="geometry"/></mxCell>`;
         }
       })
       .join("");
@@ -856,7 +866,7 @@ export class DiagramModel {
   };
 
   private escapeXml(str: string): string {
-    return str.replace(/[&<>"']/g, ch => DiagramModel.XML_ESCAPE_MAP[ch]);
+    return str.replace(/[&<>"']/g, (ch) => DiagramModel.XML_ESCAPE_MAP[ch]);
   }
 
   /**
@@ -946,226 +956,222 @@ export class DiagramModel {
     };
   }
 
-/**
- * Batch add multiple cells (vertices and edges) in a single operation.
- * Validates entire batch before executing to fail fast.
- * Returns an array of results with created cells or errors.
- */
-batchAddCells(
-  items: Array<{
-    type: "vertex" | "edge";
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    text?: string;
-    style?: string;
-    sourceId?: string;
-    targetId?: string;
-    tempId?: string;
-  }>,
-  options?: { dryRun?: boolean },
-): Array<{ success: boolean; cell?: Cell; error?: StructuredError; tempId?: string }> {
-  // Pre-validate entire batch
-  const validationErrors = this.validateBatchCells(items);
-  if (validationErrors.length > 0) {
-    return validationErrors;
-  }
-
-  // If dry-run, return success without persisting
-  if (options?.dryRun) {
-    return items.map((item, index) => ({
-      success: true,
-      tempId: item.tempId,
-      cell: {
-        id: `temp-cell-${index}`,
-        type: item.type,
-        value: item.text ?? "",
-        x: item.x,
-        y: item.y,
-        width: item.width,
-        height: item.height,
-        style: item.style,
-        sourceId: item.sourceId,
-        targetId: item.targetId,
-      } as Cell,
-    }));
-  }
-
-  // Execute batch operations
-  const results: Array<{ success: boolean; cell?: Cell; error?: StructuredError; tempId?: string }> =
-    [];
-  const tempIdMap = new Map<string, string>();
-
-  for (const item of items) {
-    if (item.type === "vertex") {
-      const cell = this.addRectangle({
-        x: item.x,
-        y: item.y,
-        width: item.width,
-        height: item.height,
-        text: item.text,
-        style: item.style,
-      });
-      if (item.tempId) {
-        tempIdMap.set(item.tempId, cell.id);
-      }
-      results.push({ success: true, cell, tempId: item.tempId });
-    } else if (item.type === "edge") {
-      // Validation guarantees sourceId/targetId are truthy for edges
-      const sourceId = tempIdMap.get(item.sourceId!) ?? item.sourceId!;
-      const targetId = tempIdMap.get(item.targetId!) ?? item.targetId!;
-
-      const result = this.addEdge({
-        sourceId,
-        targetId,
-        text: item.text,
-        style: item.style,
-      });
-
-      // Validation guarantees addEdge succeeds — cast safely
-      const edge = result as Cell;
-      if (item.tempId) {
-        tempIdMap.set(item.tempId, edge.id);
-      }
-      results.push({ success: true, cell: edge, tempId: item.tempId });
+  /**
+   * Batch add multiple cells (vertices and edges) in a single operation.
+   * Validates entire batch before executing to fail fast.
+   * Returns an array of results with created cells or errors.
+   */
+  batchAddCells(
+    items: Array<{
+      type: "vertex" | "edge";
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      text?: string;
+      style?: string;
+      sourceId?: string;
+      targetId?: string;
+      tempId?: string;
+    }>,
+    options?: { dryRun?: boolean },
+  ): Array<{ success: boolean; cell?: Cell; error?: StructuredError; tempId?: string }> {
+    // Pre-validate entire batch
+    const validationErrors = this.validateBatchCells(items);
+    if (validationErrors.length > 0) {
+      return validationErrors;
     }
-  }
 
-  return results;
-}
+    // If dry-run, return success without persisting
+    if (options?.dryRun) {
+      return items.map((item, index) => ({
+        success: true,
+        tempId: item.tempId,
+        cell: {
+          id: `temp-cell-${index}`,
+          type: item.type,
+          value: item.text ?? "",
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          style: item.style,
+          sourceId: item.sourceId,
+          targetId: item.targetId,
+        } as Cell,
+      }));
+    }
 
-private validateBatchCells(
-  items: Array<{
-    type: "vertex" | "edge";
-    sourceId?: string;
-    targetId?: string;
-    tempId?: string;
-  }>,
-): Array<{ success: boolean; error: StructuredError; tempId?: string }> {
-  const errors: Array<{ success: boolean; error: StructuredError; tempId?: string }> = [];
-  const createdTempIds = new Set<string>();
+    // Execute batch operations
+    const results: Array<{ success: boolean; cell?: Cell; error?: StructuredError; tempId?: string }> = [];
+    const tempIdMap = new Map<string, string>();
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-
-    if (item.type === "edge") {
-      // Validate source exists (check temp IDs from earlier items and existing cells)
-      const sourceExists =
-        !!(item.sourceId && (createdTempIds.has(item.sourceId) || this.cells.has(item.sourceId)));
-      if (!sourceExists) {
-        errors.push({
-          success: false,
-          tempId: item.tempId,
-          error: {
-            code: "INVALID_SOURCE",
-            message: `Edge at index ${i}: source cell '${item.sourceId}' not found`,
-            index: i,
-            suggestion: "Ensure source_id references an existing cell or a temp_id defined earlier in the batch",
-          },
+    for (const item of items) {
+      if (item.type === "vertex") {
+        const cell = this.addRectangle({
+          x: item.x,
+          y: item.y,
+          width: item.width,
+          height: item.height,
+          text: item.text,
+          style: item.style,
         });
-      }
+        if (item.tempId) {
+          tempIdMap.set(item.tempId, cell.id);
+        }
+        results.push({ success: true, cell, tempId: item.tempId });
+      } else if (item.type === "edge") {
+        // Validation guarantees sourceId/targetId are truthy for edges
+        const sourceId = tempIdMap.get(item.sourceId!) ?? item.sourceId!;
+        const targetId = tempIdMap.get(item.targetId!) ?? item.targetId!;
 
-      // Validate target exists
-      const targetExists =
-        !!(item.targetId && (createdTempIds.has(item.targetId) || this.cells.has(item.targetId)));
-      if (!targetExists) {
-        errors.push({
-          success: false,
-          tempId: item.tempId,
-          error: {
-            code: "INVALID_TARGET",
-            message: `Edge at index ${i}: target cell '${item.targetId}' not found`,
-            index: i,
-            suggestion:
-              "Ensure target_id references an existing cell or a temp_id defined earlier in the batch",
-          },
+        const result = this.addEdge({
+          sourceId,
+          targetId,
+          text: item.text,
+          style: item.style,
         });
+
+        // Validation guarantees addEdge succeeds — cast safely
+        const edge = result as Cell;
+        if (item.tempId) {
+          tempIdMap.set(item.tempId, edge.id);
+        }
+        results.push({ success: true, cell: edge, tempId: item.tempId });
       }
     }
 
-    // Track temp IDs for validation
-    if (item.tempId) {
-      createdTempIds.add(item.tempId);
-    }
+    return results;
   }
 
-  return errors;
-}
+  private validateBatchCells(
+    items: Array<{
+      type: "vertex" | "edge";
+      sourceId?: string;
+      targetId?: string;
+      tempId?: string;
+    }>,
+  ): Array<{ success: boolean; error: StructuredError; tempId?: string }> {
+    const errors: Array<{ success: boolean; error: StructuredError; tempId?: string }> = [];
+    const createdTempIds = new Set<string>();
 
-/**
- * Batch edit multiple edges in a single operation.
- */
-batchEditEdges(
-  updates: Array<{
-    cell_id: string;
-    text?: string;
-    source_id?: string;
-    target_id?: string;
-    style?: string;
-  }>,
-): Array<{ success: boolean; cell?: Cell; error?: StructuredError; cell_id: string }> {
-  return updates.map((update) => {
-    const result = this.editEdge(update.cell_id, {
-      text: update.text,
-      sourceId: update.source_id,
-      targetId: update.target_id,
-      style: update.style,
-    });
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
 
-    if ("error" in result) {
-      return {
-        success: false,
-        cell_id: update.cell_id,
-        error: result.error,
-      };
+      if (item.type === "edge") {
+        // Validate source exists (check temp IDs from earlier items and existing cells)
+        const sourceExists = !!(item.sourceId && (createdTempIds.has(item.sourceId) || this.cells.has(item.sourceId)));
+        if (!sourceExists) {
+          errors.push({
+            success: false,
+            tempId: item.tempId,
+            error: {
+              code: "INVALID_SOURCE",
+              message: `Edge at index ${i}: source cell '${item.sourceId}' not found`,
+              index: i,
+              suggestion: "Ensure source_id references an existing cell or a temp_id defined earlier in the batch",
+            },
+          });
+        }
+
+        // Validate target exists
+        const targetExists = !!(item.targetId && (createdTempIds.has(item.targetId) || this.cells.has(item.targetId)));
+        if (!targetExists) {
+          errors.push({
+            success: false,
+            tempId: item.tempId,
+            error: {
+              code: "INVALID_TARGET",
+              message: `Edge at index ${i}: target cell '${item.targetId}' not found`,
+              index: i,
+              suggestion: "Ensure target_id references an existing cell or a temp_id defined earlier in the batch",
+            },
+          });
+        }
+      }
+
+      // Track temp IDs for validation
+      if (item.tempId) {
+        createdTempIds.add(item.tempId);
+      }
     }
 
-    return {
-      success: true,
-      cell_id: update.cell_id,
-      cell: result,
-    };
-  });
-}
+    return errors;
+  }
 
-/**
- * Batch edit multiple cells in a single operation.
- */
-batchEditCells(
-  updates: Array<{
-    cell_id: string;
-    text?: string;
-    x?: number;
-    y?: number;
-    width?: number;
-    height?: number;
-    style?: string;
-  }>,
-): Array<{ success: boolean; cell?: Cell; error?: StructuredError; cell_id: string }> {
-  return updates.map((update) => {
-    const result = this.editCell(update.cell_id, {
-      text: update.text,
-      x: update.x,
-      y: update.y,
-      width: update.width,
-      height: update.height,
-      style: update.style,
-    });
+  /**
+   * Batch edit multiple edges in a single operation.
+   */
+  batchEditEdges(
+    updates: Array<{
+      cell_id: string;
+      text?: string;
+      source_id?: string;
+      target_id?: string;
+      style?: string;
+    }>,
+  ): Array<{ success: boolean; cell?: Cell; error?: StructuredError; cell_id: string }> {
+    return updates.map((update) => {
+      const result = this.editEdge(update.cell_id, {
+        text: update.text,
+        sourceId: update.source_id,
+        targetId: update.target_id,
+        style: update.style,
+      });
 
-    if ("error" in result) {
+      if ("error" in result) {
+        return {
+          success: false,
+          cell_id: update.cell_id,
+          error: result.error,
+        };
+      }
+
       return {
-        success: false,
+        success: true,
         cell_id: update.cell_id,
-        error: result.error,
+        cell: result,
       };
-    }
+    });
+  }
 
-    return {
-      success: true,
-      cell_id: update.cell_id,
-      cell: result,
-    };
-  });
-}
+  /**
+   * Batch edit multiple cells in a single operation.
+   */
+  batchEditCells(
+    updates: Array<{
+      cell_id: string;
+      text?: string;
+      x?: number;
+      y?: number;
+      width?: number;
+      height?: number;
+      style?: string;
+    }>,
+  ): Array<{ success: boolean; cell?: Cell; error?: StructuredError; cell_id: string }> {
+    return updates.map((update) => {
+      const result = this.editCell(update.cell_id, {
+        text: update.text,
+        x: update.x,
+        y: update.y,
+        width: update.width,
+        height: update.height,
+        style: update.style,
+      });
+
+      if ("error" in result) {
+        return {
+          success: false,
+          cell_id: update.cell_id,
+          error: result.error,
+        };
+      }
+
+      return {
+        success: true,
+        cell_id: update.cell_id,
+        cell: result,
+      };
+    });
+  }
 }

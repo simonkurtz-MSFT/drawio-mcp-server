@@ -60,37 +60,39 @@ Follow this 3-step pattern:
 
 ## Build and CI
 
-| Command | Description |
-|---|---|
-| `pnpm build` | Clean build (removes `build/`, then compiles via `tsconfig.build.json`) |
-| `pnpm dev` | Watch mode — auto-rebuild on changes |
-| `pnpm lint` | Type-check without emitting (uses `tsconfig.json`, which includes tests) |
-| `pnpm test` | Run all tests |
-| `pnpm test:coverage` | Run tests with V8 coverage |
-| `pnpm inspect` | Launch MCP Inspector for interactive debugging |
+| Command              | Description                                                              |
+| -------------------- | ------------------------------------------------------------------------ |
+| `pnpm build`         | Clean build (removes `build/`, then compiles via `tsconfig.build.json`)  |
+| `pnpm dev`           | Watch mode — auto-rebuild on changes                                     |
+| `pnpm lint`          | Type-check without emitting (uses `tsconfig.json`, which includes tests) |
+| `pnpm test`          | Run all tests                                                            |
+| `pnpm test:coverage` | Run tests with V8 coverage                                               |
+| `pnpm inspect`       | Launch MCP Inspector for interactive debugging                           |
 
 - `tsconfig.build.json` is used for production builds (excludes tests).
 - `tsconfig.json` includes everything (source + tests) and is used for linting and IDE support.
 
 ## Environment Variables
 
-| Variable | Description |
-|---|---|
-| `AZURE_ICON_LIBRARY_PATH` | Path to Azure icon library XML file (auto-detected from `assets/` if unset) |
-| `LOGGER_TYPE` | `console` (default) or `mcp_server` |
-| `HTTP_PORT` | HTTP server port (default: `8080`, CLI `--http-port` takes precedence) |
-| `TRANSPORT` | Transport type: `stdio`, `http`, or `stdio,http` (CLI `--transport` takes precedence) |
+| Variable                  | Description                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| `AZURE_ICON_LIBRARY_PATH` | Path to Azure icon library XML file (auto-detected from `assets/` if unset)           |
+| `LOGGER_TYPE`             | `console` (default) or `mcp_server`                                                   |
+| `HTTP_PORT`               | HTTP server port (default: `8080`, CLI `--http-port` takes precedence)                |
+| `TRANSPORT`               | Transport type: `stdio`, `http`, or `stdio,http` (CLI `--transport` takes precedence) |
 
 ## Diagrams
 
 > **Runtime conventions**: The diagram generation conventions below are also embedded in the MCP server's `instructions` field, loaded from `src/instructions.md` at startup. Any MCP client automatically receives these guidelines during initialization — no extra round trips. When updating conventions here, keep `src/instructions.md` in sync.
 
 ### General
+
 - Use the Draw.io MCP server for all diagram generation tasks.
 - When asked to create diagrams such as flowcharts, decision trees, technical architecture diagrams, etc., always use the Draw.io MCP server and XML format.
 - Content returned from the Draw.io MCP server will be in XML format. Take this content and create or update a `.drawio` file in the repository with that content.
 
 ### Layout
+
 - **Primary flow direction**: left-to-right unless otherwise specified. Each stage of the architecture occupies a vertical column.
 - **Parallel/sibling services**: Services at the same stage in the flow (e.g., multiple compute options, multiple databases) must be stacked **vertically** within their column — never placed side by side horizontally. Horizontal position indicates sequence in the flow; vertical position indicates parallelism.
 - **Orthogonal edges only**: All edges must use horizontal and vertical segments only — never diagonal. Edges may change direction multiple times with right-angle bends. Use `edgeStyle=orthogonalEdgeStyle` (the default).
@@ -108,20 +110,24 @@ Follow this 3-step pattern:
 - **Position outside-group targets to enable clean routing**: Components that are NOT children of a group but receive edges from the same source as group children should be placed **above or below** the group — not at the same vertical position behind it. This ensures edges to those components can route around the group with simple orthogonal segments rather than overlapping the group's area.
 
 ### Shape Selection
+
 - Use stencils for all architecture components. Do not use basic shapes (rectangles, circles, etc.) to represent Azure or cloud services. Basic shapes are fine for flowcharts and general diagrams.
 - Default to Azure icons and context for architecture diagrams unless otherwise specified. Use official Azure icons and colors for all components.
 - **Azure icon naming**: Azure icons use their official Azure service names, often in plural form (e.g., "Front Doors", "Container Apps", "App Services", "Key Vaults", "Virtual Networks", "DNS Zones", "Log Analytics Workspaces"). When searching, use the full Azure service name — not abbreviations, generic terms, or single words like "azure". The fuzzy search is tolerant of singular/plural and minor variations, but more specific queries yield better results.
 - **Search, don't guess**: Always call `search-shapes` before adding shapes. Review the results to confirm the matched shape name and use that exact name with `add-cells-of-shape`.
 
 ### Styling
+
 - Use `get-style-presets` to apply consistent Azure, flowchart, or general color presets.
 
 ### Labels & Annotations
+
 - Add labels for traffic paths (e.g., "HTTPS", "gRPC") or security boundaries (VNet/private endpoints) where they clarify the flow. Labels should not overlay stencils. Use whitespace for clarity.
 - **Edge label placement**: Place edge labels consistently **above** the edge for horizontal segments and **to the left** of the edge for vertical segments, provided space permits. Labels must never overlap shapes or other labels. Use the edge style properties `verticalAlign=bottom` (which places the label above a horizontal edge) to achieve this positioning.
 - Do **not** add labels for implied relationships like "DNS Resolution", "Image Pull", or "Secret Access" — these are covered by the presence of cross-cutting services.
 
 ### Batch-Only Workflow
+
 - **Every array-based tool MUST be called exactly ONCE with ALL items. NEVER call a tool repeatedly for individual items:**
   - `search-shapes` — gather ALL queries, submit ONE call
   - `add-cells-of-shape` — gather ALL shapes, submit ONE call
@@ -132,11 +138,13 @@ Follow this 3-step pattern:
   - `set-cell-shape` — gather ALL shape updates, submit ONE call
 
 ### Containment & Layers
+
 - Use `create-groups` and `add-cells-to-group` to represent containment (e.g., VNets containing subnets, resource groups holding resources). Size each group large enough to contain all its children with at least 20px padding on each side.
 - Position children **relative to the group** using coordinates that fall within the group's bounds. Stack multiple children vertically inside the group. Verify that every child's position + size fits within the parent group's dimensions.
 - For multi-page diagrams, use `create-page` and `set-active-page` to organize content across tabs (e.g., separate pages for networking, compute, and data layers).
 
 ### Import / Export
+
 - To modify an existing `.drawio` file, read its XML content and pass it to `import-diagram`, make changes, then `export-diagram` to get the updated XML.
 - Always save exported XML to a `.drawio` file.
 - **Prefer compressed export**: When calling `export-diagram`, pass `compress: true` to reduce payload size by 60-80%. The server uses **deflate-raw** compression with **base64** encoding — the same format used by the Draw.io desktop app. The response includes a `compression` object indicating whether compression is enabled and, when enabled, the `algorithm` (`deflate-raw`) and `encoding` (`base64`) used. `import-diagram` automatically detects and decompresses compressed content.
@@ -148,16 +156,19 @@ When `export-diagram` returns a large result that gets written to a temporary `c
 Instead, use a **local terminal command** to extract the `xml` property from the JSON and write the `.drawio` file directly on the user's machine:
 
 **PowerShell (Windows):**
+
 ```powershell
 $json = Get-Content '<temp-content-json-path>' -Raw | ConvertFrom-Json; $json.data.xml | Set-Content '<output-path>.drawio' -Encoding UTF8 -NoNewline
 ```
 
 **Bash (macOS/Linux):**
+
 ```bash
 cat '<temp-content-json-path>' | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['xml'], end='')" > '<output-path>.drawio'
 ```
 
 This approach:
+
 - Keeps the exported diagram data entirely local — no upload to the LLM
 - Eliminates the slowest step in the diagram generation workflow
 - Produces identical output to the read-and-create approach
