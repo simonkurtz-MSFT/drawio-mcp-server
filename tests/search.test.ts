@@ -1,6 +1,6 @@
 import { describe, it } from "@std/testing/bdd";
 import { assertGreater, assertLessOrEqual } from "@std/assert";
-import { searchAzureIcons, getAzureIconLibrary } from "../src/shapes/azure_icon_library.ts";
+import { getAzureIconLibrary, searchAzureIcons } from "../src/shapes/azure_icon_library.ts";
 
 const testQueries = [
   "container",

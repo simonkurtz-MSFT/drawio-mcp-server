@@ -32,18 +32,20 @@ export type ToolDefinition = ToolDefinitionWithArgs | ToolDefinitionWithoutArgs;
 const diagramXmlSchema = z
   .string()
   .optional()
-  .describe("Full Draw.io XML for the current diagram state from the previous tool call. Omit to start from an empty diagram.");
+  .describe(
+    "Full Draw.io XML for the current diagram state from the previous tool call. Omit to start from an empty diagram.",
+  );
 
 // ─── Tool Definitions ────────────────────────────────────────
 
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
-
   // ─── Cell Tools ──────────────────────────────────────────────
 
   {
     key: "DELETE_CELL_BY_ID",
     name: "delete-cell-by-id",
-    description: "Delete a cell (vertex or edge) by its ID. When a vertex is deleted, all connected edges are automatically cascade-deleted and reported in the response.",
+    description:
+      "Delete a cell (vertex or edge) by its ID. When a vertex is deleted, all connected edges are automatically cascade-deleted and reported in the response.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -57,7 +59,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "DELETE_EDGE",
     name: "delete-edge",
-    description: "Delete an edge by its ID. Validates that the target cell is an edge. Use delete-cell-by-id to delete vertices (which also cascade-deletes connected edges).",
+    description:
+      "Delete an edge by its ID. Validates that the target cell is an edge. Use delete-cell-by-id to delete vertices (which also cascade-deletes connected edges).",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -71,7 +74,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "EDIT_EDGE",
     name: "edit-edge",
-    description: "Edit one or more edges. Always pass ALL updates in a single call — never call this tool repeatedly. Only updates specified properties on each edge.",
+    description:
+      "Edit one or more edges. Always pass ALL updates in a single call — never call this tool repeatedly. Only updates specified properties on each edge.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -96,7 +100,9 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
           .describe(
             "Replace the edge's style string (semi-colon separated `key=value` pairs).",
           ),
-      })).describe("Array of edge updates. Example: [{cell_id: 'cell-3', text: 'HTTPS'}, {cell_id: 'cell-4', style: 'dashed=1;'}]"),
+      })).describe(
+        "Array of edge updates. Example: [{cell_id: 'cell-3', text: 'HTTPS'}, {cell_id: 'cell-4', style: 'dashed=1;'}]",
+      ),
     },
   },
 
@@ -105,7 +111,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "ADD_CELLS",
     name: "add-cells",
-    description: "Add vertices and/or edges to the diagram. Always pass ALL cells you need in a single call — never call this tool repeatedly. Use temp_id to reference cells within the same batch (e.g., an edge referencing a vertex created in the same call). For shape-library cells (Azure icons, basic shapes), use add-cells-of-shape instead.",
+    description:
+      "Add vertices and/or edges to the diagram. Always pass ALL cells you need in a single call — never call this tool repeatedly. Use temp_id to reference cells within the same batch (e.g., an edge referencing a vertex created in the same call). For shape-library cells (Azure icons, basic shapes), use add-cells-of-shape instead.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -120,14 +127,19 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         source_id: z.string().optional().describe("Source cell ID for edges (can use temp_id from same batch)"),
         target_id: z.string().optional().describe("Target cell ID for edges (can use temp_id from same batch)"),
         temp_id: z.string().optional().describe("Temporary ID to reference this cell within the batch"),
-      })).describe("Array of cells to create. Gather ALL cells you need and submit them in ONE call. Example: [{type:'vertex', x:100, y:100, temp_id:'node1'}, {type:'edge', source_id:'node1', target_id:'node2'}]"),
-      dry_run: z.boolean().optional().describe("If true, validates the batch without persisting changes. Use to check for errors before committing."),
+      })).describe(
+        "Array of cells to create. Gather ALL cells you need and submit them in ONE call. Example: [{type:'vertex', x:100, y:100, temp_id:'node1'}, {type:'edge', source_id:'node1', target_id:'node2'}]",
+      ),
+      dry_run: z.boolean().optional().describe(
+        "If true, validates the batch without persisting changes. Use to check for errors before committing.",
+      ),
     },
   },
   {
     key: "EDIT_CELLS",
     name: "edit-cells",
-    description: "Edit one or more vertex cells. Always pass ALL updates in a single call — never call this tool repeatedly. Only updates specified properties on each cell.",
+    description:
+      "Edit one or more vertex cells. Always pass ALL updates in a single call — never call this tool repeatedly. Only updates specified properties on each cell.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -139,7 +151,9 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         width: z.number().optional().describe("New width"),
         height: z.number().optional().describe("New height"),
         style: z.string().optional().describe("New style string"),
-      })).describe("Array of cell updates. Example: [{cell_id: 'cell-1', x: 200, y: 150}, {cell_id: 'cell-2', text: 'Updated'}]"),
+      })).describe(
+        "Array of cell updates. Example: [{cell_id: 'cell-1', x: 200, y: 150}, {cell_id: 'cell-2', text: 'Updated'}]",
+      ),
     },
   },
 
@@ -148,7 +162,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "GET_SHAPE_CATEGORIES",
     name: "get-shape-categories",
-    description: "Get available shape categories (General, Flowchart, Azure icons). For discovering specific shapes, prefer search-shapes.",
+    description:
+      "Get available shape categories (General, Flowchart, Azure icons). For discovering specific shapes, prefer search-shapes.",
     hasArgs: false,
   },
   {
@@ -167,7 +182,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "GET_SHAPE_BY_NAME",
     name: "get-shape-by-name",
-    description: "Get a shape by exact name from any library (basic shapes or Azure icons). For discovery or fuzzy matching, use search-shapes instead.",
+    description:
+      "Get a shape by exact name from any library (basic shapes or Azure icons). For discovery or fuzzy matching, use search-shapes instead.",
     hasArgs: true,
     inputSchema: {
       shape_name: z
@@ -180,12 +196,15 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "ADD_CELLS_OF_SHAPE",
     name: "add-cells-of-shape",
-    description: "Add one or more shape-based cells (Azure icons, basic shapes) to the diagram. Always pass ALL shapes in a single call — never call this tool repeatedly. Use search-shapes first to discover shape names.",
+    description:
+      "Add one or more shape-based cells (Azure icons, basic shapes) to the diagram. Always pass ALL shapes in a single call — never call this tool repeatedly. Use search-shapes first to discover shape names.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
       cells: z.array(z.object({
-        shape_name: z.string().describe("Name of the shape from the library (e.g., Azure icon name or basic shape like 'rectangle')"),
+        shape_name: z.string().describe(
+          "Name of the shape from the library (e.g., Azure icon name or basic shape like 'rectangle')",
+        ),
         x: z.number().optional().describe("X-axis position of the vertex cell"),
         y: z.number().optional().describe("Y-axis position of the vertex cell"),
         width: z.number().optional().describe("Width (defaults to shape's native width)"),
@@ -199,7 +218,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "SET_CELL_SHAPE",
     name: "set-cell-shape",
-    description: "Update one or more cells' visual styles to match library shapes. Always pass ALL updates in a single call. Use search-shapes to find shape names first.",
+    description:
+      "Update one or more cells' visual styles to match library shapes. Always pass ALL updates in a single call. Use search-shapes to find shape names first.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -218,10 +238,13 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "SEARCH_SHAPES",
     name: "search-shapes",
-    description: "Search for any shape — basic shapes (rectangle, circle, diamond, start, end, process, cylinder, etc.) and 700+ Azure icons. This is the primary way to discover shapes for use with add-cells-of-shape. Call this tool exactly ONCE with ALL shape names in the queries array — never call it multiple times.",
+    description:
+      "Search for any shape — basic shapes (rectangle, circle, diamond, start, end, process, cylinder, etc.) and 700+ Azure icons. This is the primary way to discover shapes for use with add-cells-of-shape. Call this tool exactly ONCE with ALL shape names in the queries array — never call it multiple times.",
     hasArgs: true,
     inputSchema: {
-      queries: z.array(z.string()).describe("Array of ALL search terms. Gather every shape name you need and pass them all here. Example: ['rectangle', 'diamond', 'front door', 'container apps', 'app service', 'key vault', 'cylinder', 'start', 'end']"),
+      queries: z.array(z.string()).describe(
+        "Array of ALL search terms. Gather every shape name you need and pass them all here. Example: ['rectangle', 'diamond', 'front door', 'container apps', 'app service', 'key vault', 'cylinder', 'start', 'end']",
+      ),
       limit: z.number().min(1).max(50).optional().default(10).describe("Maximum results to return per query (1-50)"),
     },
   },
@@ -237,7 +260,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "LIST_PAGED_MODEL",
     name: "list-paged-model",
-    description: "Get a paginated list of cells in the diagram. Returns layer context alongside results. Use this to inspect diagram structure or find cells by type.",
+    description:
+      "Get a paginated list of cells in the diagram. Returns layer context alongside results. Use this to inspect diagram structure or find cells by type.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -272,7 +296,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "GET_DIAGRAM_STATS",
     name: "get-diagram-stats",
-    description: "Get comprehensive statistics about the current diagram including cell counts, bounds, layer distribution, and more. Useful for understanding diagram state before making changes.",
+    description:
+      "Get comprehensive statistics about the current diagram including cell counts, bounds, layer distribution, and more. Useful for understanding diagram state before making changes.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -312,7 +337,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "CREATE_LAYER",
     name: "create-layer",
-    description: "Create a new layer in the diagram. Layers organize cells into separate visual planes that can be shown or hidden.",
+    description:
+      "Create a new layer in the diagram. Layers organize cells into separate visual planes that can be shown or hidden.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -338,7 +364,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "CREATE_GROUPS",
     name: "create-groups",
-    description: "Create one or more group/container cells. Always pass ALL groups in a single call — never call this tool repeatedly. Each group gets a unique ID for use with add-cells-to-group. Children are positioned relative to the group.",
+    description:
+      "Create one or more group/container cells. Always pass ALL groups in a single call — never call this tool repeatedly. Each group gets a unique ID for use with add-cells-to-group. Children are positioned relative to the group.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -349,21 +376,28 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         height: z.number().optional().describe("Height of the group container").default(300),
         text: z.string().optional().describe("Label text for the group").default(""),
         style: z.string().optional().describe("Draw.io style string for the group container"),
-        temp_id: z.string().optional().describe("Temporary ID for referencing this group later (e.g., in add-cells-to-group)"),
-      })).describe("Array of groups to create. Example: [{text: 'VNet', width: 600, height: 400, temp_id: 'vnet'}, {text: 'Subnet', width: 300, height: 200, temp_id: 'subnet'}]"),
+        temp_id: z.string().optional().describe(
+          "Temporary ID for referencing this group later (e.g., in add-cells-to-group)",
+        ),
+      })).describe(
+        "Array of groups to create. Example: [{text: 'VNet', width: 600, height: 400, temp_id: 'vnet'}, {text: 'Subnet', width: 300, height: 200, temp_id: 'subnet'}]",
+      ),
     },
   },
   {
     key: "ADD_CELLS_TO_GROUP",
     name: "add-cells-to-group",
-    description: "Assign one or more cells to groups. Always pass ALL assignments in a single call — never call this tool repeatedly. Supports assigning cells to different groups in a single call.",
+    description:
+      "Assign one or more cells to groups. Always pass ALL assignments in a single call — never call this tool repeatedly. Supports assigning cells to different groups in a single call.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
       assignments: z.array(z.object({
         cell_id: z.string().describe("ID of the cell to add to a group"),
         group_id: z.string().describe("ID of the group/container cell"),
-      })).describe("Array of cell-to-group assignments. Example: [{cell_id: 'cell-5', group_id: 'cell-2'}, {cell_id: 'cell-6', group_id: 'cell-3'}]"),
+      })).describe(
+        "Array of cell-to-group assignments. Example: [{cell_id: 'cell-5', group_id: 'cell-2'}, {cell_id: 'cell-6', group_id: 'cell-3'}]",
+      ),
     },
   },
   {
@@ -392,7 +426,8 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "IMPORT_DIAGRAM",
     name: "import-diagram",
-    description: "Import a Draw.io XML string, replacing the current diagram. Multi-page documents are supported — all pages are merged into a single flat model. Use this to load and modify existing .drawio files.",
+    description:
+      "Import a Draw.io XML string, replacing the current diagram. Multi-page documents are supported — all pages are merged into a single flat model. Use this to load and modify existing .drawio files.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -402,11 +437,14 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "EXPORT_DIAGRAM",
     name: "export-diagram",
-    description: "Export the diagram as Draw.io XML with diagram statistics. The XML is in the response payload's `xml` property. Save the output to a .drawio file. When `compress` is true, the mxGraphModel content inside the <diagram> element is deflate-compressed and base64-encoded (the format used by the Draw.io desktop app), typically achieving 60-80% size reduction. Compressed output is fully compatible with Draw.io and can be re-imported.",
+    description:
+      "Export the diagram as Draw.io XML with diagram statistics. The XML is in the response payload's `xml` property. Save the output to a .drawio file. When `compress` is true, the mxGraphModel content inside the <diagram> element is deflate-compressed and base64-encoded (the format used by the Draw.io desktop app), typically achieving 60-80% size reduction. Compressed output is fully compatible with Draw.io and can be re-imported.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
-      compress: z.boolean().optional().default(false).describe("When true, deflate-compress and base64-encode the diagram content inside the <diagram> element (Draw.io native format). Reduces output size by 60-80%. Defaults to false (plain XML)."),
+      compress: z.boolean().optional().default(false).describe(
+        "When true, deflate-compress and base64-encode the diagram content inside the <diagram> element (Draw.io native format). Reduces output size by 60-80%. Defaults to false (plain XML).",
+      ),
     },
   },
   {
@@ -424,5 +462,5 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
 
 /** Tool name constants derived from TOOL_DEFINITIONS (UPPER_SNAKE_CASE key → kebab-case value) */
 export const TOOL_NAMES: { readonly [key: string]: string } = Object.freeze(
-  Object.fromEntries(TOOL_DEFINITIONS.map(t => [t.key, t.name])),
+  Object.fromEntries(TOOL_DEFINITIONS.map((t) => [t.key, t.name])),
 );

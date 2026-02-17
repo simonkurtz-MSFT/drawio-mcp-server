@@ -13,4 +13,3 @@ updates:
     directory: "/" # Location of compose manifests
     schedule:
       interval: "weekly"
-

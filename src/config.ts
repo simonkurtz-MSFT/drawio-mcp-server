@@ -194,9 +194,7 @@ export const parseConfig = (
   }
 
   // ── Transport: CLI > env > default ──
-  let transportValues = transportArr?.length
-    ? [transportArr.at(-1)!]
-    : undefined;
+  let transportValues = transportArr?.length ? [transportArr.at(-1)!] : undefined;
   if (transportValues === undefined && env.TRANSPORT) {
     transportValues = [env.TRANSPORT];
   }
@@ -216,8 +214,7 @@ export const parseConfig = (
 
   return {
     ...DEFAULT_CONFIG,
-    httpPort:
-      parsedHttpPort !== undefined ? parsedHttpPort : DEFAULT_CONFIG.httpPort,
+    httpPort: parsedHttpPort !== undefined ? parsedHttpPort : DEFAULT_CONFIG.httpPort,
     transports,
     loggerType,
     azureIconLibraryPath,

@@ -9,7 +9,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { createToolHandlerFactory } from "./tool_handler.ts";
 import { TOOL_DEFINITIONS } from "./tool_definitions.ts";
 
-export { TOOL_NAMES, TOOL_DEFINITIONS } from "./tool_definitions.ts";
+export { TOOL_DEFINITIONS, TOOL_NAMES } from "./tool_definitions.ts";
 export type { ToolDefinition, ToolDefinitionWithArgs, ToolDefinitionWithoutArgs } from "./tool_definitions.ts";
 
 /** The handler factory function type returned by createToolHandlerFactory */

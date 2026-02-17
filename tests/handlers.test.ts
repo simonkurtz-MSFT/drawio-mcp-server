@@ -1,5 +1,5 @@
-import { describe, it, beforeEach } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists } from "@std/assert";
+import { beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals, assertExists } from "@std/assert";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { handlers as baseHandlers } from "../src/tools.ts";
 
@@ -19,7 +19,7 @@ let diagramXml: string | undefined;
 
 const handlers = new Proxy(baseHandlers, {
   get(target, prop: string) {
-    const handler = target[prop as keyof typeof target] as ((args?: any) => Promise<CallToolResult>) | undefined;
+    const handler = target[prop as keyof typeof target] as ((args?: any) => CallToolResult) | undefined;
     if (!handler) return undefined;
     return async (args: Record<string, unknown> = {}) => {
       const result = await handler({
@@ -35,10 +35,12 @@ const handlers = new Proxy(baseHandlers, {
       return result;
     };
   },
-});
+}) as unknown as Record<string, (args?: Record<string, unknown>) => Promise<CallToolResult>>;
 
 /** Create a vertex via add-cells and return the cell data. */
-async function addVertex(args: { x?: number; y?: number; width?: number; height?: number; text?: string; style?: string } = {}) {
+async function addVertex(
+  args: { x?: number; y?: number; width?: number; height?: number; text?: string; style?: string } = {},
+) {
   const result = await handlers["add-cells"]({ cells: [{ type: "vertex" as const, ...args }] });
   return parseResult(result).data.results[0].cell;
 }

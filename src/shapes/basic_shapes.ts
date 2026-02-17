@@ -82,7 +82,8 @@ export const BASIC_SHAPES: Record<string, BasicShape> = {
   },
   cylinder: {
     name: "cylinder",
-    style: "shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;",
+    style:
+      "shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;",
     defaultWidth: 80,
     defaultHeight: 100,
   },

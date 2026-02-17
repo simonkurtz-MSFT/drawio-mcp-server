@@ -1,13 +1,13 @@
 import { describe, it } from "@std/testing/bdd";
-import { assertEquals, assertInstanceOf, assert } from "@std/assert";
+import { assert, assertEquals, assertInstanceOf } from "@std/assert";
 import {
-  parseHttpPortValue,
-  shouldShowHelp,
-  parseConfig,
   buildConfig,
-  parseTransports,
+  parseConfig,
+  parseHttpPortValue,
   parseLoggerType,
+  parseTransports,
   type ServerConfig,
+  shouldShowHelp,
 } from "../src/config.ts";
 
 describe("parseHttpPortValue", () => {

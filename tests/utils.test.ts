@@ -1,5 +1,5 @@
 import { describe, it } from "@std/testing/bdd";
-import { assertEquals, assert, assertMatch, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertMatch, assertThrows } from "@std/assert";
 import { isAbsolute, resolve, SEPARATOR } from "@std/path";
 import { esmDirname, readRelativeFile } from "../src/utils.ts";
 
@@ -47,9 +47,7 @@ describe("readRelativeFile", () => {
   });
 
   it("throws for non-existent file", () => {
-    assertThrows(() =>
-      readRelativeFile(import.meta.url, "this-file-does-not-exist.txt"),
-    );
+    assertThrows(() => readRelativeFile(import.meta.url, "this-file-does-not-exist.txt"));
   });
 
   it("resolves relative to the module, not cwd", () => {

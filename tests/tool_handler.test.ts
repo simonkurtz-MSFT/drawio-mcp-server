@@ -3,15 +3,15 @@
  * Verifies handler dispatch, structured errors for unknown tools,
  * logging (tool prefix padding, duration, payload size), and helper functions.
  */
-import { describe, it, beforeEach } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists } from "@std/assert";
-import { spy, assertSpyCalls, type Spy } from "@std/testing/mock";
+import { beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals, assertExists } from "@std/assert";
+import { assertSpyCalls, type Spy, spy } from "@std/testing/mock";
 import {
   createToolHandlerFactory,
   formatBytes,
   timestamp,
-  type ToolLogger,
   type ToolHandlerMap,
+  type ToolLogger,
 } from "../src/tool_handler.ts";
 
 describe("createToolHandlerFactory", () => {

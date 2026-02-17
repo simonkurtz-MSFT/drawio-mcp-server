@@ -2,11 +2,11 @@
  * Tests for DiagramModel XML compression/decompression (deflate-raw + base64),
  * the `toXml({ compress: true })` option, and roundtrip through handlers.
  */
-import { describe, it, beforeEach } from "@std/testing/bdd";
-import { assertEquals, assert, assertExists } from "@std/assert";
+import { beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals, assertExists } from "@std/assert";
 import { spy } from "@std/testing/mock";
 import { DiagramModel } from "../src/diagram_model.ts";
-import { handlers as baseHandlers, createHandlers } from "../src/tools.ts";
+import { createHandlers, handlers as baseHandlers } from "../src/tools.ts";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 /** Parse the JSON payload out of a handler result. */
@@ -22,7 +22,7 @@ let diagramXml: string | undefined;
 
 const handlers = new Proxy(baseHandlers, {
   get(target, prop: string) {
-    const handler = target[prop as keyof typeof target] as ((args?: any) => Promise<CallToolResult>) | undefined;
+    const handler = target[prop as keyof typeof target] as ((args?: any) => CallToolResult) | undefined;
     if (!handler) return undefined;
     return async (args: Record<string, unknown> = {}) => {
       const result = await handler({
@@ -38,7 +38,7 @@ const handlers = new Proxy(baseHandlers, {
       return result;
     };
   },
-});
+}) as unknown as Record<string, (args?: Record<string, unknown>) => Promise<CallToolResult>>;
 
 describe("DiagramModel compression", () => {
   let model: DiagramModel;
@@ -71,7 +71,8 @@ describe("DiagramModel compression", () => {
     });
 
     it("should roundtrip XML with special characters", () => {
-      const xml = '<mxGraphModel><root><mxCell id="0" value="Hello &amp; &lt;World&gt; &quot;test&quot;"/></root></mxGraphModel>';
+      const xml =
+        '<mxGraphModel><root><mxCell id="0" value="Hello &amp; &lt;World&gt; &quot;test&quot;"/></root></mxGraphModel>';
       const compressed = DiagramModel.compressXml(xml);
       const decompressed = DiagramModel.decompressXml(compressed);
       assertEquals(decompressed, xml);
@@ -93,8 +94,14 @@ describe("DiagramModel compression", () => {
 
     it("should produce smaller output for large XML", () => {
       // Build a large XML string
-      const cells = Array.from({ length: 100 }, (_, i) =>
-        `<mxCell id="${i + 2}" value="Cell ${i}" style="fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="${i * 10}" y="${i * 10}" width="120" height="60" as="geometry"/></mxCell>`,
+      const cells = Array.from(
+        { length: 100 },
+        (_, i) =>
+          `<mxCell id="${
+            i + 2
+          }" value="Cell ${i}" style="fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="${
+            i * 10
+          }" y="${i * 10}" width="120" height="60" as="geometry"/></mxCell>`,
       ).join("");
       const xml = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
       const compressed = DiagramModel.compressXml(xml);
@@ -158,7 +165,7 @@ describe("DiagramModel compression", () => {
     });
 
     it("should handle special characters in compressed output", () => {
-      model.addRectangle({ text: '<strong>"Hello" & \'World\'</strong>' });
+      model.addRectangle({ text: "<strong>\"Hello\" & 'World'</strong>" });
       const compressed = model.toXml({ compress: true });
       // Should still be valid — roundtrip through import
       const model2 = new DiagramModel();
@@ -166,7 +173,7 @@ describe("DiagramModel compression", () => {
       assertEquals("error" in result, false);
       const cells = model2.listCells();
       assertEquals(cells.length, 1);
-      assertEquals(cells[0].value, '<strong>"Hello" & \'World\'</strong>');
+      assertEquals(cells[0].value, "<strong>\"Hello\" & 'World'</strong>");
     });
   });
 
@@ -192,10 +199,14 @@ describe("DiagramModel compression", () => {
 
     it("should import a compressed multi-page diagram and merge cells", () => {
       // Manually construct a 2-page compressed XML
-      const page1Xml = '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="10" value="Page1" style="" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="50" as="geometry"/></mxCell></root></mxGraphModel>';
-      const page2Xml = '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="20" value="Page2" style="" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="50" as="geometry"/></mxCell></root></mxGraphModel>';
+      const page1Xml =
+        '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="10" value="Page1" style="" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="50" as="geometry"/></mxCell></root></mxGraphModel>';
+      const page2Xml =
+        '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="20" value="Page2" style="" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="50" as="geometry"/></mxCell></root></mxGraphModel>';
 
-      const xml = `<mxfile host="test"><diagram id="p1" name="Page-1">${DiagramModel.compressXml(page1Xml)}</diagram><diagram id="p2" name="Second">${DiagramModel.compressXml(page2Xml)}</diagram></mxfile>`;
+      const xml = `<mxfile host="test"><diagram id="p1" name="Page-1">${
+        DiagramModel.compressXml(page1Xml)
+      }</diagram><diagram id="p2" name="Second">${DiagramModel.compressXml(page2Xml)}</diagram></mxfile>`;
 
       const model2 = new DiagramModel();
       const result = model2.importXml(xml);
@@ -207,8 +218,8 @@ describe("DiagramModel compression", () => {
       // Both pages' cells merged into single model
       const cells = model2.listCells();
       assertEquals(cells.length, 2);
-      assert(cells.some(c => c.value === "Page1"));
-      assert(cells.some(c => c.value === "Page2"));
+      assert(cells.some((c) => c.value === "Page1"));
+      assert(cells.some((c) => c.value === "Page2"));
     });
 
     it("should preserve edges through compressed roundtrip", () => {
@@ -235,7 +246,7 @@ describe("DiagramModel compression", () => {
 
       const layers = model2.listLayers();
       assertEquals(layers.length, 2);
-      assert(layers.some(l => l.name === "Custom"));
+      assert(layers.some((l) => l.name === "Custom"));
     });
 
     it("should preserve groups through compressed roundtrip", () => {
@@ -249,17 +260,18 @@ describe("DiagramModel compression", () => {
       model2.importXml(compressed);
 
       const cells = model2.listCells();
-      const importedGroup = cells.find(c => c.value === "VNet");
+      const importedGroup = cells.find((c) => c.value === "VNet");
       assertExists(importedGroup);
       assertEquals(importedGroup!.isGroup, true);
       assert(importedGroup!.children!.includes(
-        cells.find(c => c.value === "Subnet")!.id,
+        cells.find((c) => c.value === "Subnet")!.id,
       ));
     });
 
     it("should still import uncompressed XML after feature is added", () => {
       // Ensure backward compatibility with plain XML
-      const plainXml = `<mxfile host="test"><diagram id="d1" name="Page"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="Plain" style="" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="50" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`;
+      const plainXml =
+        `<mxfile host="test"><diagram id="d1" name="Page"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="Plain" style="" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="50" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`;
       const result = model.importXml(plainXml);
       assertEquals("error" in result, false);
       const cells = model.listCells();
@@ -347,7 +359,7 @@ describe("DiagramModel compression", () => {
       await loggedHandlers["add-cells"]({ cells: [{ type: "vertex", text: "Compression Log Test" }] });
       await loggedHandlers["export-diagram"]({ compress: true });
 
-      const debugCalls = debugSpy.calls.map(c => c.args[0] as string);
+      const debugCalls = debugSpy.calls.map((c) => c.args[0] as string);
       const compressedSizeLog = debugCalls.find((msg: string) => msg.includes("compressed size:"));
 
       assertExists(compressedSizeLog);
@@ -362,10 +374,8 @@ describe("DiagramModel compression", () => {
       await loggedHandlers["add-cells"]({ cells: [{ type: "vertex", text: "No Compress" }] });
       await loggedHandlers["export-diagram"]({ compress: false });
 
-      const debugCalls = debugSpy.calls.map(c => c.args[0] as string);
-      const compressionLogs = debugCalls.filter((msg: string) =>
-        msg.includes("compressed size:")
-      );
+      const debugCalls = debugSpy.calls.map((c) => c.args[0] as string);
+      const compressionLogs = debugCalls.filter((msg: string) => msg.includes("compressed size:"));
       assertEquals(compressionLogs.length, 0);
     });
 
@@ -377,10 +387,8 @@ describe("DiagramModel compression", () => {
       await loggedHandlers["add-cells"]({ cells: [{ type: "vertex", text: "Default" }] });
       await loggedHandlers["export-diagram"]({});
 
-      const debugCalls = debugSpy.calls.map(c => c.args[0] as string);
-      const compressionLogs = debugCalls.filter((msg: string) =>
-        msg.includes("compressed size:")
-      );
+      const debugCalls = debugSpy.calls.map((c) => c.args[0] as string);
+      const compressionLogs = debugCalls.filter((msg: string) => msg.includes("compressed size:"));
       assertEquals(compressionLogs.length, 0);
     });
   });

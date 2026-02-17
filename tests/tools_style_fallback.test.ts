@@ -7,16 +7,17 @@
  * initializeShapes(tempFile), and exercise the `?? ""` fallback on lines 53 and 66
  * through the real handler functions.
  */
-import { describe, it, afterAll } from "@std/testing/bdd";
+import { afterAll, describe, it } from "@std/testing/bdd";
 import { assertEquals } from "@std/assert";
 import { resolve } from "@std/path";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { handlers as baseHandlers, clearResolveShapeCache, setMaxResolveCacheSize, getResolveCacheSize } from "../src/tools.ts";
 import {
-  initializeShapes,
-  setAzureIconLibraryPath,
-  resetAzureIconLibrary,
-} from "../src/shapes/azure_icon_library.ts";
+  clearResolveShapeCache,
+  getResolveCacheSize,
+  handlers as baseHandlers,
+  setMaxResolveCacheSize,
+} from "../src/tools.ts";
+import { initializeShapes, resetAzureIconLibrary, setAzureIconLibraryPath } from "../src/shapes/azure_icon_library.ts";
 
 /** Parse the JSON payload out of a handler result. */
 function parseResult(result: CallToolResult): any {
@@ -29,7 +30,7 @@ let diagramXml: string | undefined;
 
 const handlers = new Proxy(baseHandlers, {
   get(target, prop: string) {
-    const handler = target[prop as keyof typeof target] as ((args?: any) => Promise<CallToolResult>) | undefined;
+    const handler = target[prop as keyof typeof target] as ((args?: any) => CallToolResult) | undefined;
     if (!handler) return undefined;
     return async (args: Record<string, unknown> = {}) => {
       const result = await handler({
@@ -45,7 +46,7 @@ const handlers = new Proxy(baseHandlers, {
       return result;
     };
   },
-});
+}) as unknown as Record<string, (args?: Record<string, unknown>) => Promise<CallToolResult>>;
 
 /**
  * XML library that defines shapes WITHOUT image data URLs in their style.
