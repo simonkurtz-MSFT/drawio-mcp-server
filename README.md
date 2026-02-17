@@ -10,8 +10,9 @@ Quick links: [Acknowledgements](#acknowledgements)
 
 ## Acknowledgements
 
+This project would not exist in this manner if it weren't for the following repositories and their authors. Thank you!
+
 - **Original drawio-mcp-server** by **Ladislav (lgazo)**: https://github.com/lgazo/drawio-mcp-server
-- **Support / donation section** in the original README: https://github.com/lgazo/drawio-mcp-server#sponsoring (includes https://liberapay.com/ladislav/donate)
 - **Azure icons source** (`dwarfered`): https://github.com/dwarfered/azure-architecture-icons-for-drawio
 - **VS Code Drawio extension** by **hediet**: https://github.com/hediet/vscode-drawio
 
