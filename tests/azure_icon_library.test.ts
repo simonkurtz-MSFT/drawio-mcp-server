@@ -162,6 +162,28 @@ describe("loadAzureIconLibrary", () => {
       Deno.removeSync(tmpFile);
     }
   });
+
+  it("parses mxlibrary payload when tag and brackets include whitespace/newlines", () => {
+    const tmpFile = Deno.makeTempFileSync({ suffix: ".xml" });
+    const xmlContent = `<mxlibrary
+>
+  [
+    {"xml":"<mxGraphModel><root><mxCell id=\\"0\\"/></root></mxGraphModel>","title":"Whitespace Tag","w":48,"h":48}
+  ]
+</mxlibrary>`;
+
+    try {
+      Deno.writeTextFileSync(tmpFile, xmlContent);
+      const result = loadAzureIconLibrary(tmpFile);
+      assertEquals(result.shapes.length, 1);
+      assertEquals(result.shapes[0].title, "Whitespace Tag");
+      assertEquals(result.shapes[0].id, "whitespace-tag");
+      assertEquals(result.shapes[0].width, 48);
+      assertEquals(result.shapes[0].height, 48);
+    } finally {
+      Deno.removeSync(tmpFile);
+    }
+  });
 });
 
 describe("categorizeShapes", () => {

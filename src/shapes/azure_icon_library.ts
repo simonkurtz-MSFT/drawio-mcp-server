@@ -50,7 +50,7 @@ export interface AzureIconLibrary {
 function parseLibraryXml(xmlContent: string): AzureIconShape[] {
   try {
     // Extract JSON array from mxlibrary XML
-    const match = xmlContent.match(/<mxlibrary>\[(.*)\]<\/mxlibrary>/s);
+    const match = xmlContent.match(/<mxlibrary\s*>\s*\[(.*)\]\s*<\/mxlibrary>/s);
     if (!match) {
       console.warn("No mxlibrary found in XML");
       return [];
