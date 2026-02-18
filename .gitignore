@@ -6,6 +6,8 @@ build/
 
 # Test coverage
 coverage/
+coverage_lcov.txt
+coverage_detail.txt
 
 # Logs
 *.log
@@ -25,4 +27,5 @@ coverage/
 # OS files
 *.tgz
 
-coverage_lcov.txt
+# Draw.io files (possibly created during testing or development)
+*.drawio
