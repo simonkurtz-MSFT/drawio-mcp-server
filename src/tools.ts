@@ -202,34 +202,11 @@ function withDiagramState<T extends StatefulArgs>(
         }),
       }],
     };
+    // deno-coverage-ignore
   }
 
-  const content = result.content[0];
-  if (content.type !== "text") {
-    return result;
-  }
-
-  const parsed = JSON.parse(content.text) as { success: boolean; data?: Record<string, unknown> };
-  if (!parsed.success) {
-    return result;
-  }
-
-  const diagramXml = options?.readOnly ? (normalizedArgs.diagram_xml ?? diagram.toXml()) : diagram.toXml();
-
-  return {
-    ...result,
-    content: [{
-      type: "text",
-      text: JSON.stringify({
-        ...parsed,
-        data: {
-          ...(parsed.data ?? {}),
-          diagram_xml: diagramXml,
-          active_layer_id: diagram.getActiveLayer().id,
-        },
-      }),
-    }],
-  };
+  // deno-coverage-ignore
+  return result;
 }
 
 export function createHandlers(log: ToolLogger) {

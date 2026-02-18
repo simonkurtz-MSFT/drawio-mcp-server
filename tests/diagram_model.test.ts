@@ -1,6 +1,6 @@
 import { beforeEach, describe, it } from "@std/testing/bdd";
 import { assert, assertEquals, assertExists, assertGreater, assertNotEquals } from "@std/assert";
-import { DiagramModel } from "../src/diagram_model.ts";
+import { type Cell, DiagramModel } from "../src/diagram_model.ts";
 
 describe("DiagramModel", () => {
   let model: DiagramModel;
@@ -852,6 +852,562 @@ describe("DiagramModel", () => {
       model.addRectangle({ text: "A" });
       const stats = model.getStats();
       assertNotEquals(stats.bounds, null);
+    });
+
+    it("should return cached stats on second call", () => {
+      model.addRectangle({ text: "A" });
+      const stats1 = model.getStats();
+      const stats2 = model.getStats();
+      assertEquals(stats1.total_cells, stats2.total_cells);
+      assertEquals(stats1.vertices, stats2.vertices);
+    });
+  });
+
+  describe("clear with edges", () => {
+    it("should count edges in clear result", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      model.addEdge({ sourceId: a.id, targetId: b.id });
+      const result = model.clear();
+      assertEquals(result.vertices, 2);
+      assertEquals(result.edges, 1);
+    });
+  });
+
+  describe("symmetric edge anchors", () => {
+    it("should apply left-facing anchors when source is right of target", () => {
+      const right = model.addRectangle({ x: 400, y: 100, width: 100, height: 60, text: "Right" });
+      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
+      const edge = model.addEdge({ sourceId: right.id, targetId: left.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        assert(styleMatch![1].includes("exitX=0;exitY=0.5;entryX=1;entryY=0.5;"));
+      }
+    });
+
+    it("should apply bottom-to-top anchors when source is below target", () => {
+      const bottom = model.addRectangle({ x: 120, y: 320, width: 100, height: 60, text: "Bottom" });
+      const top = model.addRectangle({ x: 120, y: 0, width: 100, height: 60, text: "Top" });
+      const edge = model.addEdge({ sourceId: bottom.id, targetId: top.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        assert(styleMatch![1].includes("exitX=0.5;exitY=0;entryX=0.5;entryY=1;"));
+      }
+    });
+
+    it("should add semicolon terminator to style strings missing trailing semicolon", () => {
+      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
+      const right = model.addRectangle({ x: 400, y: 100, width: 100, height: 60, text: "Right" });
+      const edge = model.addEdge({ sourceId: left.id, targetId: right.id, style: "html=1" });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        // Should have a semicolon between the original style and the anchor suffix
+        assert(styleMatch![1].startsWith("html=1;exitX="));
+      }
+    });
+  });
+
+  describe("group avoidance routing", () => {
+    it("should route below group when nodes are below group center", () => {
+      // Edge must cross through group. Position nodes on either side, with y below group center.
+      // Group at (200, 100, 260, 200) → center y=200. Nodes at y=250 → mid y=280 > 200 → route below.
+      model.createGroup({ x: 200, y: 100, width: 260, height: 200, text: "Container" });
+      const left = model.addRectangle({ x: 20, y: 250, width: 100, height: 60, text: "Left" });
+      const right = model.addRectangle({ x: 560, y: 250, width: 100, height: 60, text: "Right" });
+      const edge = model.addEdge({ sourceId: left.id, targetId: right.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        // The waypoint should appear as an mxPoint in the edge geometry
+        assert(xml.includes(`id="${edge.id}"`));
+        const pointMatch = xml.match(/mxPoint x="[\d.]+" y="([\d.]+)"/);
+        assertExists(pointMatch);
+        if (pointMatch) {
+          const waypointY = parseFloat(pointMatch[1]);
+          // Route below group: groupBottom (300) + margin (30) = 330
+          assertEquals(waypointY, 330);
+        }
+      }
+    });
+
+    it("should route through gap channel when source is left of group and target is below", () => {
+      // Source left of group, target below group → vertical channel in the gap.
+      // Group at (320, 80, 250, 380). Source at (80, 240, 65, 68), sourceRight=145.
+      // Target at (413, 550, 65, 68), targetCenter.y=584 > groupBottom+margin (460+30=490).
+      // Channel X = 145 + (320 - 145) / 2 = 232.5
+      model.createGroup({ x: 320, y: 80, width: 250, height: 380, text: "Container" });
+      const source = model.addRectangle({ x: 80, y: 240, width: 65, height: 68, text: "Source" });
+      const target = model.addRectangle({ x: 413, y: 550, width: 65, height: 68, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const pointsMatch = xml.match(
+          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
+        );
+        assertExists(pointsMatch);
+        // Channel at x=232.5, waypoints at sourceCenter.y=274 and targetCenter.y=584
+        assert(pointsMatch![1].includes('x="232.5"'));
+        assert(pointsMatch![1].includes('y="274"'));
+        assert(pointsMatch![1].includes('y="584"'));
+      }
+    });
+
+    it("should route through gap channel when source is left of group and target is above", () => {
+      // Source left of group, target above group.
+      // Group at (320, 200, 250, 300). Source at (80, 300, 65, 68), sourceRight=145.
+      // Target at (413, 20, 65, 68), targetCenter.y=54 < groupTop-margin (200-30=170).
+      // Channel X = 145 + (320 - 145) / 2 = 232.5
+      model.createGroup({ x: 320, y: 200, width: 250, height: 300, text: "Container" });
+      const source = model.addRectangle({ x: 80, y: 300, width: 65, height: 68, text: "Source" });
+      const target = model.addRectangle({ x: 413, y: 20, width: 65, height: 68, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const pointsMatch = xml.match(
+          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
+        );
+        assertExists(pointsMatch);
+        // Channel at x=232.5, waypoints at sourceCenter.y=334 and targetCenter.y=54
+        assert(pointsMatch![1].includes('x="232.5"'));
+        assert(pointsMatch![1].includes('y="334"'));
+        assert(pointsMatch![1].includes('y="54"'));
+      }
+    });
+
+    it("should route through gap channel when source is right of group and target is below", () => {
+      // Group at (100, 80, 200, 300). Source at (400, 150, 80, 60), sourceBounds.x=400 > groupRight=300.
+      // Target at (150, 470, 80, 60), targetCenter.y=500 > groupBottom+margin (380+30=410).
+      // Channel X = 300 + (400 - 300) / 2 = 350
+      model.createGroup({ x: 100, y: 80, width: 200, height: 300, text: "Container" });
+      const source = model.addRectangle({ x: 400, y: 150, width: 80, height: 60, text: "Source" });
+      const target = model.addRectangle({ x: 150, y: 470, width: 80, height: 60, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const pointsMatch = xml.match(
+          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
+        );
+        assertExists(pointsMatch);
+        // Channel at x=350, waypoints at sourceCenter.y=180 and targetCenter.y=500
+        assert(pointsMatch![1].includes('x="350"'));
+        assert(pointsMatch![1].includes('y="180"'));
+        assert(pointsMatch![1].includes('y="500"'));
+      }
+    });
+
+    it("should route through gap channel when source is right of group and target is above", () => {
+      // Group at (100, 200, 200, 300). Source at (400, 300, 80, 60), sourceBounds.x=400 > groupRight=300.
+      // Target at (150, 20, 80, 60), targetCenter.y=50 < groupTop-margin (200-30=170).
+      // Channel X = 300 + (400 - 300) / 2 = 350
+      model.createGroup({ x: 100, y: 200, width: 200, height: 300, text: "Container" });
+      const source = model.addRectangle({ x: 400, y: 300, width: 80, height: 60, text: "Source" });
+      const target = model.addRectangle({ x: 150, y: 20, width: 80, height: 60, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const pointsMatch = xml.match(
+          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
+        );
+        assertExists(pointsMatch);
+        // Channel at x=350, waypoints at sourceCenter.y=330 and targetCenter.y=50
+        assert(pointsMatch![1].includes('x="350"'));
+        assert(pointsMatch![1].includes('y="330"'));
+        assert(pointsMatch![1].includes('y="50"'));
+      }
+    });
+
+    it("should route through gap channel when source is above group and target is to the right", () => {
+      // Group at (200, 200, 200, 200). Source at (250, 20, 80, 60), sourceBottom=80 < groupTop=200.
+      // Target at (500, 280, 80, 60), targetCenter.x=540 > groupRight+margin (400+30=430).
+      // Channel Y = 80 + (200 - 80) / 2 = 140
+      model.createGroup({ x: 200, y: 200, width: 200, height: 200, text: "Container" });
+      const source = model.addRectangle({ x: 250, y: 20, width: 80, height: 60, text: "Source" });
+      const target = model.addRectangle({ x: 500, y: 280, width: 80, height: 60, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const pointsMatch = xml.match(
+          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
+        );
+        assertExists(pointsMatch);
+        // Channel at y=140, waypoints at sourceCenter.x=290 and targetCenter.x=540
+        assert(pointsMatch![1].includes('y="140"'));
+        assert(pointsMatch![1].includes('x="290"'));
+        assert(pointsMatch![1].includes('x="540"'));
+      }
+    });
+
+    it("should route through gap channel when source is above group and target is to the left", () => {
+      // Group at (200, 200, 200, 200). Source at (250, 20, 80, 60), sourceBottom=80 < groupTop=200.
+      // Target at (20, 280, 80, 60), targetCenter.x=60 < groupLeft-margin (200-30=170).
+      // Channel Y = 80 + (200 - 80) / 2 = 140
+      model.createGroup({ x: 200, y: 200, width: 200, height: 200, text: "Container" });
+      const source = model.addRectangle({ x: 250, y: 20, width: 80, height: 60, text: "Source" });
+      const target = model.addRectangle({ x: 20, y: 280, width: 80, height: 60, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const pointsMatch = xml.match(
+          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
+        );
+        assertExists(pointsMatch);
+        // Channel at y=140, waypoints at sourceCenter.x=290 and targetCenter.x=60
+        assert(pointsMatch![1].includes('y="140"'));
+        assert(pointsMatch![1].includes('x="290"'));
+        assert(pointsMatch![1].includes('x="60"'));
+      }
+    });
+
+    it("should route through gap channel when source is below group and target is to the left", () => {
+      // Group at (200, 100, 200, 200). Source at (250, 400, 80, 60), sourceBounds.y=400 > groupBottom=300.
+      // Target at (20, 180, 80, 60), targetCenter.x=60 < groupLeft-margin (200-30=170).
+      // Channel Y = 300 + (400 - 300) / 2 = 350
+      model.createGroup({ x: 200, y: 100, width: 200, height: 200, text: "Container" });
+      const source = model.addRectangle({ x: 250, y: 400, width: 80, height: 60, text: "Source" });
+      const target = model.addRectangle({ x: 20, y: 180, width: 80, height: 60, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const pointsMatch = xml.match(
+          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
+        );
+        assertExists(pointsMatch);
+        // Channel at y=350, waypoints at sourceCenter.x=290 and targetCenter.x=60
+        assert(pointsMatch![1].includes('y="350"'));
+        assert(pointsMatch![1].includes('x="290"'));
+        assert(pointsMatch![1].includes('x="60"'));
+      }
+    });
+
+    it("should route through gap channel when source is below group and target is to the right", () => {
+      // Group at (200, 100, 200, 200). Source at (250, 400, 80, 60), sourceBounds.y=400 > groupBottom=300.
+      // Target at (500, 180, 80, 60), targetCenter.x=540 > groupRight+margin (400+30=430).
+      // Channel Y = 300 + (400 - 300) / 2 = 350
+      model.createGroup({ x: 200, y: 100, width: 200, height: 200, text: "Container" });
+      const source = model.addRectangle({ x: 250, y: 400, width: 80, height: 60, text: "Source" });
+      const target = model.addRectangle({ x: 500, y: 180, width: 80, height: 60, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const pointsMatch = xml.match(
+          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
+        );
+        assertExists(pointsMatch);
+        // Channel at y=350, waypoints at sourceCenter.x=290 and targetCenter.x=540
+        assert(pointsMatch![1].includes('y="350"'));
+        assert(pointsMatch![1].includes('x="290"'));
+        assert(pointsMatch![1].includes('x="540"'));
+      }
+    });
+
+    it("should skip gap channel when path bbox does not overlap group", () => {
+      // Source and target both above a group — no bbox overlap, no waypoints needed.
+      model.createGroup({ x: 300, y: 400, width: 200, height: 200, text: "Container" });
+      const source = model.addRectangle({ x: 20, y: 50, width: 80, height: 60, text: "Source" });
+      const target = model.addRectangle({ x: 200, y: 50, width: 80, height: 60, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        // Edge should have no Array points (no avoidance waypoints)
+        const edgeXml = xml.match(new RegExp(`<mxCell id="${edge.id}"[^/]*/>`))?.[0] ??
+          xml.match(new RegExp(`<mxCell id="${edge.id}".*?</mxCell>`, "s"))?.[0] ?? "";
+        assertEquals(edgeXml.includes("<Array"), false);
+      }
+    });
+  });
+
+  describe("nested group bounds", () => {
+    it("should propagate parent group offsets in getAbsoluteBoundsFromMap", () => {
+      // Create outer group, inner group, and a cell inside the inner group
+      const outer = model.createGroup({ x: 100, y: 50, width: 500, height: 400, text: "Outer" });
+      const inner = model.createGroup({ x: 20, y: 20, width: 200, height: 150, text: "Inner" });
+      model.addCellToGroup(inner.id, outer.id);
+      const child = model.addRectangle({ x: 10, y: 10, width: 80, height: 40, text: "Child" });
+      model.addCellToGroup(child.id, inner.id);
+
+      // Create nodes outside the outer group and an edge across
+      const external = model.addRectangle({ x: 700, y: 200, width: 100, height: 60, text: "External" });
+      model.addEdge({ sourceId: external.id, targetId: child.id });
+
+      // Calling toXml() exercises getAbsoluteBoundsFromMap with nested parent recursion
+      const xml = model.toXml();
+      assert(xml.includes(`id="${child.id}"`));
+      assert(xml.includes(`id="${inner.id}"`));
+      assert(xml.includes(`id="${outer.id}"`));
+    });
+  });
+
+  describe("private geometry helpers", () => {
+    // Access private methods via `any` cast for thorough unit testing
+    it("getAbsoluteBounds should traverse parent chain", () => {
+      const m = model as any;
+      const parent: Cell = {
+        id: "g1",
+        type: "vertex",
+        value: "Group",
+        x: 100,
+        y: 50,
+        width: 400,
+        height: 300,
+        style: "",
+        parent: "1",
+        isGroup: true,
+        children: ["c1"],
+      };
+      const child: Cell = {
+        id: "c1",
+        type: "vertex",
+        value: "Child",
+        x: 20,
+        y: 30,
+        width: 80,
+        height: 40,
+        style: "",
+        parent: "g1",
+      };
+      m.cells.set("g1", parent);
+      m.cells.set("c1", child);
+      const bounds = m.getAbsoluteBounds("c1");
+      assertEquals(bounds, { x: 120, y: 80, width: 80, height: 40 });
+    });
+
+    it("getAbsoluteBounds should return null for non-existent cell", () => {
+      const m = model as any;
+      assertEquals(m.getAbsoluteBounds("missing"), null);
+    });
+
+    it("getAbsoluteBounds should return null for edge cell", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id });
+      if (!("error" in edge)) {
+        const m = model as any;
+        assertEquals(m.getAbsoluteBounds(edge.id), null);
+      }
+    });
+
+    it("getAbsoluteBounds should stop at non-group parent", () => {
+      const m = model as any;
+      const nonGroup: Cell = {
+        id: "ng1",
+        type: "vertex",
+        value: "Not Group",
+        x: 200,
+        y: 200,
+        width: 100,
+        height: 100,
+        style: "",
+        parent: "1",
+      };
+      const child: Cell = {
+        id: "c2",
+        type: "vertex",
+        value: "Child",
+        x: 10,
+        y: 10,
+        width: 50,
+        height: 50,
+        style: "",
+        parent: "ng1",
+      };
+      m.cells.set("ng1", nonGroup);
+      m.cells.set("c2", child);
+      const bounds = m.getAbsoluteBounds("c2");
+      // Parent is not a group, so no offset is added
+      assertEquals(bounds, { x: 10, y: 10, width: 50, height: 50 });
+    });
+
+    it("getCellCenter should return center point", () => {
+      const m = model as any;
+      const cell: Cell = {
+        id: "v1",
+        type: "vertex",
+        value: "V",
+        x: 100,
+        y: 200,
+        width: 80,
+        height: 40,
+        style: "",
+        parent: "1",
+      };
+      m.cells.set("v1", cell);
+      const center = m.getCellCenter("v1");
+      assertEquals(center, { x: 140, y: 220 });
+    });
+
+    it("getCellCenter should return null for non-existent cell", () => {
+      const m = model as any;
+      assertEquals(m.getCellCenter("missing"), null);
+    });
+
+    it("isCellInsideGroup should return true for same cell", () => {
+      const g = model.createGroup({ text: "G" });
+      const m = model as any;
+      assertEquals(m.isCellInsideGroup(g.id, g.id), true);
+    });
+
+    it("isCellInsideGroup should traverse nested groups", () => {
+      const outer = model.createGroup({ text: "Outer" });
+      const inner = model.createGroup({ text: "Inner" });
+      model.addCellToGroup(inner.id, outer.id);
+      const cell = model.addRectangle({ text: "Leaf" });
+      model.addCellToGroup(cell.id, inner.id);
+      const m = model as any;
+      assertEquals(m.isCellInsideGroup(cell.id, outer.id), true);
+    });
+
+    it("isCellInsideGroup should return false for unrelated cell", () => {
+      const g = model.createGroup({ text: "G" });
+      const cell = model.addRectangle({ text: "A" });
+      const m = model as any;
+      assertEquals(m.isCellInsideGroup(cell.id, g.id), false);
+    });
+
+    it("pointInsideRect should detect point inside", () => {
+      const m = model as any;
+      assertEquals(m.pointInsideRect({ x: 150, y: 150 }, { x: 100, y: 100, width: 200, height: 200 }), true);
+    });
+
+    it("pointInsideRect should detect point outside", () => {
+      const m = model as any;
+      assertEquals(m.pointInsideRect({ x: 50, y: 150 }, { x: 100, y: 100, width: 200, height: 200 }), false);
+    });
+
+    it("pointInsideRect should fail for point below rect", () => {
+      const m = model as any;
+      assertEquals(m.pointInsideRect({ x: 150, y: 350 }, { x: 100, y: 100, width: 200, height: 200 }), false);
+    });
+
+    it("pointInsideRect should fail for point right of rect", () => {
+      const m = model as any;
+      assertEquals(m.pointInsideRect({ x: 350, y: 150 }, { x: 100, y: 100, width: 200, height: 200 }), false);
+    });
+
+    it("pointInsideRect should fail for point above rect", () => {
+      const m = model as any;
+      assertEquals(m.pointInsideRect({ x: 150, y: 50 }, { x: 100, y: 100, width: 200, height: 200 }), false);
+    });
+
+    it("lineSegmentsIntersect should detect collinear overlap o1=0", () => {
+      const m = model as any;
+      // Collinear horizontal segments that overlap: p1-p2 = (0,0)→(10,0) and q1-q2 = (5,0)→(15,0)
+      assertEquals(m.lineSegmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: 0 }, { x: 15, y: 0 }), true);
+    });
+
+    it("lineSegmentsIntersect should detect collinear overlap o2=0", () => {
+      const m = model as any;
+      // q2 is on segment p1-p2
+      assertEquals(m.lineSegmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: -5, y: 0 }, { x: 5, y: 0 }), true);
+    });
+
+    it("lineSegmentsIntersect should detect collinear overlap o3=0", () => {
+      const m = model as any;
+      // p1 is on segment q1-q2
+      assertEquals(m.lineSegmentsIntersect({ x: 5, y: 0 }, { x: 15, y: 0 }, { x: 0, y: 0 }, { x: 10, y: 0 }), true);
+    });
+
+    it("lineSegmentsIntersect should detect collinear overlap o4=0", () => {
+      const m = model as any;
+      // p2 is on segment q1-q2
+      assertEquals(m.lineSegmentsIntersect({ x: -5, y: 0 }, { x: 5, y: 0 }, { x: 0, y: 0 }, { x: 10, y: 0 }), true);
+    });
+
+    it("lineSegmentsIntersect should detect when o3=0 (p1 on segment q1-q2)", () => {
+      const m = model as any;
+      // p1-p2 diagonal, q1-q2 horizontal. p1 lies on q1-q2 extended line (y=0).
+      // o1,o2 non-zero, o3=0 and onSegment(q1,p1,q2)=true
+      assertEquals(m.lineSegmentsIntersect({ x: 5, y: 0 }, { x: 0, y: 5 }, { x: 0, y: 0 }, { x: 10, y: 0 }), true);
+    });
+
+    it("lineSegmentsIntersect should detect when o4=0 (p2 on segment q1-q2)", () => {
+      const m = model as any;
+      // p2 lies on q1-q2 line (y=0). o1,o2 non-zero, o4=0
+      assertEquals(m.lineSegmentsIntersect({ x: 0, y: 5 }, { x: 5, y: 0 }, { x: 0, y: 0 }, { x: 10, y: 0 }), true);
+    });
+
+    it("lineSegmentsIntersect should return false for non-intersecting segments", () => {
+      const m = model as any;
+      assertEquals(m.lineSegmentsIntersect({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 5 }, { x: 10, y: 5 }), false);
+    });
+
+    it("segmentIntersectsRect should detect point inside rect", () => {
+      const m = model as any;
+      // Start point is inside the rect
+      assertEquals(
+        m.segmentIntersectsRect({ x: 150, y: 150 }, { x: 500, y: 500 }, { x: 100, y: 100, width: 200, height: 200 }),
+        true,
+      );
+    });
+
+    it("segmentIntersectsRect should check all four sides", () => {
+      const m = model as any;
+      const rect = { x: 100, y: 100, width: 200, height: 200 };
+      // Diagonal segment that enters from bottom-left corner area
+      assertEquals(m.segmentIntersectsRect({ x: 50, y: 350 }, { x: 350, y: 50 }, rect), true);
+      // Segment crossing only the bottom side
+      assertEquals(m.segmentIntersectsRect({ x: 150, y: 350 }, { x: 150, y: 250 }, rect), true);
+      // Segment crossing only the left side
+      assertEquals(m.segmentIntersectsRect({ x: 50, y: 200 }, { x: 150, y: 200 }, rect), true);
+      // Segment that misses entirely
+      assertEquals(m.segmentIntersectsRect({ x: 0, y: 0 }, { x: 50, y: 50 }, rect), false);
+    });
+
+    it("getFlattenedEdgeLabelKey should swap when sourceId > targetId", () => {
+      const m = model as any;
+      // Create edge where sourceId > targetId alphabetically
+      const edge: Cell = {
+        id: "e1",
+        type: "edge",
+        value: "label",
+        style: "",
+        sourceId: "z-cell",
+        targetId: "a-cell",
+        parent: "1",
+      };
+      m.cells.set("z-cell", { id: "z-cell", type: "vertex", value: "", style: "", parent: "1" });
+      m.cells.set("a-cell", { id: "a-cell", type: "vertex", value: "", style: "", parent: "1" });
+      m.cells.set("e1", edge);
+      const key = m.getFlattenedEdgeLabelKey(edge);
+      assertExists(key);
+      // Key should have a-cell before z-cell (sorted order)
+      assert(key!.includes("a-cell|z-cell"));
+    });
+
+    it("getFlattenedEdgeRouteKey should swap when sourceId > targetId", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "e2",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "z-cell",
+        targetId: "a-cell",
+        parent: "1",
+      };
+      m.cells.set("z-cell", { id: "z-cell", type: "vertex", value: "", style: "", parent: "1" });
+      m.cells.set("a-cell", { id: "a-cell", type: "vertex", value: "", style: "", parent: "1" });
+      m.cells.set("e2", edge);
+      const key = m.getFlattenedEdgeRouteKey(edge);
+      assertExists(key);
+      assert(key!.includes("a-cell|z-cell"));
     });
   });
 });

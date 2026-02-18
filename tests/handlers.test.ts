@@ -686,4 +686,41 @@ describe("tool handlers", () => {
       assertEquals(parsed.data.summary.failed, 1);
     });
   });
+
+  describe("withDiagramState edge cases", () => {
+    it("should handle undefined args (args ?? {} fallback)", () => {
+      const result = baseHandlers["get-diagram-stats"](undefined as any);
+      assertEquals(result.isError, undefined);
+      const parsed = parseResult(result);
+      assertEquals(parsed.success, true);
+    });
+
+    it("should return error for invalid diagram_xml", () => {
+      const result = baseHandlers["list-paged-model"]({ diagram_xml: "<html>not valid drawio</html>" } as any);
+      assertEquals(result.isError, true);
+    });
+
+    it("should set active layer from active_layer_id", () => {
+      const setupResult = baseHandlers["create-layer"]({ name: "CustomLayer" });
+      const setupParsed = parseResult(setupResult);
+      const diagramXmlWithLayer = setupParsed.data.diagram_xml;
+      const layerId = setupParsed.data.layer.id;
+
+      const result = baseHandlers["add-cells"]({
+        diagram_xml: diagramXmlWithLayer,
+        active_layer_id: layerId,
+        cells: [{ type: "vertex", text: "test" }],
+      } as any);
+      const parsed = parseResult(result);
+      assertEquals(parsed.success, true);
+      assertEquals(parsed.data.active_layer_id, layerId);
+    });
+
+    it("should return error for invalid active_layer_id", () => {
+      const result = baseHandlers["list-paged-model"]({
+        active_layer_id: "nonexistent-layer",
+      } as any);
+      assertEquals(result.isError, true);
+    });
+  });
 });
