@@ -24,6 +24,10 @@ import { formatBytes, timestamp } from "./tool_handler.ts";
 
 /** Shared TextEncoder for UTF-8 byte length calculations (replaces Node's Buffer.byteLength) */
 const textEncoder = new TextEncoder();
+const allBasicShapes = Object.values(BASIC_SHAPES);
+const INTERNAL_SUCCESS_DATA = Symbol("internal_success_data");
+
+type InternalSuccessResult = CallToolResult & { [INTERNAL_SUCCESS_DATA]?: unknown };
 
 /**
  * Resolved shape with unified dimensions and style, regardless of source (basic or Azure).
@@ -134,9 +138,11 @@ function resolveShape(shapeName: string): ResolvedShape | undefined {
 }
 
 function successResult(data: any): CallToolResult {
-  return {
+  const result: InternalSuccessResult = {
     content: [{ type: "text", text: JSON.stringify({ success: true, data }) }],
   };
+  result[INTERNAL_SUCCESS_DATA] = data;
+  return result;
 }
 
 function errorResult(error: StructuredError): CallToolResult {
@@ -151,6 +157,7 @@ type StatefulArgs = { diagram_xml?: string; active_layer_id?: string };
 function withDiagramState<T extends StatefulArgs>(
   args: T | undefined,
   operation: (diagram: DiagramModel) => CallToolResult,
+  options?: { readOnly?: boolean },
 ): CallToolResult {
   const normalizedArgs: StatefulArgs = args ?? {};
   const diagram = new DiagramModel();
@@ -174,6 +181,29 @@ function withDiagramState<T extends StatefulArgs>(
     return result;
   }
 
+  const internalResult = result as InternalSuccessResult;
+  const dataFromInternal = internalResult[INTERNAL_SUCCESS_DATA] as
+    | Record<string, unknown>
+    | undefined;
+  if (dataFromInternal) {
+    const diagramXml = options?.readOnly ? (normalizedArgs.diagram_xml ?? diagram.toXml()) : diagram.toXml();
+
+    return {
+      ...result,
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          data: {
+            ...dataFromInternal,
+            diagram_xml: diagramXml,
+            active_layer_id: diagram.getActiveLayer().id,
+          },
+        }),
+      }],
+    };
+  }
+
   const content = result.content[0];
   if (content.type !== "text") {
     return result;
@@ -184,6 +214,8 @@ function withDiagramState<T extends StatefulArgs>(
     return result;
   }
 
+  const diagramXml = options?.readOnly ? (normalizedArgs.diagram_xml ?? diagram.toXml()) : diagram.toXml();
+
   return {
     ...result,
     content: [{
@@ -192,7 +224,7 @@ function withDiagramState<T extends StatefulArgs>(
         ...parsed,
         data: {
           ...(parsed.data ?? {}),
-          diagram_xml: diagram.toXml(),
+          diagram_xml: diagramXml,
           active_layer_id: diagram.getActiveLayer().id,
         },
       }),
@@ -314,7 +346,7 @@ export function createHandlers(log: ToolLogger) {
           active_layer: diagram.getActiveLayer(),
           cells: pagedCells,
         });
-      });
+      }, { readOnly: true });
     },
 
     "list-layers": (args: {
@@ -325,7 +357,7 @@ export function createHandlers(log: ToolLogger) {
           layers: diagram.listLayers(),
           active_layer_id: diagram.getActiveLayer().id,
         });
-      });
+      }, { readOnly: true });
     },
 
     "get-active-layer": (args: {
@@ -333,7 +365,7 @@ export function createHandlers(log: ToolLogger) {
     }): CallToolResult => {
       return withDiagramState(args, (diagram) => {
         return successResult({ layer: diagram.getActiveLayer() });
-      });
+      }, { readOnly: true });
     },
 
     "set-active-layer": (args: {
@@ -392,7 +424,7 @@ export function createHandlers(log: ToolLogger) {
             ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" }
             : { enabled: false },
         });
-      });
+      }, { readOnly: true });
     },
 
     "get-diagram-stats": (args: {
@@ -401,7 +433,7 @@ export function createHandlers(log: ToolLogger) {
       return withDiagramState(args, (diagram) => {
         const stats = diagram.getStats();
         return successResult({ stats });
-      });
+      }, { readOnly: true });
     },
 
     "clear-diagram": (args: {
@@ -514,7 +546,7 @@ export function createHandlers(log: ToolLogger) {
           return errorResult(result.error);
         }
         return successResult({ children: result, total: result.length });
-      });
+      }, { readOnly: true });
     },
 
     // ─── Import Handler ─────────────────────────────────────────────
@@ -861,9 +893,6 @@ export function createHandlers(log: ToolLogger) {
           message: "Must provide a non-empty 'queries' array",
         });
       }
-
-      // Pre-compute basic shapes array once for the entire batch
-      const allBasicShapes = Object.values(BASIC_SHAPES);
 
       const results = args.queries.map((q) => {
         // Check basic shapes first (exact, case-insensitive)

@@ -2,11 +2,11 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for programmatic diagram generation using [Draw.io](https://www.drawio.com/) (Diagrams.net). This server generates Draw.io XML directly — no browser extension or Draw.io instance required.
 
-<!--[![Build project](https://github.com/simonkurtz-MSFT/drawio-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/simonkurtz-MSFT/drawio-mcp-server/actions/workflows/ci.yml)-->
+[![Build project](https://github.com/simonkurtz-MSFT/drawio-mcp-server/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/simonkurtz-MSFT/drawio-mcp-server/actions/workflows/ci.yml)
+[![Tests](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/simonkurtz-MSFT/drawio-mcp-server/main/.github/badges/tests.json)](https://github.com/simonkurtz-MSFT/drawio-mcp-server/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/simonkurtz-MSFT/drawio-mcp-server/main/.github/badges/coverage.json)](https://github.com/simonkurtz-MSFT/drawio-mcp-server/actions/workflows/ci.yml)
 
 [![Docker Hub](https://img.shields.io/docker/v/simonkurtzmsft/drawio-mcp-server?label=Docker%20Hub&logo=docker&sort=semver)](https://hub.docker.com/r/simonkurtzmsft/drawio-mcp-server)
-
-Quick links: [Acknowledgements](#acknowledgements)
 
 ## Acknowledgements
 
@@ -417,6 +417,7 @@ No install step needed — Deno resolves dependencies on first run.
 | `deno task test`          | Run tests                            |
 | `deno task test:watch`    | Run tests in watch mode              |
 | `deno task test:coverage` | Run tests with coverage              |
+| `deno task bench`         | Run focused performance benchmarks   |
 | `deno task lint`          | Lint and type-check                  |
 | `deno task fmt`           | Format code                          |
 | `deno task fmt:check`     | Check formatting without writing     |

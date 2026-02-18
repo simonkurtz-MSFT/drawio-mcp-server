@@ -257,6 +257,52 @@ describe("DiagramModel groups", () => {
       const xml = model.toXml();
       assert(xml.includes("fillColor=#e6f2fa;strokeColor=#0078d4;container=1;"));
     });
+
+    it("should add edge waypoints when an unrelated edge would cross a group", () => {
+      const group = model.createGroup({ x: 200, y: 120, width: 260, height: 180, text: "Container Apps Environment" });
+      const left = model.addRectangle({ x: 20, y: 170, width: 100, height: 60, text: "Front Door" });
+      const right = model.addRectangle({ x: 560, y: 170, width: 100, height: 60, text: "App Service" });
+
+      const edge = model.addEdge({ sourceId: left.id, targetId: right.id, text: "https" });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const pointMatch = xml.match(
+          new RegExp(
+            `id=\\"${edge.id}\\"[^>]*><mxGeometry[^>]*><Array as=\\"points\\"><mxPoint x=\\"([^\\"]+)\\" y=\\"([^\\"]+)\\"/><mxPoint x=\\"([^\\"]+)\\" y=\\"([^\\"]+)\\"/>`,
+          ),
+        );
+        assertExists(pointMatch);
+        if (pointMatch) {
+          const firstY = parseFloat(pointMatch[2]);
+          const secondY = parseFloat(pointMatch[4]);
+          assertEquals(firstY, secondY);
+
+          const groupTop = group.y!;
+          const groupBottom = group.y! + group.height!;
+          assert(firstY < groupTop || firstY > groupBottom);
+        }
+        // Sanity check that the group exists in the test shape
+        assert(xml.includes(`id="${group.id}"`));
+      }
+    });
+
+    it("should not add avoidance waypoints when edge endpoint belongs to the group", () => {
+      const group = model.createGroup({ x: 200, y: 120, width: 260, height: 180, text: "Container Apps Environment" });
+      const inside = model.addRectangle({ x: 30, y: 40, width: 110, height: 60, text: "Container App" });
+      model.addCellToGroup(inside.id, group.id);
+      const outside = model.addRectangle({ x: 560, y: 170, width: 100, height: 60, text: "Front Door" });
+
+      const edge = model.addEdge({ sourceId: outside.id, targetId: inside.id, text: "https" });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const edgeRegex = new RegExp(
+          `id=\\"${edge.id}\\"[^>]*><mxGeometry relative=\\"1\\" as=\\"geometry\\"><Array as=\\"points\\">`,
+        );
+        assertEquals(edgeRegex.test(xml), false);
+      }
+    });
   });
 
   describe("getStats includes group count", () => {

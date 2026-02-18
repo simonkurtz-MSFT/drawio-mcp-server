@@ -79,6 +79,148 @@ describe("DiagramModel", () => {
         assert(xml.includes(`<mxGeometry relative="1" as="geometry"/>`));
       }
     });
+
+    it("should emit only one label for duplicate flattened edge lines", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+
+      model.addEdge({ sourceId: a.id, targetId: b.id, text: "https" });
+      model.addEdge({ sourceId: b.id, targetId: a.id, text: "HTTPS" });
+
+      const xml = model.toXml();
+      const httpsLabelMatches = xml.match(/value="https"|value="HTTPS"/g) ?? [];
+      assertEquals(httpsLabelMatches.length, 1);
+    });
+
+    it("should keep labels when flattened edge label texts differ", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+
+      model.addEdge({ sourceId: a.id, targetId: b.id, text: "https" });
+      model.addEdge({ sourceId: b.id, targetId: a.id, text: "gRPC" });
+
+      const xml = model.toXml();
+      assert(xml.includes('value="https"'));
+      assert(xml.includes('value="gRPC"'));
+    });
+
+    it("should keep duplicate labels on different flattened edge lines", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const c = model.addRectangle({ text: "C" });
+
+      model.addEdge({ sourceId: a.id, targetId: b.id, text: "https" });
+      model.addEdge({ sourceId: b.id, targetId: c.id, text: "https" });
+
+      const xml = model.toXml();
+      const httpsLabelMatches = xml.match(/value="https"/g) ?? [];
+      assertEquals(httpsLabelMatches.length, 2);
+    });
+
+    it("should offset multiple visible labels on the same flattened edge line", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+
+      const edge1 = model.addEdge({ sourceId: a.id, targetId: b.id, text: "https" });
+      const edge2 = model.addEdge({ sourceId: b.id, targetId: a.id, text: "gRPC" });
+      const edge3 = model.addEdge({ sourceId: a.id, targetId: b.id, text: "tcp" });
+      assertEquals("error" in edge1, false);
+      assertEquals("error" in edge2, false);
+      assertEquals("error" in edge3, false);
+
+      if (!("error" in edge1) && !("error" in edge2) && !("error" in edge3)) {
+        const xml = model.toXml();
+        const geometryFor = (edgeId: string): string => {
+          const match = xml.match(new RegExp(`id=\\"${edgeId}\\"[^>]*><mxGeometry([^>]*)as=\\"geometry\\"`));
+          assertExists(match);
+          return match![1];
+        };
+
+        const geom1 = geometryFor(edge1.id);
+        const geom2 = geometryFor(edge2.id);
+        const geom3 = geometryFor(edge3.id);
+
+        assertEquals(geom1.includes(' y="'), false);
+        assert(geom2.includes(' y="-14"'));
+        assert(geom3.includes(' y="14"'));
+      }
+    });
+
+    it("should not offset labels on different flattened routes", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const c = model.addRectangle({ text: "C" });
+
+      const edge1 = model.addEdge({ sourceId: a.id, targetId: b.id, text: "https" });
+      const edge2 = model.addEdge({ sourceId: b.id, targetId: c.id, text: "gRPC" });
+      assertEquals("error" in edge1, false);
+      assertEquals("error" in edge2, false);
+
+      if (!("error" in edge1) && !("error" in edge2)) {
+        const xml = model.toXml();
+        const geometryFor = (edgeId: string): string => {
+          const match = xml.match(new RegExp(`id=\\"${edgeId}\\"[^>]*><mxGeometry([^>]*)as=\\"geometry\\"`));
+          assertExists(match);
+          return match![1];
+        };
+
+        const geom1 = geometryFor(edge1.id);
+        const geom2 = geometryFor(edge2.id);
+
+        assertEquals(geom1.includes(' y="'), false);
+        assertEquals(geom2.includes(' y="'), false);
+      }
+    });
+
+    it("should apply symmetric side anchors for horizontal edges", () => {
+      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
+      const right = model.addRectangle({ x: 400, y: 100, width: 100, height: 60, text: "Right" });
+
+      const edge = model.addEdge({ sourceId: left.id, targetId: right.id, text: "https" });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        if (styleMatch) {
+          assert(styleMatch[1].includes("exitX=1;exitY=0.5;entryX=0;entryY=0.5;"));
+        }
+      }
+    });
+
+    it("should apply symmetric top-bottom anchors for vertical edges", () => {
+      const top = model.addRectangle({ x: 120, y: 0, width: 100, height: 60, text: "Top" });
+      const bottom = model.addRectangle({ x: 120, y: 320, width: 100, height: 60, text: "Bottom" });
+
+      const edge = model.addEdge({ sourceId: top.id, targetId: bottom.id, text: "https" });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        if (styleMatch) {
+          assert(styleMatch[1].includes("exitX=0.5;exitY=1;entryX=0.5;entryY=0;"));
+        }
+      }
+    });
+
+    it("should preserve explicit edge anchors when provided", () => {
+      const a = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "A" });
+      const b = model.addRectangle({ x: 400, y: 120, width: 100, height: 60, text: "B" });
+
+      const explicitStyle = "edgeStyle=orthogonalEdgeStyle;html=1;exitX=0.2;exitY=0.3;entryX=0.8;entryY=0.7;";
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id, style: explicitStyle });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        if (styleMatch) {
+          assert(styleMatch[1].includes("exitX=0.2;exitY=0.3;entryX=0.8;entryY=0.7;"));
+          assertEquals(styleMatch[1].includes("exitX=1;exitY=0.5;entryX=0;entryY=0.5;"), false);
+        }
+      }
+    });
   });
 
   describe("addRectangle", () => {
@@ -593,6 +735,49 @@ describe("DiagramModel", () => {
         // Vertices should still exist
         assertExists(model.getCell(a.id));
         assertExists(model.getCell(b.id));
+      }
+    });
+
+    it("should cascade based on updated edge source after edit", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const c = model.addRectangle({ text: "C" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id });
+      assertEquals("error" in edge, false);
+
+      if (!("error" in edge)) {
+        const editResult = model.editEdge(edge.id, { sourceId: c.id });
+        assertEquals("error" in editResult, false);
+
+        const deleteOriginalSource = model.deleteCell(a.id);
+        assertEquals(deleteOriginalSource.deleted, true);
+        assertEquals(deleteOriginalSource.cascadedEdgeIds.length, 0);
+        assertExists(model.getCell(edge.id));
+
+        const deleteNewSource = model.deleteCell(c.id);
+        assertEquals(deleteNewSource.deleted, true);
+        assertEquals(deleteNewSource.cascadedEdgeIds.length, 1);
+        assertEquals(deleteNewSource.cascadedEdgeIds[0], edge.id);
+        assertEquals(model.getCell(edge.id), undefined);
+      }
+    });
+
+    it("should cascade correctly after import rebuilds edge index", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id });
+      assertEquals("error" in edge, false);
+
+      const exported = model.toXml();
+      const imported = new DiagramModel();
+      const importResult = imported.importXml(exported);
+      assertEquals("error" in importResult, false);
+
+      const deleteResult = imported.deleteCell(a.id);
+      assertEquals(deleteResult.deleted, true);
+      assertEquals(deleteResult.cascadedEdgeIds.length, 1);
+      if (!("error" in edge)) {
+        assertEquals(deleteResult.cascadedEdgeIds[0], edge.id);
       }
     });
   });

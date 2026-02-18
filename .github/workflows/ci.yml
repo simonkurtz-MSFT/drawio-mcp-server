@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   checks: write
 
 jobs:
@@ -49,6 +49,86 @@ jobs:
       - name: Run coverage suite
         run: deno task test:coverage
 
+      - name: Generate LCOV report
+        run: deno coverage coverage/ --exclude='index\\.ts' --lcov > coverage/lcov.info
+
+      - name: Generate badge metadata
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import xml.etree.ElementTree as ET
+
+          os.makedirs('.github/badges', exist_ok=True)
+
+          junit_path = 'test-results/junit.xml'
+          tree = ET.parse(junit_path)
+          root = tree.getroot()
+
+          tests = 0
+          failures = 0
+          errors = 0
+          skipped = 0
+
+          if root.tag == 'testsuite':
+            suites = [root]
+          else:
+            suites = root.findall('testsuite')
+
+          for suite in suites:
+            tests += int(suite.attrib.get('tests', '0'))
+            failures += int(suite.attrib.get('failures', '0'))
+            errors += int(suite.attrib.get('errors', '0'))
+            skipped += int(suite.attrib.get('skipped', '0'))
+
+          passed = max(tests - failures - errors - skipped, 0)
+
+          tests_color = 'brightgreen' if (failures + errors) == 0 else 'red'
+          tests_badge = {
+            'schemaVersion': 1,
+            'label': 'tests',
+            'message': f'{passed}/{tests} passing',
+            'color': tests_color,
+          }
+
+          with open('.github/badges/tests.json', 'w', encoding='utf-8') as f:
+            json.dump(tests_badge, f)
+
+          lf = 0
+          lh = 0
+          with open('coverage/lcov.info', 'r', encoding='utf-8') as f:
+            for line in f:
+              if line.startswith('LF:'):
+                lf += int(line[3:].strip())
+              elif line.startswith('LH:'):
+                lh += int(line[3:].strip())
+
+          coverage = (lh / lf * 100) if lf else 0.0
+
+          if coverage >= 90:
+            coverage_color = 'brightgreen'
+          elif coverage >= 80:
+            coverage_color = 'green'
+          elif coverage >= 70:
+            coverage_color = 'yellowgreen'
+          elif coverage >= 60:
+            coverage_color = 'yellow'
+          elif coverage >= 50:
+            coverage_color = 'orange'
+          else:
+            coverage_color = 'red'
+
+          coverage_badge = {
+            'schemaVersion': 1,
+            'label': 'coverage',
+            'message': f'{coverage:.2f}%',
+            'color': coverage_color,
+          }
+
+          with open('.github/badges/coverage.json', 'w', encoding='utf-8') as f:
+            json.dump(coverage_badge, f)
+          PY
+
       - name: Validate compile step
         run: deno task compile
 
@@ -73,3 +153,17 @@ jobs:
           name: coverage-report
           path: coverage/
           if-no-files-found: warn
+
+      - name: Commit badge metadata
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if git diff --quiet -- .github/badges/tests.json .github/badges/coverage.json; then
+            echo "No badge changes to commit"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/badges/tests.json .github/badges/coverage.json
+          git commit -m "chore: update badge metadata [skip ci]"
+          git push
