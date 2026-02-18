@@ -291,7 +291,7 @@ describe("DiagramModel groups", () => {
       const group = model.createGroup({ x: 200, y: 120, width: 260, height: 180, text: "Container Apps Environment" });
       const inside = model.addRectangle({ x: 30, y: 40, width: 110, height: 60, text: "Container App" });
       model.addCellToGroup(inside.id, group.id);
-      const outside = model.addRectangle({ x: 560, y: 170, width: 100, height: 60, text: "Front Door" });
+      const outside = model.addRectangle({ x: 560, y: 160, width: 100, height: 60, text: "Front Door" });
 
       const edge = model.addEdge({ sourceId: outside.id, targetId: inside.id, text: "https" });
       assertEquals("error" in edge, false);

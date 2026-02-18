@@ -239,11 +239,11 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "SEARCH_SHAPES",
     name: "search-shapes",
     description:
-      "Search for any shape — basic shapes (rectangle, circle, diamond, start, end, process, cylinder, etc.) and 700+ Azure icons. This is the primary way to discover shapes for use with add-cells-of-shape. Call this tool exactly ONCE with ALL shape names in the queries array — never call it multiple times.",
+      "Search for any shape — basic shapes (rectangle, circle, diamond, start, end, process, cylinder, etc.) and 700+ Azure icons. This is the primary way to discover shapes for use with add-cells-of-shape. Call this tool once with all shape names in the queries array — include cross-cutting services (Monitor, Entra ID, Key Vault, Azure Policy, Defender for Cloud, Container Registry) in the SAME call.",
     hasArgs: true,
     inputSchema: {
       queries: z.array(z.string()).describe(
-        "Array of ALL search terms. Gather every shape name you need and pass them all here. Example: ['rectangle', 'diamond', 'front door', 'container apps', 'app service', 'key vault', 'cylinder', 'start', 'end']",
+        "Array of ALL search terms — main flow AND cross-cutting services. Gather every shape you need and pass them all here in a SINGLE call. Example: ['front door', 'container apps', 'app service', 'key vault', 'monitor', 'entra id', 'azure policy', 'container registry']",
       ),
       limit: z.number().min(1).max(50).optional().default(10).describe("Maximum results to return per query (1-50)"),
     },

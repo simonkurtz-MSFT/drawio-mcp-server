@@ -271,11 +271,14 @@ async function main() {
   log.debug(`Draw.io MCP Server v${VERSION} starting`);
   log.debug(`Transports: ${config.transports.join(", ")}`);
 
-  // Eagerly load all shapes at startup so they are ready for the first tool call.
+  // Eagerly load all shapes and build the fuzzy-search index at startup so
+  // they are ready for the first tool call with no cold-start penalty.
   // initializeShapes also verifies the file is readable; getAzureIconLibrary()
   // will re-attempt loading on subsequent calls if shapes are still empty.
+  const shapeLoadStart = performance.now();
   const shapeLibrary = initializeShapes(config.azureIconLibraryPath);
-  log.debug(`Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} categories`);
+  const shapeLoadMs = (performance.now() - shapeLoadStart).toFixed(1);
+  log.debug(`Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} categories in ${shapeLoadMs}ms (includes search index)`);
 
   if (config.transports.indexOf("stdio") > -1) {
     await start_stdio_transport();

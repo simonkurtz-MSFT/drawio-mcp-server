@@ -559,6 +559,9 @@ export function initializeShapes(libraryPath?: string): AzureIconLibrary {
   cachedSearchResults = new Map();
   cachedCategoryNames = null;
   cachedLibrary = loadAzureIconLibrary(configuredLibraryPath);
+  // Eagerly build the fuzzy-search index so the first search-shapes call
+  // doesn't pay a cold-start penalty.
+  getSearchIndex();
   return cachedLibrary;
 }
 

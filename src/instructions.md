@@ -58,10 +58,10 @@ Before making ANY tool calls, plan the entire diagram: identify all shapes, grou
 
 ### Step 1 — Search all shapes ONCE
 
-Call `search-shapes` exactly **ONE time** with the `queries` array listing **every** shape name you need — both basic shapes (rectangle, diamond, cylinder, start, end, etc.) and Azure icons.
+Call `search-shapes` exactly **ONE time** with the `queries` array listing **every** shape name you need — basic shapes, Azure icons for the main flow, **AND** cross-cutting / supporting services (Monitor, Entra ID, Key Vault, Azure Policy, Defender for Cloud, Container Registry, etc.). Do NOT defer cross-cutting services to a second call.
 
 ```
-search-shapes({ queries: ["rectangle", "diamond", "front door", "container apps", "app service", "key vault", "dns zone"] })
+search-shapes({ queries: ["rectangle", "diamond", "front door", "container apps", "app service", "key vault", "dns zone", "monitor", "entra id", "azure policy", "container registry"] })
 ```
 
 ### Step 2 — Create all groups in ONE call

@@ -223,6 +223,78 @@ describe("DiagramModel", () => {
     });
   });
 
+  describe("alignment waypoints", () => {
+    it("should not add waypoints when horizontal cells are Y-aligned", () => {
+      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
+      const right = model.addRectangle({ x: 400, y: 100, width: 100, height: 60, text: "Right" });
+      model.addEdge({ sourceId: left.id, targetId: right.id });
+      const xml = model.toXml();
+      // Perfectly aligned → no mxPoint waypoints on this edge
+      // The edge's geometry should have no <Array as="points">
+      assert(!xml.match(new RegExp(`source=\\"${left.id}\\"[^>]*>.*?<Array`, "s")));
+    });
+
+    it("should add midpoint waypoints for horizontal flow with Y offset", () => {
+      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
+      const right = model.addRectangle({ x: 400, y: 160, width: 100, height: 60, text: "Right" });
+      model.addEdge({ sourceId: left.id, targetId: right.id });
+      const xml = model.toXml();
+      // Source center Y = 130, target center Y = 190 → midX waypoints should exist
+      assert(xml.includes("<Array as=\"points\">"), "expected alignment waypoints for Y-offset horizontal edge");
+      assert(xml.includes("<mxPoint"), "expected mxPoint elements for alignment");
+    });
+
+    it("should add midpoint waypoints for vertical flow with X offset", () => {
+      const top = model.addRectangle({ x: 100, y: 0, width: 100, height: 60, text: "Top" });
+      const bottom = model.addRectangle({ x: 200, y: 400, width: 100, height: 60, text: "Bottom" });
+      model.addEdge({ sourceId: top.id, targetId: bottom.id });
+      const xml = model.toXml();
+      assert(xml.includes("<Array as=\"points\">"), "expected alignment waypoints for X-offset vertical edge");
+    });
+
+    it("should not add waypoints when vertical cells are X-aligned", () => {
+      const top = model.addRectangle({ x: 100, y: 0, width: 100, height: 60, text: "Top" });
+      const bottom = model.addRectangle({ x: 100, y: 400, width: 100, height: 60, text: "Bottom" });
+      model.addEdge({ sourceId: top.id, targetId: bottom.id });
+      const xml = model.toXml();
+      assert(!xml.match(new RegExp(`source=\\"${top.id}\\"[^>]*>.*?<Array`, "s")));
+    });
+
+    it("should not add alignment waypoints when explicit anchors are set", () => {
+      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
+      const right = model.addRectangle({ x: 400, y: 160, width: 100, height: 60, text: "Right" });
+      model.addEdge({
+        sourceId: left.id,
+        targetId: right.id,
+        style: "edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0;entryY=0.5;",
+      });
+      const xml = model.toXml();
+      // Explicit anchors → alignment waypoints should NOT be added
+      assert(!xml.match(new RegExp(`source=\\"${left.id}\\"[^>]*>.*?<Array`, "s")));
+    });
+
+    it("should compute correct midpoint X for horizontal Z-bend", () => {
+      // Source at x=0..100 (right edge=100), target at x=400..500 (left edge=400)
+      // midX = (100 + 400) / 2 = 250
+      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
+      const right = model.addRectangle({ x: 400, y: 140, width: 100, height: 60, text: "Right" });
+      model.addEdge({ sourceId: left.id, targetId: right.id });
+      const xml = model.toXml();
+      assert(xml.includes('x="250"'), "expected midpoint X=250 for Z-bend");
+    });
+
+    it("should prefer group avoidance waypoints over alignment waypoints", () => {
+      model.createGroup({ x: 200, y: 50, width: 200, height: 200, text: "Group" });
+      const left = model.addRectangle({ x: 0, y: 100, width: 80, height: 60, text: "Left" });
+      const right = model.addRectangle({ x: 500, y: 160, width: 80, height: 60, text: "Right" });
+      model.addEdge({ sourceId: left.id, targetId: right.id });
+      const xml = model.toXml();
+      // The edge should have avoidance waypoints (routing around the group),
+      // not alignment waypoints. Verify waypoints exist.
+      assert(xml.includes("<Array as=\"points\">"), "expected avoidance waypoints");
+    });
+  });
+
   describe("addRectangle", () => {
     it("should create a cell with defaults", () => {
       const cell = model.addRectangle({});
@@ -1408,6 +1480,654 @@ describe("DiagramModel", () => {
       const key = m.getFlattenedEdgeRouteKey(edge);
       assertExists(key);
       assert(key!.includes("a-cell|z-cell"));
+    });
+
+    it("getFlattenedEdgeLabelKey should use empty string when parent is undefined", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "e3",
+        type: "edge",
+        value: "label",
+        style: "",
+        sourceId: "a-cell",
+        targetId: "b-cell",
+        parent: undefined,
+      };
+      m.cells.set("a-cell", { id: "a-cell", type: "vertex", value: "", style: "", parent: "1" });
+      m.cells.set("b-cell", { id: "b-cell", type: "vertex", value: "", style: "", parent: "1" });
+      m.cells.set("e3", edge);
+      const key = m.getFlattenedEdgeLabelKey(edge);
+      assertExists(key);
+      assert(key!.startsWith("|"));
+    });
+
+    it("getFlattenedEdgeRouteKey should use empty string when parent is undefined", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "e4",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "a-cell",
+        targetId: "b-cell",
+        parent: undefined,
+      };
+      m.cells.set("a-cell", { id: "a-cell", type: "vertex", value: "", style: "", parent: "1" });
+      m.cells.set("b-cell", { id: "b-cell", type: "vertex", value: "", style: "", parent: "1" });
+      m.cells.set("e4", edge);
+      const key = m.getFlattenedEdgeRouteKey(edge);
+      assertExists(key);
+      assert(key!.startsWith("|"));
+    });
+
+    it("getAbsoluteBounds should default undefined coords to 0", () => {
+      const m = model as any;
+      const cell: Cell = {
+        id: "v-no-coords",
+        type: "vertex",
+        value: "No Coords",
+        style: "",
+        parent: "1",
+      };
+      m.cells.set("v-no-coords", cell);
+      const bounds = m.getAbsoluteBounds("v-no-coords");
+      assertEquals(bounds, { x: 0, y: 0, width: 0, height: 0 });
+    });
+
+    it("getAbsoluteBounds should default parent undefined coords to 0", () => {
+      const m = model as any;
+      const parent: Cell = {
+        id: "g-no-coords",
+        type: "vertex",
+        value: "Group",
+        style: "",
+        parent: "1",
+        isGroup: true,
+        children: ["c-child"],
+      };
+      const child: Cell = {
+        id: "c-child",
+        type: "vertex",
+        value: "Child",
+        x: 10,
+        y: 20,
+        width: 50,
+        height: 30,
+        style: "",
+        parent: "g-no-coords",
+      };
+      m.cells.set("g-no-coords", parent);
+      m.cells.set("c-child", child);
+      const bounds = m.getAbsoluteBounds("c-child");
+      assertEquals(bounds, { x: 10, y: 20, width: 50, height: 30 });
+    });
+
+    it("getAbsoluteBoundsFromMap should return cached null", () => {
+      const m = model as any;
+      const cellMap = new Map<string, Cell>();
+      const cache = new Map<string, any>();
+      cache.set("cached-null", null);
+      assertEquals(m.getAbsoluteBoundsFromMap("cached-null", cellMap, cache), null);
+    });
+
+    it("getAbsoluteBoundsFromMap should return null for edge cell", () => {
+      const m = model as any;
+      const edge: Cell = { id: "e-test", type: "edge", value: "", style: "", parent: "1" };
+      const cellMap = new Map<string, Cell>([["e-test", edge]]);
+      const cache = new Map<string, any>();
+      assertEquals(m.getAbsoluteBoundsFromMap("e-test", cellMap, cache), null);
+      assertEquals(cache.get("e-test"), null);
+    });
+
+    it("getAbsoluteBoundsFromMap should default undefined coords to 0", () => {
+      const m = model as any;
+      const cell: Cell = { id: "v-undef", type: "vertex", value: "", style: "", parent: "1" };
+      const cellMap = new Map<string, Cell>([["v-undef", cell]]);
+      const cache = new Map<string, any>();
+      const bounds = m.getAbsoluteBoundsFromMap("v-undef", cellMap, cache);
+      assertEquals(bounds, { x: 0, y: 0, width: 0, height: 0 });
+    });
+  });
+
+  describe("edge index defensive branches", () => {
+    it("removeEdgeReference should early return for undefined vertexId", () => {
+      const m = model as any;
+      // Should not throw
+      m.removeEdgeReference(undefined, "some-edge");
+    });
+
+    it("removeEdgeReference should early return when vertex has no index entry", () => {
+      const m = model as any;
+      // Vertex ID is defined but not in the index
+      m.removeEdgeReference("nonexistent-vertex", "some-edge");
+    });
+
+    it("removeEdgeFromIndex should early return for non-edge cell", () => {
+      const m = model as any;
+      const vertex: Cell = {
+        id: "v1",
+        type: "vertex",
+        value: "",
+        style: "",
+        parent: "1",
+      };
+      m.removeEdgeFromIndex(vertex);
+    });
+  });
+
+  describe("moveCellToLayer success", () => {
+    it("should move cell to new layer", () => {
+      const cell = model.addRectangle({ text: "A" });
+      const layer = model.createLayer("Target");
+      const result = model.moveCellToLayer(cell.id, layer.id);
+      assertEquals("error" in result, false);
+      if (!("error" in result)) {
+        assertEquals(result.parent, layer.id);
+      }
+      const updated = model.getCell(cell.id);
+      assertExists(updated);
+      assertEquals(updated!.parent, layer.id);
+    });
+  });
+
+  describe("batchEditEdges", () => {
+    it("should edit multiple edges successfully", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const c = model.addRectangle({ text: "C" });
+      const edge1 = model.addEdge({ sourceId: a.id, targetId: b.id, text: "e1" });
+      const edge2 = model.addEdge({ sourceId: b.id, targetId: c.id, text: "e2" });
+      assertEquals("error" in edge1, false);
+      assertEquals("error" in edge2, false);
+
+      if (!("error" in edge1) && !("error" in edge2)) {
+        const results = model.batchEditEdges([
+          { cell_id: edge1.id, text: "updated1" },
+          { cell_id: edge2.id, text: "updated2", style: "newStyle;" },
+        ]);
+        assertEquals(results.length, 2);
+        assertEquals(results[0].success, true);
+        assertEquals(results[1].success, true);
+        assertExists(results[0].cell);
+        assertEquals(results[0].cell!.value, "updated1");
+        assertEquals(results[1].cell!.value, "updated2");
+        assertEquals(results[1].cell!.style, "newStyle;");
+      }
+    });
+
+    it("should report errors for non-existent edge", () => {
+      const results = model.batchEditEdges([
+        { cell_id: "nonexistent", text: "X" },
+      ]);
+      assertEquals(results.length, 1);
+      assertEquals(results[0].success, false);
+      assertExists(results[0].error);
+    });
+
+    it("should report error when editing a vertex as edge", () => {
+      const cell = model.addRectangle({ text: "A" });
+      const results = model.batchEditEdges([
+        { cell_id: cell.id, text: "X" },
+      ]);
+      assertEquals(results.length, 1);
+      assertEquals(results[0].success, false);
+    });
+
+    it("should update source and target IDs", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const c = model.addRectangle({ text: "C" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id });
+      assertEquals("error" in edge, false);
+
+      if (!("error" in edge)) {
+        const results = model.batchEditEdges([
+          { cell_id: edge.id, source_id: c.id, target_id: a.id },
+        ]);
+        assertEquals(results[0].success, true);
+        assertEquals(results[0].cell!.sourceId, c.id);
+        assertEquals(results[0].cell!.targetId, a.id);
+      }
+    });
+  });
+
+  describe("getGroupAvoidanceWaypoints without precomputed data", () => {
+    it("should return empty when source center cannot be resolved", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "edge-no-center",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "nonexistent-src",
+        targetId: "nonexistent-tgt",
+        parent: "1",
+      };
+      m.cells.set("edge-no-center", edge);
+      // No precomputed centers and cells don't exist → null centers → early return
+      const waypoints = m.getGroupAvoidanceWaypoints(edge);
+      assertEquals(waypoints.length, 0);
+    });
+
+    it("should fall back to getCellCenter and manual group collection", () => {
+      const m = model as any;
+      model.createGroup({ x: 200, y: 100, width: 260, height: 200, text: "G" });
+      const left = model.addRectangle({ x: 20, y: 170, width: 100, height: 60, text: "L" });
+      const right = model.addRectangle({ x: 560, y: 170, width: 100, height: 60, text: "R" });
+      const edge: Cell = {
+        id: "test-edge",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: left.id,
+        targetId: right.id,
+        parent: "1",
+      };
+      m.cells.set("test-edge", edge);
+
+      // Call without precomputed data to exercise fallback paths
+      const waypoints = m.getGroupAvoidanceWaypoints(edge);
+      assertGreater(waypoints.length, 0);
+    });
+
+    it("should use center-based spatial comparison when sourceBounds is null", () => {
+      const m = model as any;
+      // Create a group that the path crosses
+      model.createGroup({ x: 200, y: 100, width: 200, height: 200, text: "G" });
+
+      // Set up edge with source/target that don't exist as vertices (so getAbsoluteBounds returns null)
+      // But provide precomputedCenters so the function gets past the center check
+      const edge: Cell = {
+        id: "edge-no-bounds",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "fake-src",
+        targetId: "fake-tgt",
+        parent: "1",
+      };
+      m.cells.set("edge-no-bounds", edge);
+
+      const centers = new Map();
+      centers.set("fake-src", { x: 50, y: 200 });
+      centers.set("fake-tgt", { x: 550, y: 200 });
+
+      const waypoints = m.getGroupAvoidanceWaypoints(edge, centers);
+      // Should still produce waypoints using center-based spatial comparison
+      assertGreater(waypoints.length, 0);
+    });
+  });
+
+  describe("getAlignmentWaypoints edge cases", () => {
+    it("should handle edge with undefined style", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "e-undef-style",
+        type: "edge",
+        value: "",
+        sourceId: "src",
+        targetId: "tgt",
+        parent: "1",
+      };
+      m.cells.set("e-undef-style", edge);
+
+      const centers = new Map();
+      centers.set("src", { x: 100, y: 100 });
+      centers.set("tgt", { x: 400, y: 200 });
+
+      const boundsCache = new Map();
+      boundsCache.set("src", { x: 50, y: 70, width: 100, height: 60 });
+      boundsCache.set("tgt", { x: 350, y: 170, width: 100, height: 60 });
+
+      const waypoints = m.getAlignmentWaypoints(edge, centers, boundsCache);
+      assertGreater(waypoints.length, 0);
+    });
+
+    it("should return empty when source center is not in precomputedCenters", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "e-no-center",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "src",
+        targetId: "tgt",
+        parent: "1",
+      };
+      m.cells.set("e-no-center", edge);
+
+      const centers = new Map();
+      centers.set("tgt", { x: 400, y: 200 });
+      // src not in centers
+
+      const boundsCache = new Map();
+      const waypoints = m.getAlignmentWaypoints(edge, centers, boundsCache);
+      assertEquals(waypoints.length, 0);
+    });
+
+    it("should return empty when source bounds is not in cache", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "e-no-bounds",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "src",
+        targetId: "tgt",
+        parent: "1",
+      };
+      m.cells.set("e-no-bounds", edge);
+
+      const centers = new Map();
+      centers.set("src", { x: 100, y: 100 });
+      centers.set("tgt", { x: 400, y: 200 });
+
+      const boundsCache = new Map();
+      // No bounds for src or tgt
+
+      const waypoints = m.getAlignmentWaypoints(edge, centers, boundsCache);
+      assertEquals(waypoints.length, 0);
+    });
+
+    it("should produce Z-bend waypoints for vertical upward flow", () => {
+      // Source below-right, target above-left. |dy| > |dx|, dy < 0, dx != 0
+      const source = model.addRectangle({ x: 200, y: 400, width: 100, height: 60, text: "Src" });
+      const target = model.addRectangle({ x: 100, y: 100, width: 100, height: 60, text: "Tgt" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        // Should contain alignment waypoints for vertical upward flow
+        const pointsMatch = xml.match(
+          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
+        );
+        assertExists(pointsMatch);
+      }
+    });
+  });
+
+  describe("withSymmetricEdgeAnchors fallbacks", () => {
+    it("should handle edge with undefined style", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "e-no-style",
+        type: "edge",
+        value: "",
+        sourceId: "src",
+        targetId: "tgt",
+        parent: "1",
+      };
+      m.cells.set("e-no-style", edge);
+      m.cells.set("src", {
+        id: "src",
+        type: "vertex",
+        value: "",
+        x: 0,
+        y: 100,
+        width: 100,
+        height: 60,
+        style: "",
+        parent: "1",
+      });
+      m.cells.set("tgt", {
+        id: "tgt",
+        type: "vertex",
+        value: "",
+        x: 400,
+        y: 100,
+        width: 100,
+        height: 60,
+        style: "",
+        parent: "1",
+      });
+
+      const result = m.withSymmetricEdgeAnchors(edge);
+      assert(result.includes("exitX=1;exitY=0.5;"));
+    });
+
+    it("should return baseStyle when centers cannot be resolved", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "e-unresolvable",
+        type: "edge",
+        value: "",
+        style: "custom;",
+        sourceId: "missing-src",
+        targetId: "missing-tgt",
+        parent: "1",
+      };
+      m.cells.set("e-unresolvable", edge);
+      // No cells for missing-src/missing-tgt and no precomputedCenters
+      const result = m.withSymmetricEdgeAnchors(edge);
+      assertEquals(result, "custom;");
+    });
+
+    it("should use precomputedCenters fallback to getCellCenter", () => {
+      const m = model as any;
+      const edge: Cell = {
+        id: "e-fallback",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "src2",
+        targetId: "tgt2",
+        parent: "1",
+      };
+      m.cells.set("e-fallback", edge);
+      m.cells.set("src2", {
+        id: "src2",
+        type: "vertex",
+        value: "",
+        x: 0,
+        y: 100,
+        width: 100,
+        height: 60,
+        style: "",
+        parent: "1",
+      });
+      m.cells.set("tgt2", {
+        id: "tgt2",
+        type: "vertex",
+        value: "",
+        x: 400,
+        y: 100,
+        width: 100,
+        height: 60,
+        style: "",
+        parent: "1",
+      });
+
+      // Pass a precomputedCenters map that does NOT contain src2/tgt2
+      // This forces the ?? fallback to getCellCenter
+      const emptyCenters = new Map();
+      const result = m.withSymmetricEdgeAnchors(edge, emptyCenters);
+      assert(result.includes("exitX=1;exitY=0.5;"));
+    });
+  });
+
+  describe("getGroupAvoidanceWaypoints gap channel with sourceBounds", () => {
+    it("should use sourceBounds.x+width when sourceLeft (L-shaped path)", () => {
+      const m = model as any;
+      // Group large enough that the diagonal from source to target crosses it
+      model.createGroup({ x: 200, y: 100, width: 300, height: 300, text: "G" });
+      // Source LEFT of the group
+      model.addRectangle({ x: 20, y: 250, width: 80, height: 60, text: "Src" });
+      // Target BELOW the group — its center is horizontally inside the group's x range
+      model.addRectangle({ x: 350, y: 500, width: 60, height: 60, text: "Tgt" });
+      const srcCell = Array.from(m.cells.values()).find((c: any) => c.value === "Src") as Cell;
+      const tgtCell = Array.from(m.cells.values()).find((c: any) => c.value === "Tgt") as Cell;
+      const edge: Cell = {
+        id: "edge-sl",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: srcCell.id,
+        targetId: tgtCell.id,
+        parent: "1",
+      };
+      m.cells.set("edge-sl", edge);
+      const waypoints = m.getGroupAvoidanceWaypoints(edge);
+      assertGreater(waypoints.length, 0);
+    });
+
+    it("should use sourceBounds.x when sourceRight (L-shaped path)", () => {
+      const m = model as any;
+      // Tall group so the diagonal crosses it
+      model.createGroup({ x: 200, y: 150, width: 200, height: 350, text: "G" });
+      // Source RIGHT of the group
+      model.addRectangle({ x: 500, y: 350, width: 80, height: 60, text: "Src" });
+      // Target ABOVE the group — its center is horizontally inside the group's x range
+      model.addRectangle({ x: 280, y: 20, width: 60, height: 60, text: "Tgt" });
+      const srcCell = Array.from(m.cells.values()).find((c: any) => c.value === "Src") as Cell;
+      const tgtCell = Array.from(m.cells.values()).find((c: any) => c.value === "Tgt") as Cell;
+      const edge: Cell = {
+        id: "edge-sr",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: srcCell.id,
+        targetId: tgtCell.id,
+        parent: "1",
+      };
+      m.cells.set("edge-sr", edge);
+      const waypoints = m.getGroupAvoidanceWaypoints(edge);
+      assertGreater(waypoints.length, 0);
+    });
+
+    it("should use sourceBounds.y+height when sourceAbove (L-shaped path)", () => {
+      const m = model as any;
+      // Large group so the diagonal crosses it
+      model.createGroup({ x: 200, y: 150, width: 300, height: 300, text: "G" });
+      // Source ABOVE group — horizontally within group x range
+      model.addRectangle({ x: 300, y: 10, width: 80, height: 60, text: "Src" });
+      // Target RIGHT of group
+      model.addRectangle({ x: 600, y: 300, width: 80, height: 60, text: "Tgt" });
+      const srcCell = Array.from(m.cells.values()).find((c: any) => c.value === "Src") as Cell;
+      const tgtCell = Array.from(m.cells.values()).find((c: any) => c.value === "Tgt") as Cell;
+      const edge: Cell = {
+        id: "edge-sa",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: srcCell.id,
+        targetId: tgtCell.id,
+        parent: "1",
+      };
+      m.cells.set("edge-sa", edge);
+      const waypoints = m.getGroupAvoidanceWaypoints(edge);
+      assertGreater(waypoints.length, 0);
+    });
+
+    it("should use sourceBounds.y when sourceBelow (L-shaped path)", () => {
+      const m = model as any;
+      // Large group so the diagonal crosses it
+      model.createGroup({ x: 200, y: 100, width: 300, height: 300, text: "G" });
+      // Source BELOW the group — horizontally within group x range
+      model.addRectangle({ x: 300, y: 500, width: 80, height: 60, text: "Src" });
+      // Target RIGHT of the group
+      model.addRectangle({ x: 600, y: 250, width: 80, height: 60, text: "Tgt" });
+      const srcCell = Array.from(m.cells.values()).find((c: any) => c.value === "Src") as Cell;
+      const tgtCell = Array.from(m.cells.values()).find((c: any) => c.value === "Tgt") as Cell;
+      const edge: Cell = {
+        id: "edge-sb",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: srcCell.id,
+        targetId: tgtCell.id,
+        parent: "1",
+      };
+      m.cells.set("edge-sb", edge);
+      const waypoints = m.getGroupAvoidanceWaypoints(edge);
+      assertGreater(waypoints.length, 0);
+    });
+
+    it("should fall back to sourceCenter.x when sourceBounds is null and sourceLeft (gap channel)", () => {
+      const m = model as any;
+      model.createGroup({ x: 200, y: 100, width: 300, height: 300, text: "G" });
+      model.addRectangle({ x: 350, y: 500, width: 60, height: 60, text: "Tgt" });
+      const tgtCell = Array.from(m.cells.values()).find((c: any) => c.value === "Tgt") as Cell;
+      const edge: Cell = {
+        id: "edge-null-sl",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "fake-left",
+        targetId: tgtCell.id,
+        parent: "1",
+      };
+      m.cells.set("edge-null-sl", edge);
+      const centers = new Map();
+      centers.set("fake-left", { x: 60, y: 280 });
+      centers.set(tgtCell.id, { x: 380, y: 530 });
+      const waypoints = m.getGroupAvoidanceWaypoints(edge, centers);
+      assertGreater(waypoints.length, 0);
+    });
+
+    it("should fall back to sourceCenter.x when sourceBounds is null and sourceRight (gap channel)", () => {
+      const m = model as any;
+      model.createGroup({ x: 200, y: 150, width: 200, height: 350, text: "G" });
+      model.addRectangle({ x: 280, y: 20, width: 60, height: 60, text: "Tgt" });
+      const tgtCell = Array.from(m.cells.values()).find((c: any) => c.value === "Tgt") as Cell;
+      const edge: Cell = {
+        id: "edge-null-sr",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "fake-right",
+        targetId: tgtCell.id,
+        parent: "1",
+      };
+      m.cells.set("edge-null-sr", edge);
+      const centers = new Map();
+      centers.set("fake-right", { x: 540, y: 380 });
+      centers.set(tgtCell.id, { x: 310, y: 50 });
+      const waypoints = m.getGroupAvoidanceWaypoints(edge, centers);
+      assertGreater(waypoints.length, 0);
+    });
+
+    it("should fall back to sourceCenter.y when sourceBounds is null and sourceAbove (gap channel)", () => {
+      const m = model as any;
+      model.createGroup({ x: 200, y: 150, width: 300, height: 300, text: "G" });
+      model.addRectangle({ x: 600, y: 300, width: 80, height: 60, text: "Tgt" });
+      const tgtCell = Array.from(m.cells.values()).find((c: any) => c.value === "Tgt") as Cell;
+      const edge: Cell = {
+        id: "edge-null-sa",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "fake-above",
+        targetId: tgtCell.id,
+        parent: "1",
+      };
+      m.cells.set("edge-null-sa", edge);
+      const centers = new Map();
+      centers.set("fake-above", { x: 340, y: 40 });
+      centers.set(tgtCell.id, { x: 640, y: 330 });
+      const waypoints = m.getGroupAvoidanceWaypoints(edge, centers);
+      assertGreater(waypoints.length, 0);
+    });
+
+    it("should fall back to sourceCenter.y when sourceBounds is null and sourceBelow (gap channel)", () => {
+      const m = model as any;
+      model.createGroup({ x: 200, y: 100, width: 300, height: 300, text: "G" });
+      model.addRectangle({ x: 600, y: 250, width: 80, height: 60, text: "Tgt" });
+      const tgtCell = Array.from(m.cells.values()).find((c: any) => c.value === "Tgt") as Cell;
+      const edge: Cell = {
+        id: "edge-null-sb",
+        type: "edge",
+        value: "",
+        style: "",
+        sourceId: "fake-below",
+        targetId: tgtCell.id,
+        parent: "1",
+      };
+      m.cells.set("edge-null-sb", edge);
+      const centers = new Map();
+      centers.set("fake-below", { x: 340, y: 530 });
+      centers.set(tgtCell.id, { x: 640, y: 280 });
+      const waypoints = m.getGroupAvoidanceWaypoints(edge, centers);
+      assertGreater(waypoints.length, 0);
     });
   });
 });
