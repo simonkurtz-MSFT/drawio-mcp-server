@@ -49,10 +49,10 @@ jobs:
       - name: Run coverage suite
         run: deno task test:coverage
 
-        - name: Generate LCOV report
+      - name: Generate LCOV report
         run: deno coverage coverage/ --exclude='index\\.ts' --lcov > coverage/lcov.info
 
-        - name: Generate badge metadata
+      - name: Generate badge metadata
         run: |
           python3 - <<'PY'
           import json
