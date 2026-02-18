@@ -267,10 +267,19 @@ describe("DiagramModel groups", () => {
       assertEquals("error" in edge, false);
       if (!("error" in edge)) {
         const xml = model.toXml();
-        const edgeRegex = new RegExp(
-          `id=\\"${edge.id}\\"[^>]*><mxGeometry relative=\\"1\\" as=\\"geometry\\"><Array as=\\"points\\">`,
-        );
-        assert(edgeRegex.test(xml));
+        const pointMatch = xml.match(new RegExp(
+          `id=\\"${edge.id}\\"[^>]*><mxGeometry[^>]*><Array as=\\"points\\"><mxPoint x=\\"([^\\"]+)\\" y=\\"([^\\"]+)\\"/><mxPoint x=\\"([^\\"]+)\\" y=\\"([^\\"]+)\\"/>`,
+        ));
+        assertExists(pointMatch);
+        if (pointMatch) {
+          const firstY = parseFloat(pointMatch[2]);
+          const secondY = parseFloat(pointMatch[4]);
+          assertEquals(firstY, secondY);
+
+          const groupTop = group.y!;
+          const groupBottom = group.y! + group.height!;
+          assert(firstY < groupTop || firstY > groupBottom);
+        }
         // Sanity check that the group exists in the test shape
         assert(xml.includes(`id="${group.id}"`));
       }

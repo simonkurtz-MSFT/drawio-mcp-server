@@ -117,6 +117,61 @@ describe("DiagramModel", () => {
       assertEquals(httpsLabelMatches.length, 2);
     });
 
+    it("should offset multiple visible labels on the same flattened edge line", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+
+      const edge1 = model.addEdge({ sourceId: a.id, targetId: b.id, text: "https" });
+      const edge2 = model.addEdge({ sourceId: b.id, targetId: a.id, text: "gRPC" });
+      const edge3 = model.addEdge({ sourceId: a.id, targetId: b.id, text: "tcp" });
+      assertEquals("error" in edge1, false);
+      assertEquals("error" in edge2, false);
+      assertEquals("error" in edge3, false);
+
+      if (!("error" in edge1) && !("error" in edge2) && !("error" in edge3)) {
+        const xml = model.toXml();
+        const geometryFor = (edgeId: string): string => {
+          const match = xml.match(new RegExp(`id=\\"${edgeId}\\"[^>]*><mxGeometry([^>]*)as=\\"geometry\\"`));
+          assertExists(match);
+          return match![1];
+        };
+
+        const geom1 = geometryFor(edge1.id);
+        const geom2 = geometryFor(edge2.id);
+        const geom3 = geometryFor(edge3.id);
+
+        assertEquals(geom1.includes(' y="'), false);
+        assert(geom2.includes(' y="-14"'));
+        assert(geom3.includes(' y="14"'));
+      }
+    });
+
+    it("should not offset labels on different flattened routes", () => {
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const c = model.addRectangle({ text: "C" });
+
+      const edge1 = model.addEdge({ sourceId: a.id, targetId: b.id, text: "https" });
+      const edge2 = model.addEdge({ sourceId: b.id, targetId: c.id, text: "gRPC" });
+      assertEquals("error" in edge1, false);
+      assertEquals("error" in edge2, false);
+
+      if (!("error" in edge1) && !("error" in edge2)) {
+        const xml = model.toXml();
+        const geometryFor = (edgeId: string): string => {
+          const match = xml.match(new RegExp(`id=\\"${edgeId}\\"[^>]*><mxGeometry([^>]*)as=\\"geometry\\"`));
+          assertExists(match);
+          return match![1];
+        };
+
+        const geom1 = geometryFor(edge1.id);
+        const geom2 = geometryFor(edge2.id);
+
+        assertEquals(geom1.includes(' y="'), false);
+        assertEquals(geom2.includes(' y="'), false);
+      }
+    });
+
     it("should apply symmetric side anchors for horizontal edges", () => {
       const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
       const right = model.addRectangle({ x: 400, y: 100, width: 100, height: 60, text: "Right" });

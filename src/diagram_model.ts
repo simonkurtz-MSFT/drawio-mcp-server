@@ -180,6 +180,40 @@ export class DiagramModel {
     return `${parent}|${first}|${second}|${normalizedLabel}`;
   }
 
+  private getFlattenedEdgeRouteKey(edge: Cell): string | null {
+    if (edge.type !== "edge" || !edge.sourceId || !edge.targetId) {
+      return null;
+    }
+
+    const [first, second] = edge.sourceId < edge.targetId
+      ? [edge.sourceId, edge.targetId]
+      : [edge.targetId, edge.sourceId];
+    const parent = edge.parent ?? "";
+
+    return `${parent}|${first}|${second}`;
+  }
+
+  private getAlternatingLabelOffset(labelIndexOnRoute: number): number {
+    if (labelIndexOnRoute <= 0) {
+      return 0;
+    }
+
+    const step = Math.ceil(labelIndexOnRoute / 2);
+    const direction = labelIndexOnRoute % 2 === 1 ? -1 : 1;
+    return direction * step * 14;
+  }
+
+  private renderEdgeGeometryXml(waypoints: Point[], labelOffsetY: number): string {
+    const yAttr = labelOffsetY !== 0 ? ` y="${labelOffsetY}"` : "";
+
+    if (waypoints.length > 0) {
+      const pointsXml = waypoints.map((point) => `<mxPoint x="${point.x}" y="${point.y}"/>`).join("");
+      return `<mxGeometry relative="1"${yAttr} as="geometry"><Array as="points">${pointsXml}</Array></mxGeometry>`;
+    }
+
+    return `<mxGeometry relative="1"${yAttr} as="geometry"/>`;
+  }
+
   private getAbsoluteBounds(cellId: string): Rect | null {
     const cell = this.cells.get(cellId);
     if (!cell || cell.type !== "vertex") {
@@ -1210,6 +1244,7 @@ export class DiagramModel {
     }
 
     const emittedFlattenedEdgeLabelKeys = new Set<string>();
+    const emittedLabelCountByRoute = new Map<string, number>();
 
     const cellsXml = Array.from(cells.values())
       .map((cell) => {
@@ -1230,13 +1265,17 @@ export class DiagramModel {
           }
 
           const edgeValue = shouldHideDuplicateLabel ? "" : cell.value;
+          const flattenedRouteKey = this.getFlattenedEdgeRouteKey(cell);
+          let labelOffsetY = 0;
+          if (flattenedRouteKey && edgeValue.trim().length > 0) {
+            const labelIndexOnRoute = emittedLabelCountByRoute.get(flattenedRouteKey) ?? 0;
+            labelOffsetY = this.getAlternatingLabelOffset(labelIndexOnRoute);
+            emittedLabelCountByRoute.set(flattenedRouteKey, labelIndexOnRoute + 1);
+          }
+
           const edgeStyle = this.withSymmetricEdgeAnchors(cell, precomputedCenters);
           const waypoints = this.getGroupAvoidanceWaypoints(cell, precomputedCenters, precomputedGroupBounds);
-          const geometryXml = waypoints.length > 0
-            ? `<mxGeometry relative="1" as="geometry"><Array as="points">${
-              waypoints.map((point) => `<mxPoint x="${point.x}" y="${point.y}"/>`).join("")
-            }</Array></mxGeometry>`
-            : `<mxGeometry relative="1" as="geometry"/>`;
+          const geometryXml = this.renderEdgeGeometryXml(waypoints, labelOffsetY);
           const sourceAttr = cell.sourceId ? ` source="${cell.sourceId}"` : "";
           const targetAttr = cell.targetId ? ` target="${cell.targetId}"` : "";
           return `<mxCell id="${this.escapeXml(cell.id)}" value="${this.escapeXml(edgeValue)}" style="${
