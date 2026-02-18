@@ -357,6 +357,16 @@ describe("searchAzureIcons", () => {
     assertEquals(results[0].score, 1.0);
   });
 
+  it("Entra alias variants return Entra ID Protection as top result", () => {
+    const queries = ["Entra", "Microsoft Entra", "Azure AD", "AAD"];
+    for (const query of queries) {
+      const results = searchAzureIcons(query, 5);
+      assert(results.length > 0);
+      assert(results[0].title.includes("Entra-ID"));
+      assertEquals(results[0].score, 1.0);
+    }
+  });
+
   it("Azure Monitor alias returns Azure Monitor Dashboard as top result", () => {
     const results = searchAzureIcons("Azure Monitor", 5);
     assert(results.length > 0);
@@ -736,6 +746,13 @@ describe("resolveAzureAlias", () => {
     assertEquals(resolveAzureAlias("Microsoft Entra ID"), "10231-icon-service-entra-id-protection");
   });
 
+  it("resolves Entra shorthand variants", () => {
+    assertEquals(resolveAzureAlias("Entra"), "10231-icon-service-entra-id-protection");
+    assertEquals(resolveAzureAlias("Microsoft Entra"), "10231-icon-service-entra-id-protection");
+    assertEquals(resolveAzureAlias("Azure AD"), "10231-icon-service-entra-id-protection");
+    assertEquals(resolveAzureAlias("AAD"), "10231-icon-service-entra-id-protection");
+  });
+
   it("resolves Azure Monitor", () => {
     assertEquals(resolveAzureAlias("Azure Monitor"), "02488-icon-service-azure-monitor-dashboard");
   });
@@ -852,7 +869,9 @@ describe("AZURE_SHAPE_ALIASES", () => {
   it("contains expected aliases", () => {
     // App Service / Web Apps
     assertEquals(AZURE_SHAPE_ALIASES.has("app service"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("app services"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("azure app service"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure app services"), true);
 
     // Static Web Apps
     assertEquals(AZURE_SHAPE_ALIASES.has("static web app"), true);
@@ -863,6 +882,9 @@ describe("AZURE_SHAPE_ALIASES", () => {
     // Functions
     assertEquals(AZURE_SHAPE_ALIASES.has("azure functions"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("function app"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("function apps"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure function app"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure function apps"), true);
 
     // Container Apps
     assertEquals(AZURE_SHAPE_ALIASES.has("container apps"), true);
@@ -871,12 +893,16 @@ describe("AZURE_SHAPE_ALIASES", () => {
 
     // Container Registry
     assertEquals(AZURE_SHAPE_ALIASES.has("container registry"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("container registries"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("acr"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("azure container registry"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure container registries"), true);
 
     // AKS
     assertEquals(AZURE_SHAPE_ALIASES.has("aks"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("azure kubernetes service"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure kubernetes services"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("k8s"), true);
 
     // Virtual Machines
     assertEquals(AZURE_SHAPE_ALIASES.has("vm"), true);
@@ -885,10 +911,15 @@ describe("AZURE_SHAPE_ALIASES", () => {
 
     // Virtual Networks
     assertEquals(AZURE_SHAPE_ALIASES.has("vnet"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("virtual network"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("virtual networks"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure virtual network"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("azure vnet"), true);
 
     // NSG
     assertEquals(AZURE_SHAPE_ALIASES.has("nsg"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("network security group"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("network security groups"), true);
 
     // Blob Storage
     assertEquals(AZURE_SHAPE_ALIASES.has("blob storage"), true);
@@ -919,6 +950,8 @@ describe("AZURE_SHAPE_ALIASES", () => {
     assertEquals(AZURE_SHAPE_ALIASES.has("azure sql database"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("azure sql"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("sql database"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure sql db"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("sql db"), true);
 
     // Managed Identity
     assertEquals(AZURE_SHAPE_ALIASES.has("managed identity"), true);
@@ -929,7 +962,12 @@ describe("AZURE_SHAPE_ALIASES", () => {
 
     // Entra ID
     assertEquals(AZURE_SHAPE_ALIASES.has("entra id"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("entra"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("microsoft entra"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("microsoft entra id"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure ad"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure active directory"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("aad"), true);
 
     // Azure Monitor
     assertEquals(AZURE_SHAPE_ALIASES.has("azure monitor"), true);
@@ -939,6 +977,7 @@ describe("AZURE_SHAPE_ALIASES", () => {
     assertEquals(AZURE_SHAPE_ALIASES.has("front door"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("azure front door"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("azure front doors"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("afd"), true);
 
     // Cosmos DB
     assertEquals(AZURE_SHAPE_ALIASES.has("cosmos db"), true);
@@ -946,14 +985,18 @@ describe("AZURE_SHAPE_ALIASES", () => {
 
     // Key Vault
     assertEquals(AZURE_SHAPE_ALIASES.has("key vault"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("key vaults"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("azure key vault"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure key vaults"), true);
 
     // Service Bus
     assertEquals(AZURE_SHAPE_ALIASES.has("service bus"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure service bus"), true);
 
     // API Management
     assertEquals(AZURE_SHAPE_ALIASES.has("api management"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("apim"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("api mgmt"), true);
 
     // Application Gateway
     assertEquals(AZURE_SHAPE_ALIASES.has("app gateway"), true);
@@ -965,6 +1008,8 @@ describe("AZURE_SHAPE_ALIASES", () => {
 
     // Log Analytics
     assertEquals(AZURE_SHAPE_ALIASES.has("log analytics"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("log analytics workspace"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("log analytics workspaces"), true);
 
     // Bastion
     assertEquals(AZURE_SHAPE_ALIASES.has("bastion"), true);

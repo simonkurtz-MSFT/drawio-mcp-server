@@ -296,7 +296,9 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
   // ── App Service / Web Apps ─────────────────────────────────────────────
   // "App Service" fuzzy-matches Plans/Certs/Domains before the main icon
   ["app service", ["10035-icon-service-app-services"]],
+  ["app services", ["10035-icon-service-app-services"]],
   ["azure app service", ["10035-icon-service-app-services"]],
+  ["azure app services", ["10035-icon-service-app-services"]],
 
   // ── Static Web Apps ────────────────────────────────────────────────────
   // Icon is named "Static-Apps", not "Static-Web-Apps"
@@ -304,11 +306,15 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
   ["static web apps", ["01007-icon-service-static-apps"]],
   ["azure static web app", ["01007-icon-service-static-apps"]],
   ["azure static web apps", ["01007-icon-service-static-apps"]],
+  ["swa", ["01007-icon-service-static-apps"]],
 
   // ── Functions ──────────────────────────────────────────────────────────
   // "Azure Functions" fuzzy-matches Network Function Manager
   ["azure functions", ["10029-icon-service-function-apps"]],
   ["function app", ["10029-icon-service-function-apps"]],
+  ["function apps", ["10029-icon-service-function-apps"]],
+  ["azure function app", ["10029-icon-service-function-apps"]],
+  ["azure function apps", ["10029-icon-service-function-apps"]],
 
   // ── Container Apps ─────────────────────────────────────────────────────
   ["container apps", ["02989-icon-service-container-apps-environments", "02884-icon-service-worker-container-app"]],
@@ -317,17 +323,26 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
     "02884-icon-service-worker-container-app",
   ]],
   ["container app", ["02989-icon-service-container-apps-environments", "02884-icon-service-worker-container-app"]],
+  ["azure container app", [
+    "02989-icon-service-container-apps-environments",
+    "02884-icon-service-worker-container-app",
+  ]],
+  ["aca", ["02989-icon-service-container-apps-environments", "02884-icon-service-worker-container-app"]],
 
   // ── Container Registry ─────────────────────────────────────────────────
   // Icon is titled "Container-Registries" (plural); singular/abbreviation miss
   ["container registry", ["10105-icon-service-container-registries"]],
+  ["container registries", ["10105-icon-service-container-registries"]],
   ["acr", ["10105-icon-service-container-registries"]],
   ["azure container registry", ["10105-icon-service-container-registries"]],
+  ["azure container registries", ["10105-icon-service-container-registries"]],
 
   // ── Kubernetes / AKS ───────────────────────────────────────────────────
   // "AKS" fuzzy-matches AKS Automatic; shorthand should resolve to the main icon
   ["aks", ["10023-icon-service-kubernetes-services"]],
   ["azure kubernetes service", ["10023-icon-service-kubernetes-services"]],
+  ["azure kubernetes services", ["10023-icon-service-kubernetes-services"]],
+  ["k8s", ["10023-icon-service-kubernetes-services"]],
 
   // ── Virtual Machines ───────────────────────────────────────────────────
   // "VM" fuzzy-matches Automanaged VM; shorthand should resolve to main icon
@@ -338,11 +353,16 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
   // ── Virtual Networks ───────────────────────────────────────────────────
   // "VNet" does not fuzzy-match Virtual Networks at all
   ["vnet", ["10061-icon-service-virtual-networks"]],
+  ["virtual network", ["10061-icon-service-virtual-networks"]],
+  ["virtual networks", ["10061-icon-service-virtual-networks"]],
+  ["azure virtual network", ["10061-icon-service-virtual-networks"]],
   ["azure vnet", ["10061-icon-service-virtual-networks"]],
 
   // ── Network Security Groups ────────────────────────────────────────────
   // "NSG" fuzzy-matches HD Insight instead of Network Security Groups
   ["nsg", ["10067-icon-service-network-security-groups"]],
+  ["network security group", ["10067-icon-service-network-security-groups"]],
+  ["network security groups", ["10067-icon-service-network-security-groups"]],
 
   // ── Blob Storage ───────────────────────────────────────────────────────
   // No "Blob Storage" icon; closest is Blob Block + Storage Accounts
@@ -378,18 +398,31 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
   ["azure sql database", ["10130-icon-service-sql-database"]],
   ["azure sql", ["02390-icon-service-azure-sql", "10130-icon-service-sql-database"]],
   ["sql database", ["10130-icon-service-sql-database"]],
+  ["azure sql db", ["10130-icon-service-sql-database"]],
+  ["sql db", ["10130-icon-service-sql-database"]],
 
   // ── Managed Identity ───────────────────────────────────────────────────
   ["managed identity", ["10227-icon-service-entra-managed-identities"]],
   ["managed identities", ["10227-icon-service-entra-managed-identities"]],
+  ["user assigned managed identity", ["10227-icon-service-entra-managed-identities"]],
+  ["user assigned managed identities", ["10227-icon-service-entra-managed-identities"]],
+  ["system assigned managed identity", ["10227-icon-service-entra-managed-identities"]],
+  ["system assigned managed identities", ["10227-icon-service-entra-managed-identities"]],
+  ["uami", ["10227-icon-service-entra-managed-identities"]],
+  ["sami", ["10227-icon-service-entra-managed-identities"]],
 
   // ── Application Insights ───────────────────────────────────────────────
   // "App Insights" doesn't fuzzy-match — only full name does
   ["app insights", ["00012-icon-service-application-insights"]],
 
   // ── Entra ID ───────────────────────────────────────────────────────────
+  ["entra", ["10231-icon-service-entra-id-protection"]],
+  ["microsoft entra", ["10231-icon-service-entra-id-protection"]],
   ["entra id", ["10231-icon-service-entra-id-protection"]],
   ["microsoft entra id", ["10231-icon-service-entra-id-protection"]],
+  ["azure ad", ["10231-icon-service-entra-id-protection"]],
+  ["azure active directory", ["10231-icon-service-entra-id-protection"]],
+  ["aad", ["10231-icon-service-entra-id-protection"]],
 
   // ── Azure Monitor ──────────────────────────────────────────────────────
   ["azure monitor", ["02488-icon-service-azure-monitor-dashboard"]],
@@ -399,6 +432,7 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
   ["front door", ["10073-icon-service-front-door-and-cdn-profiles"]],
   ["azure front door", ["10073-icon-service-front-door-and-cdn-profiles"]],
   ["azure front doors", ["10073-icon-service-front-door-and-cdn-profiles"]],
+  ["afd", ["10073-icon-service-front-door-and-cdn-profiles"]],
 
   // ── Cosmos DB ──────────────────────────────────────────────────────────
   ["cosmos db", ["10121-icon-service-azure-cosmos-db"]],
@@ -406,18 +440,23 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
 
   // ── Key Vault ──────────────────────────────────────────────────────────
   ["key vault", ["10245-icon-service-key-vaults"]],
+  ["key vaults", ["10245-icon-service-key-vaults"]],
   ["azure key vault", ["10245-icon-service-key-vaults"]],
+  ["azure key vaults", ["10245-icon-service-key-vaults"]],
 
   // ── Service Bus ────────────────────────────────────────────────────────
   ["service bus", ["10836-icon-service-azure-service-bus"]],
+  ["azure service bus", ["10836-icon-service-azure-service-bus"]],
 
   // ── API Management ─────────────────────────────────────────────────────
   ["api management", ["10042-icon-service-api-management-services"]],
   ["apim", ["10042-icon-service-api-management-services"]],
+  ["api mgmt", ["10042-icon-service-api-management-services"]],
 
   // ── Application Gateway ────────────────────────────────────────────────
   ["app gateway", ["10076-icon-service-application-gateways"]],
   ["application gateway", ["10076-icon-service-application-gateways"]],
+  ["agw", ["10076-icon-service-application-gateways"]],
 
   // ── Load Balancer ──────────────────────────────────────────────────────
   ["load balancer", ["10062-icon-service-load-balancers"]],
@@ -425,6 +464,9 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
 
   // ── Log Analytics ──────────────────────────────────────────────────────
   ["log analytics", ["00009-icon-service-log-analytics-workspaces"]],
+  ["log analytics workspace", ["00009-icon-service-log-analytics-workspaces"]],
+  ["log analytics workspaces", ["00009-icon-service-log-analytics-workspaces"]],
+  ["law", ["00009-icon-service-log-analytics-workspaces"]],
 
   // ── Bastion ────────────────────────────────────────────────────────────
   ["bastion", ["02422-icon-service-bastions"]],
