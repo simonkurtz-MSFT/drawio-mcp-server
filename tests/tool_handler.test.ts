@@ -124,7 +124,7 @@ describe("createToolHandlerFactory", () => {
 
       const firstCallMsg = debugSpy.calls[0].args[0] as string;
       assert(!firstCallMsg.includes("session="));
-      assert(firstCallMsg.includes("req=req-1"));
+      assert(firstCallMsg.includes("req:req-1"));
     });
 
     it("should handle missing sessionId without logging session", async () => {
@@ -140,7 +140,7 @@ describe("createToolHandlerFactory", () => {
 
       const firstCallMsg = debugSpy.calls[0].args[0] as string;
       assert(!firstCallMsg.includes("session="));
-      assert(firstCallMsg.includes("req=000r1"));
+      assert(firstCallMsg.includes("req:000r1"));
     });
 
     it("should handle undefined extra without logging session", async () => {
