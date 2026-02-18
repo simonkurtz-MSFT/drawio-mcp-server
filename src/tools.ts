@@ -19,11 +19,6 @@ import {
   searchAzureIcons,
 } from "./shapes/azure_icon_library.ts";
 import { BASIC_SHAPE_CATEGORIES, BASIC_SHAPES, getBasicShape } from "./shapes/basic_shapes.ts";
-import type { ToolLogger } from "./tool_handler.ts";
-import { formatBytes, timestamp } from "./tool_handler.ts";
-
-/** Shared TextEncoder for UTF-8 byte length calculations (replaces Node's Buffer.byteLength) */
-const textEncoder = new TextEncoder();
 const allBasicShapes = Object.values(BASIC_SHAPES);
 const allBasicShapesLower = allBasicShapes.map((s) => ({ ...s, nameLower: s.name.toLowerCase() }));
 const INTERNAL_SUCCESS_DATA = Symbol("internal_success_data");
@@ -210,7 +205,7 @@ function withDiagramState<T extends StatefulArgs>(
   return result;
 }
 
-export function createHandlers(log: ToolLogger) {
+export function createHandlers() {
   return {
     "delete-cell-by-id": (args: {
       diagram_xml?: string;
@@ -349,12 +344,6 @@ export function createHandlers(log: ToolLogger) {
         const compressed = args?.compress ?? false;
         const xml = diagram.toXml({ compress: compressed });
         const stats = diagram.getStats();
-
-        if (compressed) {
-          const compressedSize = textEncoder.encode(xml).length;
-          const prefix = "[tool:export-diagram]".padEnd(30);
-          log.debug(`${timestamp()}: ${prefix} compressed size: ${formatBytes(compressedSize)}`);
-        }
 
         return successResult({
           xml,
@@ -854,5 +843,16 @@ export function createHandlers(log: ToolLogger) {
   };
 }
 
-/** Default handlers instance with a no-op logger, for backward compatibility in tests. */
-export const handlers = createHandlers({ debug: () => {} });
+/** Default handlers instance for backward compatibility in tests. */
+export const handlers = createHandlers();
+
+/**
+ * Run a throwaway search-shapes handler call to JIT-compile the full
+ * handler path (basic shape filtering, displayTitle mapping, score
+ * formatting, JSON serialization).  Call once at startup after
+ * initializeShapes() so the first real search-shapes call doesn't
+ * pay ~15ms of compilation overhead.
+ */
+export function warmupSearchPath(): void {
+  handlers["search-shapes"]({ queries: ["rectangle", "front door"] });
+}

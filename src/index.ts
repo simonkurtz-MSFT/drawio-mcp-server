@@ -19,7 +19,7 @@ import { cors } from "hono/cors";
 import { buildConfig, parseLoggerType, type ServerConfig, shouldShowHelp, VERSION } from "./config.ts";
 import { create_logger as create_console_logger } from "./loggers/mcp_console_logger.ts";
 import { create_logger as create_server_logger, validLogLevels } from "./loggers/mcp_server_logger.ts";
-import { createHandlers } from "./tools.ts";
+import { createHandlers, warmupSearchPath } from "./tools.ts";
 import { createToolHandlerFactory } from "./tool_handler.ts";
 import { initializeShapes, resetAzureIconLibrary } from "./shapes/azure_icon_library.ts";
 import { registerTools, TOOL_DEFINITIONS } from "./tool_registrations.ts";
@@ -107,7 +107,7 @@ function createMcpServer(): McpServer {
   }
 
   // Register all MCP tools (schemas + descriptions)
-  const handlers = createHandlers(log);
+  const handlers = createHandlers();
   const createToolHandler = createToolHandlerFactory(handlers, log);
   registerTools(srv, createToolHandler);
 
@@ -279,6 +279,7 @@ async function main() {
   const shapeLoadStart = performance.now();
   const shapeLibrary = initializeShapes(config.azureIconLibraryPath);
   const shapeLoadMs = (performance.now() - shapeLoadStart).toFixed(1);
+  warmupSearchPath();
   log.debug(
     `Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} categories in ${shapeLoadMs}ms (includes search index + JIT warm-up)`,
   );

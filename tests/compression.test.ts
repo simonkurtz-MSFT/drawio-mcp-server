@@ -4,9 +4,8 @@
  */
 import { beforeEach, describe, it } from "@std/testing/bdd";
 import { assert, assertEquals, assertExists } from "@std/assert";
-import { spy } from "@std/testing/mock";
 import { DiagramModel } from "../src/diagram_model.ts";
-import { createHandlers, handlers as baseHandlers } from "../src/tools.ts";
+import { handlers as baseHandlers } from "../src/tools.ts";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 
 /** Parse the JSON payload out of a handler result. */
@@ -344,54 +343,4 @@ describe("DiagramModel compression", () => {
     });
   });
 
-  // ——— Compression debug logging ——————————————————————————————
-
-  describe("export-diagram compression debug logging", () => {
-    beforeEach(() => {
-      diagramXml = undefined;
-    });
-
-    it("should log compressed size when compress is true", async () => {
-      const debugSpy = spy((_msg: string) => {});
-      const logSpy = { debug: debugSpy };
-      const loggedHandlers = createHandlers(logSpy);
-
-      await loggedHandlers["add-cells"]({ cells: [{ type: "vertex", text: "Compression Log Test" }] });
-      await loggedHandlers["export-diagram"]({ compress: true });
-
-      const debugCalls = debugSpy.calls.map((c) => c.args[0] as string);
-      const compressedSizeLog = debugCalls.find((msg: string) => msg.includes("compressed size:"));
-
-      assertExists(compressedSizeLog);
-      assert(
-        /^\d{4}-\d{2}-\d{2}T[\d:.]+Z: \[tool:export-diagram\]\s+compressed size: [\d.]+ KB$/.test(compressedSizeLog!),
-      );
-    });
-
-    it("should not log compression details when compress is false", async () => {
-      const debugSpy = spy((_msg: string) => {});
-      const logSpy = { debug: debugSpy };
-      const loggedHandlers = createHandlers(logSpy);
-
-      await loggedHandlers["add-cells"]({ cells: [{ type: "vertex", text: "No Compress" }] });
-      await loggedHandlers["export-diagram"]({ compress: false });
-
-      const debugCalls = debugSpy.calls.map((c) => c.args[0] as string);
-      const compressionLogs = debugCalls.filter((msg: string) => msg.includes("compressed size:"));
-      assertEquals(compressionLogs.length, 0);
-    });
-
-    it("should not log compression details when compress is omitted", async () => {
-      const debugSpy = spy((_msg: string) => {});
-      const logSpy = { debug: debugSpy };
-      const loggedHandlers = createHandlers(logSpy);
-
-      await loggedHandlers["add-cells"]({ cells: [{ type: "vertex", text: "Default" }] });
-      await loggedHandlers["export-diagram"]({});
-
-      const debugCalls = debugSpy.calls.map((c) => c.args[0] as string);
-      const compressionLogs = debugCalls.filter((msg: string) => msg.includes("compressed size:"));
-      assertEquals(compressionLogs.length, 0);
-    });
-  });
 });
