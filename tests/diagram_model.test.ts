@@ -240,7 +240,7 @@ describe("DiagramModel", () => {
       model.addEdge({ sourceId: left.id, targetId: right.id });
       const xml = model.toXml();
       // Source center Y = 130, target center Y = 190 → midX waypoints should exist
-      assert(xml.includes("<Array as=\"points\">"), "expected alignment waypoints for Y-offset horizontal edge");
+      assert(xml.includes('<Array as="points">'), "expected alignment waypoints for Y-offset horizontal edge");
       assert(xml.includes("<mxPoint"), "expected mxPoint elements for alignment");
     });
 
@@ -249,7 +249,7 @@ describe("DiagramModel", () => {
       const bottom = model.addRectangle({ x: 200, y: 400, width: 100, height: 60, text: "Bottom" });
       model.addEdge({ sourceId: top.id, targetId: bottom.id });
       const xml = model.toXml();
-      assert(xml.includes("<Array as=\"points\">"), "expected alignment waypoints for X-offset vertical edge");
+      assert(xml.includes('<Array as="points">'), "expected alignment waypoints for X-offset vertical edge");
     });
 
     it("should not add waypoints when vertical cells are X-aligned", () => {
@@ -291,7 +291,7 @@ describe("DiagramModel", () => {
       const xml = model.toXml();
       // The edge should have avoidance waypoints (routing around the group),
       // not alignment waypoints. Verify waypoints exist.
-      assert(xml.includes("<Array as=\"points\">"), "expected avoidance waypoints");
+      assert(xml.includes('<Array as="points">'), "expected avoidance waypoints");
     });
   });
 

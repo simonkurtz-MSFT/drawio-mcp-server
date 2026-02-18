@@ -279,7 +279,9 @@ async function main() {
   const shapeLoadStart = performance.now();
   const shapeLibrary = initializeShapes(config.azureIconLibraryPath);
   const shapeLoadMs = (performance.now() - shapeLoadStart).toFixed(1);
-  log.debug(`Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} categories in ${shapeLoadMs}ms (includes search index + JIT warm-up)`);
+  log.debug(
+    `Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} categories in ${shapeLoadMs}ms (includes search index + JIT warm-up)`,
+  );
 
   if (config.transports.indexOf("stdio") > -1) {
     await start_stdio_transport();

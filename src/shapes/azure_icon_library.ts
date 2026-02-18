@@ -570,9 +570,9 @@ export function initializeShapes(libraryPath?: string): AzureIconLibrary {
   // to force V8 to JIT-compile the entire hot path — not just the raw
   // fuzzy-search internals.  Without this, the first real search-shapes
   // call pays ~50ms of JIT compilation overhead.
-  searchAzureIcons("warm-up", 1);              // non-alias path
-  searchAzureIcons("container apps", 1);       // alias path
-  cachedSearchResults.clear();                  // discard throwaway entries
+  searchAzureIcons("warm-up", 1); // non-alias path
+  searchAzureIcons("container apps", 1); // alias path
+  cachedSearchResults.clear(); // discard throwaway entries
   return cachedLibrary;
 }
 

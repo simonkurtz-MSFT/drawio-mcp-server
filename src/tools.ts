@@ -235,8 +235,6 @@ export function createHandlers(log: ToolLogger) {
       });
     },
 
-
-
     "edit-edge": (args: {
       diagram_xml?: string;
       edges: Array<{
@@ -308,8 +306,6 @@ export function createHandlers(log: ToolLogger) {
         });
       }, { readOnly: true });
     },
-
-
 
     "set-active-layer": (args: {
       diagram_xml?: string;
@@ -568,8 +564,6 @@ export function createHandlers(log: ToolLogger) {
         suggestion: "Use get-shape-categories to list available categories",
       });
     },
-
-
 
     "add-cells-of-shape": (args: {
       diagram_xml?: string;

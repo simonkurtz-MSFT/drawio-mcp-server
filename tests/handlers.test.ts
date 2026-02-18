@@ -84,8 +84,6 @@ describe("tool handlers", () => {
     });
   });
 
-
-
   describe("edit-edge", () => {
     it("should update edge text", async () => {
       const a = await addVertex({ text: "A" });
@@ -343,8 +341,6 @@ describe("tool handlers", () => {
       assert(parsed.data.total > 0);
     });
   });
-
-
 
   describe("add-cells", () => {
     it("should add multiple cells and resolve temp IDs", async () => {
