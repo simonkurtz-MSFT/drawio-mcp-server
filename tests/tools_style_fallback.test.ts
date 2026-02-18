@@ -82,8 +82,8 @@ afterAll(() => {
 describe("resolveShape style ?? fallback", () => {
   it("should default to empty string when Azure exact match has undefined style", async () => {
     diagramXml = undefined;
-    const result = await handlers["add-cells-of-shape"]({
-      cells: [{ shape_name: "ExactMatchNoStyle", x: 0, y: 0 }],
+    const result = await handlers["add-cells"]({
+      cells: [{ type: "vertex", shape_name: "ExactMatchNoStyle", x: 0, y: 0 }],
     });
     const parsed = parseResult(result);
     assertEquals(parsed.success, true);
@@ -94,8 +94,8 @@ describe("resolveShape style ?? fallback", () => {
   it("should default to empty string when Azure fuzzy match has undefined style", async () => {
     diagramXml = undefined;
     // Use a query that won't match basic shapes but will fuzzy-match "FuzzyMatchNoStyle"
-    const result = await handlers["add-cells-of-shape"]({
-      cells: [{ shape_name: "FuzzyMatchNo", x: 0, y: 0 }],
+    const result = await handlers["add-cells"]({
+      cells: [{ type: "vertex", shape_name: "FuzzyMatchNo", x: 0, y: 0 }],
     });
     const parsed = parseResult(result);
     assertEquals(parsed.success, true);
@@ -112,16 +112,16 @@ describe("resolveShape cache eviction", () => {
     try {
       // Fill cache with 2 entries (at capacity)
       diagramXml = undefined;
-      await handlers["add-cells-of-shape"]({
-        cells: [{ shape_name: "ExactMatchNoStyle", x: 0, y: 0 }],
+      await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "ExactMatchNoStyle", x: 0, y: 0 }],
       });
-      await handlers["add-cells-of-shape"]({
-        cells: [{ shape_name: "FuzzyMatchNoStyle", x: 100, y: 0 }],
+      await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "FuzzyMatchNoStyle", x: 100, y: 0 }],
       });
       assertEquals(getResolveCacheSize(), 2, "Cache should have 2 entries");
       // Third distinct query triggers eviction (cache clears then adds the new entry)
-      await handlers["add-cells-of-shape"]({
-        cells: [{ shape_name: "nonexistent-shape-xyz", x: 200, y: 0 }],
+      await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "nonexistent-shape-xyz", x: 200, y: 0 }],
       });
       // After eviction: cache was cleared, then the new lookup was added
       // "nonexistent-shape-xyz" resolves to undefined and is cached via .has() sentinel

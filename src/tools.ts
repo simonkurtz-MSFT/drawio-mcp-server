@@ -20,7 +20,7 @@ import {
 } from "./shapes/azure_icon_library.ts";
 import { BASIC_SHAPE_CATEGORIES, BASIC_SHAPES, getBasicShape } from "./shapes/basic_shapes.ts";
 import type { ToolLogger } from "./tool_handler.ts";
-import { formatBytes } from "./tool_handler.ts";
+import { formatBytes, timestamp } from "./tool_handler.ts";
 
 /** Shared TextEncoder for UTF-8 byte length calculations (replaces Node's Buffer.byteLength) */
 const textEncoder = new TextEncoder();
@@ -353,7 +353,7 @@ export function createHandlers(log: ToolLogger) {
         if (compressed) {
           const compressedSize = textEncoder.encode(xml).length;
           const prefix = "[tool:export-diagram]".padEnd(30);
-          log.debug(`${prefix} compressed size: ${formatBytes(compressedSize)}`);
+          log.debug(`${timestamp()}: ${prefix} compressed size: ${formatBytes(compressedSize)}`);
         }
 
         return successResult({
@@ -565,78 +565,6 @@ export function createHandlers(log: ToolLogger) {
       });
     },
 
-    "add-cells-of-shape": (args: {
-      diagram_xml?: string;
-      cells: Array<{
-        shape_name: string;
-        x?: number;
-        y?: number;
-        width?: number;
-        height?: number;
-        text?: string;
-        style?: string;
-        temp_id?: string;
-      }>;
-    }): CallToolResult => {
-      if (!args.cells || args.cells.length === 0) {
-        return errorResult({
-          code: "INVALID_INPUT",
-          message: "Must provide a non-empty 'cells' array",
-        });
-      }
-
-      return withDiagramState(args, (diagram) => {
-        const results = args.cells.map((item) => {
-          const resolved = resolveShape(item.shape_name);
-          if (!resolved) {
-            return {
-              success: false,
-              temp_id: item.temp_id,
-              shape_name: item.shape_name,
-              error: {
-                code: "SHAPE_NOT_FOUND",
-                message: `Unknown shape '${item.shape_name}'`,
-                suggestion: "Use search-shapes to find available shapes",
-              },
-            };
-          }
-
-          const cell = diagram.addRectangle({
-            x: item.x,
-            y: item.y,
-            width: item.width ?? resolved.width,
-            height: item.height ?? resolved.height,
-            text: item.text ?? (resolved.source !== "basic" ? resolved.name : undefined),
-            style: item.style ?? resolved.style,
-          });
-
-          return {
-            success: true,
-            cell,
-            temp_id: item.temp_id,
-            ...(resolved.source === "azure-exact" && { info: `Added Azure icon: ${resolved.name}` }),
-            ...(resolved.source === "azure-fuzzy" && {
-              info: `Added Azure icon (matched from search): ${resolved.name}`,
-              confidence: parseFloat(resolved.score!.toFixed(3)),
-            }),
-          };
-        });
-
-        const successCount = results.reduce((n, r) => n + (r.success ? 1 : 0), 0);
-        const errorCount = results.length - successCount;
-
-        return successResult({
-          success: errorCount === 0,
-          summary: {
-            total: results.length,
-            succeeded: successCount,
-            failed: errorCount,
-          },
-          results,
-        });
-      });
-    },
-
     "set-cell-shape": (args: {
       diagram_xml?: string;
       cells: Array<{ cell_id: string; shape_name: string }>;
@@ -711,6 +639,7 @@ export function createHandlers(log: ToolLogger) {
         height?: number;
         text?: string;
         style?: string;
+        shape_name?: string;
         source_id?: string;
         target_id?: string;
         temp_id?: string;
@@ -718,22 +647,95 @@ export function createHandlers(log: ToolLogger) {
       dry_run?: boolean;
     }): CallToolResult => {
       return withDiagramState(args, (diagram) => {
-        const items = args.cells.map((c) => ({
-          type: c.type,
-          x: c.x,
-          y: c.y,
-          width: c.width,
-          height: c.height,
-          text: c.text,
-          style: c.style,
-          sourceId: c.source_id,
-          targetId: c.target_id,
-          tempId: c.temp_id,
-        }));
-        const results = diagram.batchAddCells(items, { dryRun: args.dry_run });
-        const successCount = results.reduce((n, r) => n + (r.success ? 1 : 0), 0);
+        // Pre-resolve shapes and track per-cell metadata
+        const resolvedMap = new Map<number, NonNullable<ReturnType<typeof resolveShape>>>();
+        const failedMap = new Map<number, object>();
+        const batchItems: Array<{
+          type: "vertex" | "edge";
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+          text?: string;
+          style?: string;
+          sourceId?: string;
+          targetId?: string;
+          tempId?: string;
+        }> = [];
+        const batchToInput: number[] = [];
+
+        for (let i = 0; i < args.cells.length; i++) {
+          const c = args.cells[i];
+          let style = c.style;
+          let width = c.width;
+          let height = c.height;
+          let text = c.text;
+
+          if (c.type === "vertex" && c.shape_name) {
+            const resolved = resolveShape(c.shape_name);
+            if (!resolved) {
+              failedMap.set(i, {
+                success: false,
+                tempId: c.temp_id,
+                shape_name: c.shape_name,
+                error: {
+                  code: "SHAPE_NOT_FOUND",
+                  message: `Unknown shape '${c.shape_name}'`,
+                  suggestion: "Use search-shapes to find available shapes",
+                },
+              });
+              continue;
+            }
+            resolvedMap.set(i, resolved);
+            style = resolved.style;
+            width = width ?? resolved.width;
+            height = height ?? resolved.height;
+            text = text ?? (resolved.source !== "basic" ? resolved.name : undefined);
+          }
+
+          batchToInput.push(i);
+          batchItems.push({
+            type: c.type,
+            x: c.x,
+            y: c.y,
+            width,
+            height,
+            text,
+            style,
+            sourceId: c.source_id,
+            targetId: c.target_id,
+            tempId: c.temp_id,
+          });
+        }
+
+        const batchResults = diagram.batchAddCells(batchItems, { dryRun: args.dry_run });
+
+        // Reassemble results in original input order, enriching with shape metadata
+        const results: object[] = new Array(args.cells.length);
+        for (const [i, failure] of failedMap) {
+          results[i] = failure;
+        }
+        for (let j = 0; j < batchResults.length; j++) {
+          const origIdx = batchToInput[j];
+          const resolved = resolvedMap.get(origIdx);
+          if (resolved && batchResults[j].success) {
+            results[origIdx] = {
+              ...batchResults[j],
+              ...(resolved.source === "azure-exact" && { info: `Added Azure icon: ${resolved.name}` }),
+              ...(resolved.source === "azure-fuzzy" && {
+                info: `Added Azure icon (matched from search): ${resolved.name}`,
+                confidence: parseFloat(resolved.score!.toFixed(3)),
+              }),
+            };
+          } else {
+            results[origIdx] = batchResults[j];
+          }
+        }
+
+        const successCount = results.reduce((n, r: any) => n + (r.success ? 1 : 0), 0);
         const errorCount = results.length - successCount;
         return successResult({
+          success: errorCount === 0,
           summary: { total: results.length, succeeded: successCount, failed: errorCount },
           results,
           dry_run: args.dry_run ?? false,

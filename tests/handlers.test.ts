@@ -390,6 +390,37 @@ describe("tool handlers", () => {
       const edgeResult = parsed.data.results[2];
       assertEquals(edgeResult.success, true);
     });
+
+    it("should resolve shape_name to full icon style for vertices", async () => {
+      const result = await handlers["add-cells"]({
+        cells: [
+          { type: "vertex", x: 50, y: 50, shape_name: "rectangle", temp_id: "r" },
+          { type: "vertex", x: 200, y: 50, shape_name: "Front Doors", temp_id: "fd" },
+          { type: "edge", source_id: "r", target_id: "fd" },
+        ],
+      });
+      const parsed = parseResult(result);
+      assertEquals(parsed.data.summary.succeeded, 3);
+      // Basic shape should have its style
+      const rectCell = parsed.data.results[0].cell;
+      assert(rectCell.style.includes("whiteSpace=wrap"), "rectangle should have its basic shape style");
+      // Azure icon should have the full image data URL
+      const fdCell = parsed.data.results[1].cell;
+      assert(fdCell.style.includes("shape=image;"), "Front Door should have shape=image style");
+      assert(fdCell.style.includes("image=data:image/svg+xml,"), "Front Door should include SVG data URL");
+    });
+
+    it("should use shape_name style over explicit style when both provided", async () => {
+      const result = await handlers["add-cells"]({
+        cells: [
+          { type: "vertex", x: 50, y: 50, shape_name: "Front Doors", style: "shape=image;", temp_id: "fd" },
+        ],
+      });
+      const parsed = parseResult(result);
+      assertEquals(parsed.data.summary.succeeded, 1);
+      const cell = parsed.data.results[0].cell;
+      assert(cell.style.includes("image=data:image/svg+xml,"), "shape_name should override explicit style");
+    });
   });
 
   describe("edit-cells", () => {
@@ -420,12 +451,12 @@ describe("tool handlers", () => {
     });
   });
 
-  describe("add-cells-of-shape", () => {
-    it("should add multiple shape cells", async () => {
-      const result = await handlers["add-cells-of-shape"]({
+  describe("add-cells shape resolution", () => {
+    it("should add multiple shape cells via shape_name", async () => {
+      const result = await handlers["add-cells"]({
         cells: [
-          { shape_name: "rectangle", x: 100, y: 100, temp_id: "r1" },
-          { shape_name: "decision", x: 300, y: 100, temp_id: "d1" },
+          { type: "vertex", shape_name: "rectangle", x: 100, y: 100, temp_id: "r1" },
+          { type: "vertex", shape_name: "decision", x: 300, y: 100, temp_id: "d1" },
         ],
       });
       const parsed = parseResult(result);
@@ -433,18 +464,11 @@ describe("tool handlers", () => {
       assertEquals(parsed.data.summary.failed, 0);
     });
 
-    it("should return error for empty cells array", async () => {
-      const result = await handlers["add-cells-of-shape"]({ cells: [] });
-      assertEquals(result.isError, true);
-      const parsed = parseResult(result);
-      assertEquals(parsed.error.code, "INVALID_INPUT");
-    });
-
     it("should add Azure shape cells with info", async () => {
       const searchResult = await handlers["search-shapes"]({ queries: ["virtual machine"], limit: 1 });
       const azureName = parseResult(searchResult).data.results[0].matches[0].name;
-      const result = await handlers["add-cells-of-shape"]({
-        cells: [{ shape_name: azureName, x: 100, y: 100 }],
+      const result = await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: azureName, x: 100, y: 100 }],
       });
       const parsed = parseResult(result);
       assertEquals(parsed.data.summary.succeeded, 1);
@@ -454,8 +478,8 @@ describe("tool handlers", () => {
     it("should include confidence for fuzzy-matched Azure shapes", async () => {
       // Use a partial/approximate name that is NOT an alias hit so it falls
       // through to the fuzzy-search path in resolveShape.
-      const result = await handlers["add-cells-of-shape"]({
-        cells: [{ shape_name: "defender for cloud", x: 100, y: 100 }],
+      const result = await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "defender for cloud", x: 100, y: 100 }],
       });
       const parsed = parseResult(result);
       assertEquals(parsed.data.summary.succeeded, 1);
@@ -464,11 +488,11 @@ describe("tool handlers", () => {
     });
 
     it("should handle mixed success and failure in batch", async () => {
-      const result = await handlers["add-cells-of-shape"]({
+      const result = await handlers["add-cells"]({
         cells: [
-          { shape_name: "rectangle", x: 100, y: 100 },
-          { shape_name: "xyznonexistent_shape", x: 200, y: 200 },
-          { shape_name: "decision", x: 300, y: 300 },
+          { type: "vertex", shape_name: "rectangle", x: 100, y: 100 },
+          { type: "vertex", shape_name: "xyznonexistent_shape", x: 200, y: 200 },
+          { type: "vertex", shape_name: "decision", x: 300, y: 300 },
         ],
       });
       const parsed = parseResult(result);
@@ -480,16 +504,15 @@ describe("tool handlers", () => {
     });
 
     it("should use custom dimensions over shape defaults", async () => {
-      const result = await handlers["add-cells-of-shape"]({
+      const result = await handlers["add-cells"]({
         cells: [
-          { shape_name: "rectangle", x: 50, y: 50, width: 400, height: 200, text: "Big", style: "fillColor=#ff0000;" },
+          { type: "vertex", shape_name: "rectangle", x: 50, y: 50, width: 400, height: 200, text: "Big" },
         ],
       });
       const parsed = parseResult(result);
       assertEquals(parsed.data.results[0].cell.width, 400);
       assertEquals(parsed.data.results[0].cell.height, 200);
       assertEquals(parsed.data.results[0].cell.value, "Big");
-      assertEquals(parsed.data.results[0].cell.style, "fillColor=#ff0000;");
     });
   });
 

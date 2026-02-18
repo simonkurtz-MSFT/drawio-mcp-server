@@ -288,14 +288,13 @@ The `.env` file supports:
 
 ### Diagram Modification
 
-| Tool                 | Description                                                                                         |
-| -------------------- | --------------------------------------------------------------------------------------------------- |
-| `add-cells`          | Add vertices and/or edges. Supports `temp_id` for within-batch references and `dry_run` validation. |
-| `add-cells-of-shape` | Add shape-library cells (Azure icons, basic shapes).                                                |
-| `edit-cells`         | Update vertex cell properties (position, size, text, style).                                        |
-| `edit-edge`          | Update an edge's properties (text, source, target, style).                                          |
-| `set-cell-shape`     | Apply library shape styles to existing cells.                                                       |
-| `delete-cell-by-id`  | Remove a cell (vertex or edge) by ID. Cascade-deletes connected edges for vertices.                 |
+| Tool                | Description                                                                                                                            |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `add-cells`         | Add vertices and/or edges. Supports `shape_name` for icon resolution, `temp_id` for within-batch references, and `dry_run` validation. |
+| `edit-cells`        | Update vertex cell properties (position, size, text, style).                                                                           |
+| `edit-edge`         | Update an edge's properties (text, source, target, style).                                                                             |
+| `set-cell-shape`    | Apply library shape styles to existing cells.                                                                                          |
+| `delete-cell-by-id` | Remove a cell (vertex or edge) by ID. Cascade-deletes connected edges for vertices.                                                    |
 
 ### Diagram Inspection
 

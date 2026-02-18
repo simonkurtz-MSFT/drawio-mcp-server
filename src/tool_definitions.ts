@@ -98,7 +98,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "ADD_CELLS",
     name: "add-cells",
     description:
-      "Add vertices and/or edges to the diagram. Always pass ALL cells you need in a single call — never call this tool repeatedly. Use temp_id to reference cells within the same batch (e.g., an edge referencing a vertex created in the same call). For shape-library cells (Azure icons, basic shapes), use add-cells-of-shape instead.",
+      "Add vertices and/or edges to the diagram. Always pass ALL cells you need in a single call — never call this tool repeatedly. Use temp_id to reference cells within the same batch (e.g., an edge referencing a vertex created in the same call). For vertices that need a shape-library icon (Azure icons, basic shapes), set shape_name and the server will resolve the style automatically.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -109,12 +109,15 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         width: z.number().optional().describe("Width (vertices only)"),
         height: z.number().optional().describe("Height (vertices only)"),
         text: z.string().optional().describe("Text label"),
-        style: z.string().optional().describe("Draw.io style string"),
+        style: z.string().optional().describe("Draw.io style string (ignored when shape_name is set)"),
+        shape_name: z.string().optional().describe(
+          "Shape library name (e.g. 'Front Doors', 'Container Apps'). When set, the server resolves the full icon style — do NOT also set style.",
+        ),
         source_id: z.string().optional().describe("Source cell ID for edges (can use temp_id from same batch)"),
         target_id: z.string().optional().describe("Target cell ID for edges (can use temp_id from same batch)"),
         temp_id: z.string().optional().describe("Temporary ID to reference this cell within the batch"),
       })).describe(
-        "Array of cells to create. Gather ALL cells you need and submit them in ONE call. Example: [{type:'vertex', x:100, y:100, temp_id:'node1'}, {type:'edge', source_id:'node1', target_id:'node2'}]",
+        "Array of cells to create. Gather ALL cells you need and submit them in ONE call. Example: [{type:'vertex', x:100, y:100, shape_name:'Front Doors', temp_id:'node1'}, {type:'edge', source_id:'node1', target_id:'node2'}]",
       ),
       dry_run: z.boolean().optional().describe(
         "If true, validates the batch without persisting changes. Use to check for errors before committing.",
@@ -155,7 +158,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "GET_SHAPES_IN_CATEGORY",
     name: "get-shapes-in-category",
-    description: "List all shapes in a category. Returns shape names and styles for use with add-cells-of-shape.",
+    description: "List all shapes in a category. Returns shape names and styles for use with add-cells.",
     hasArgs: true,
     inputSchema: {
       category_id: z
@@ -166,28 +169,6 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     },
   },
 
-  {
-    key: "ADD_CELLS_OF_SHAPE",
-    name: "add-cells-of-shape",
-    description:
-      "Add one or more shape-based cells (Azure icons, basic shapes) to the diagram. Always pass ALL shapes in a single call — never call this tool repeatedly. Use search-shapes first to discover shape names.",
-    hasArgs: true,
-    inputSchema: {
-      diagram_xml: diagramXmlSchema,
-      cells: z.array(z.object({
-        shape_name: z.string().describe(
-          "Name of the shape from the library (e.g., Azure icon name or basic shape like 'rectangle')",
-        ),
-        x: z.number().optional().describe("X-axis position of the vertex cell"),
-        y: z.number().optional().describe("Y-axis position of the vertex cell"),
-        width: z.number().optional().describe("Width (defaults to shape's native width)"),
-        height: z.number().optional().describe("Height (defaults to shape's native height)"),
-        text: z.string().optional().describe("Text label (defaults to shape title)"),
-        style: z.string().optional().describe("Override the shape's default style"),
-        temp_id: z.string().optional().describe("Temporary ID for referencing this cell later"),
-      })).describe("Array of shape cells to create. Gather ALL shapes and submit ONE call."),
-    },
-  },
   {
     key: "SET_CELL_SHAPE",
     name: "set-cell-shape",
@@ -212,7 +193,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "SEARCH_SHAPES",
     name: "search-shapes",
     description:
-      "Search for any shape — basic shapes (rectangle, circle, diamond, start, end, process, cylinder, etc.) and 700+ Azure icons. This is the primary way to discover shapes for use with add-cells-of-shape. Call this tool once with all shape names in the queries array — include cross-cutting services (Monitor, Entra ID, Key Vault, Azure Policy, Defender for Cloud, Container Registry) in the SAME call.",
+      "Search for any shape — basic shapes (rectangle, circle, diamond, start, end, process, cylinder, etc.) and 700+ Azure icons. This is the primary way to discover shapes for use with add-cells. Call this tool once with all shape names in the queries array — include cross-cutting services (Monitor, Entra ID, Key Vault, Azure Policy, Defender for Cloud, Container Registry) in the SAME call.",
     hasArgs: true,
     inputSchema: {
       queries: z.array(z.string()).describe(

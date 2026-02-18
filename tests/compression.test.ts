@@ -363,7 +363,9 @@ describe("DiagramModel compression", () => {
       const compressedSizeLog = debugCalls.find((msg: string) => msg.includes("compressed size:"));
 
       assertExists(compressedSizeLog);
-      assert(/\[tool:export-diagram\]\s+compressed size: [\d.]+ KB$/.test(compressedSizeLog!));
+      assert(
+        /^\d{4}-\d{2}-\d{2}T[\d:.]+Z: \[tool:export-diagram\]\s+compressed size: [\d.]+ KB$/.test(compressedSizeLog!),
+      );
     });
 
     it("should not log compression details when compress is false", async () => {
