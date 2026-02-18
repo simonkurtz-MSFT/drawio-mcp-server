@@ -205,6 +205,43 @@ export class DiagramModel {
     return { x, y, width, height };
   }
 
+  private getAbsoluteBoundsFromMap(
+    cellId: string,
+    cellMap: Map<string, Cell>,
+    cache: Map<string, Rect | null>,
+  ): Rect | null {
+    if (cache.has(cellId)) {
+      return cache.get(cellId)!;
+    }
+
+    const cell = cellMap.get(cellId);
+    if (!cell || cell.type !== "vertex") {
+      cache.set(cellId, null);
+      return null;
+    }
+
+    let x = cell.x ?? 0;
+    let y = cell.y ?? 0;
+    const width = cell.width ?? 0;
+    const height = cell.height ?? 0;
+
+    const parentId = cell.parent;
+    if (parentId) {
+      const parentCell = cellMap.get(parentId);
+      if (parentCell?.type === "vertex" && parentCell.isGroup) {
+        const parentBounds = this.getAbsoluteBoundsFromMap(parentCell.id, cellMap, cache);
+        if (parentBounds) {
+          x += parentBounds.x;
+          y += parentBounds.y;
+        }
+      }
+    }
+
+    const bounds: Rect = { x, y, width, height };
+    cache.set(cellId, bounds);
+    return bounds;
+  }
+
   private getCellCenter(cellId: string): Point | null {
     const bounds = this.getAbsoluteBounds(cellId);
     if (!bounds) {
@@ -283,18 +320,22 @@ export class DiagramModel {
       this.lineSegmentsIntersect(start, end, bottomLeft, topLeft);
   }
 
-  private getGroupAvoidanceWaypoints(edge: Cell): Point[] {
+  private getGroupAvoidanceWaypoints(
+    edge: Cell,
+    precomputedCenters?: Map<string, Point>,
+    precomputedGroupBounds?: Array<{ id: string; bounds: Rect }>,
+  ): Point[] {
     if (edge.type !== "edge" || !edge.sourceId || !edge.targetId) {
       return [];
     }
 
-    const sourceCenter = this.getCellCenter(edge.sourceId);
-    const targetCenter = this.getCellCenter(edge.targetId);
+    const sourceCenter = precomputedCenters?.get(edge.sourceId) ?? this.getCellCenter(edge.sourceId);
+    const targetCenter = precomputedCenters?.get(edge.targetId) ?? this.getCellCenter(edge.targetId);
     if (!sourceCenter || !targetCenter) {
       return [];
     }
 
-    const groups = Array.from(this.cells.values())
+    const groups = precomputedGroupBounds ?? Array.from(this.cells.values())
       .filter((cell) => cell.type === "vertex" && cell.isGroup)
       .map((group) => ({
         id: group.id,
@@ -333,7 +374,7 @@ export class DiagramModel {
     return new RegExp(`(?:^|;)${key}=`).test(style);
   }
 
-  private withSymmetricEdgeAnchors(edge: Cell): string {
+  private withSymmetricEdgeAnchors(edge: Cell, precomputedCenters?: Map<string, Point>): string {
     const baseStyle = edge.style ?? "";
     const hasExplicitAnchors = this.hasStyleKey(baseStyle, "exitX") || this.hasStyleKey(baseStyle, "exitY") ||
       this.hasStyleKey(baseStyle, "entryX") || this.hasStyleKey(baseStyle, "entryY");
@@ -341,8 +382,8 @@ export class DiagramModel {
       return baseStyle;
     }
 
-    const sourceCenter = this.getCellCenter(edge.sourceId);
-    const targetCenter = this.getCellCenter(edge.targetId);
+    const sourceCenter = precomputedCenters?.get(edge.sourceId) ?? this.getCellCenter(edge.sourceId);
+    const targetCenter = precomputedCenters?.get(edge.targetId) ?? this.getCellCenter(edge.targetId);
     if (!sourceCenter || !targetCenter) {
       return baseStyle;
     }
@@ -1144,6 +1185,30 @@ export class DiagramModel {
       .map((l) => `<mxCell id="${this.escapeXml(l.id)}" value="${this.escapeXml(l.name)}" style="" parent="0"/>`)
       .join("");
 
+    const absoluteBoundsCache = new Map<string, Rect | null>();
+    const precomputedCenters = new Map<string, Point>();
+    const precomputedGroupBounds: Array<{ id: string; bounds: Rect }> = [];
+
+    for (const cell of cells.values()) {
+      if (cell.type !== "vertex") {
+        continue;
+      }
+
+      const bounds = this.getAbsoluteBoundsFromMap(cell.id, cells, absoluteBoundsCache);
+      if (!bounds) {
+        continue;
+      }
+
+      precomputedCenters.set(cell.id, {
+        x: bounds.x + bounds.width / 2,
+        y: bounds.y + bounds.height / 2,
+      });
+
+      if (cell.isGroup) {
+        precomputedGroupBounds.push({ id: cell.id, bounds });
+      }
+    }
+
     const emittedFlattenedEdgeLabelKeys = new Set<string>();
 
     const cellsXml = Array.from(cells.values())
@@ -1165,8 +1230,8 @@ export class DiagramModel {
           }
 
           const edgeValue = shouldHideDuplicateLabel ? "" : cell.value;
-          const edgeStyle = this.withSymmetricEdgeAnchors(cell);
-          const waypoints = this.getGroupAvoidanceWaypoints(cell);
+          const edgeStyle = this.withSymmetricEdgeAnchors(cell, precomputedCenters);
+          const waypoints = this.getGroupAvoidanceWaypoints(cell, precomputedCenters, precomputedGroupBounds);
           const geometryXml = waypoints.length > 0
             ? `<mxGeometry relative="1" as="geometry"><Array as="points">${
               waypoints.map((point) => `<mxPoint x="${point.x}" y="${point.y}"/>`).join("")
