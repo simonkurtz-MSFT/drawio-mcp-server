@@ -24,3 +24,5 @@ coverage/
 
 # OS files
 *.tgz
+
+coverage_lcov.txt
