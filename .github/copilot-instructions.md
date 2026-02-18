@@ -149,7 +149,6 @@ Follow this 3-step pattern:
 
 - Use `create-groups` and `add-cells-to-group` to represent containment (e.g., VNets containing subnets, resource groups holding resources). Size each group large enough to contain all its children with at least 20px padding on each side.
 - Position children **relative to the group** using coordinates that fall within the group's bounds. Stack multiple children vertically inside the group. Verify that every child's position + size fits within the parent group's dimensions.
-- For multi-page diagrams, use `create-page` and `set-active-page` to organize content across tabs (e.g., separate pages for networking, compute, and data layers).
 
 ### Import / Export
 
