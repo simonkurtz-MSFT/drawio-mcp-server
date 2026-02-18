@@ -27,49 +27,6 @@ const textEncoder = new TextEncoder();
 const allBasicShapes = Object.values(BASIC_SHAPES);
 const INTERNAL_SUCCESS_DATA = Symbol("internal_success_data");
 
-interface CachedDiagramEntry {
-  diagramXml: string;
-  diagram: DiagramModel;
-}
-
-const READONLY_DIAGRAM_CACHE_MAX = 32;
-const readonlyDiagramCache = new Map<string, CachedDiagramEntry>();
-
-function hashDiagramXml(xml: string): string {
-  let hash = 2166136261;
-  for (let i = 0; i < xml.length; i++) {
-    hash ^= xml.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return `${xml.length}:${(hash >>> 0).toString(16)}`;
-}
-
-function getCachedReadonlyDiagram(diagramXml: string): DiagramModel | undefined {
-  const key = hashDiagramXml(diagramXml);
-  const entry = readonlyDiagramCache.get(key);
-  if (!entry || entry.diagramXml !== diagramXml) {
-    return undefined;
-  }
-
-  // Refresh LRU position
-  readonlyDiagramCache.delete(key);
-  readonlyDiagramCache.set(key, entry);
-  return entry.diagram;
-}
-
-function setCachedReadonlyDiagram(diagramXml: string, diagram: DiagramModel): void {
-  const key = hashDiagramXml(diagramXml);
-  readonlyDiagramCache.delete(key);
-  readonlyDiagramCache.set(key, { diagramXml, diagram });
-
-  if (readonlyDiagramCache.size > READONLY_DIAGRAM_CACHE_MAX) {
-    const oldestKey = readonlyDiagramCache.keys().next().value;
-    if (oldestKey) {
-      readonlyDiagramCache.delete(oldestKey);
-    }
-  }
-}
-
 type InternalSuccessResult = CallToolResult & { [INTERNAL_SUCCESS_DATA]?: unknown };
 
 /**
@@ -203,29 +160,12 @@ function withDiagramState<T extends StatefulArgs>(
   options?: { readOnly?: boolean },
 ): CallToolResult {
   const normalizedArgs: StatefulArgs = args ?? {};
-  const useReadonlyCache = options?.readOnly === true && !normalizedArgs.active_layer_id;
-  let diagram: DiagramModel;
+  const diagram = new DiagramModel();
 
-  if (useReadonlyCache && normalizedArgs.diagram_xml) {
-    const cached = getCachedReadonlyDiagram(normalizedArgs.diagram_xml);
-    if (cached) {
-      diagram = cached;
-    } else {
-      diagram = new DiagramModel();
-      const importResult = diagram.importXml(normalizedArgs.diagram_xml);
-      if ("error" in importResult) {
-        return errorResult(importResult.error);
-      }
-      setCachedReadonlyDiagram(normalizedArgs.diagram_xml, diagram);
-    }
-  } else {
-    diagram = new DiagramModel();
-
-    if (normalizedArgs.diagram_xml) {
-      const importResult = diagram.importXml(normalizedArgs.diagram_xml);
-      if ("error" in importResult) {
-        return errorResult(importResult.error);
-      }
+  if (normalizedArgs.diagram_xml) {
+    const importResult = diagram.importXml(normalizedArgs.diagram_xml);
+    if ("error" in importResult) {
+      return errorResult(importResult.error);
     }
   }
 
