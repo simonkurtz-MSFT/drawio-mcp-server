@@ -284,7 +284,6 @@ The `.env` file supports:
 | `search-shapes`          | Fuzzy search for shapes including 700+ Azure icons. Pass all queries in the `queries` array. |
 | `get-shape-categories`   | List all shape categories (General, Flowchart, Azure categories).                            |
 | `get-shapes-in-category` | List all shapes in a category by `category_id`.                                              |
-| `get-shape-by-name`      | Get a specific shape by exact name.                                                          |
 | `get-style-presets`      | Get built-in style presets (Azure colors, flowchart shapes, edge styles).                    |
 
 ### Diagram Modification
@@ -297,7 +296,6 @@ The `.env` file supports:
 | `edit-edge`          | Update an edge's properties (text, source, target, style).                                          |
 | `set-cell-shape`     | Apply library shape styles to existing cells.                                                       |
 | `delete-cell-by-id`  | Remove a cell (vertex or edge) by ID. Cascade-deletes connected edges for vertices.                 |
-| `delete-edge`        | Remove an edge by ID (validates that the target is an edge).                                        |
 
 ### Diagram Inspection
 
@@ -314,7 +312,6 @@ The `.env` file supports:
 | Tool                 | Description                            |
 | -------------------- | -------------------------------------- |
 | `list-layers`        | List all layers with IDs and names.    |
-| `get-active-layer`   | Get the currently active layer.        |
 | `set-active-layer`   | Set the active layer for new elements. |
 | `create-layer`       | Create a new layer.                    |
 | `move-cell-to-layer` | Move a cell to a different layer.      |

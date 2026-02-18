@@ -56,21 +56,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         ),
     },
   },
-  {
-    key: "DELETE_EDGE",
-    name: "delete-edge",
-    description:
-      "Delete an edge by its ID. Validates that the target cell is an edge. Use delete-cell-by-id to delete vertices (which also cascade-deletes connected edges).",
-    hasArgs: true,
-    inputSchema: {
-      diagram_xml: diagramXmlSchema,
-      cell_id: z
-        .string()
-        .describe(
-          "The ID of the edge to delete.",
-        ),
-    },
-  },
+
   {
     key: "EDIT_EDGE",
     name: "edit-edge",
@@ -179,20 +165,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
         ),
     },
   },
-  {
-    key: "GET_SHAPE_BY_NAME",
-    name: "get-shape-by-name",
-    description:
-      "Get a shape by exact name from any library (basic shapes or Azure icons). For discovery or fuzzy matching, use search-shapes instead.",
-    hasArgs: true,
-    inputSchema: {
-      shape_name: z
-        .string()
-        .describe(
-          "Name of the shape to retrieve from the shape library of the current diagram.",
-        ),
-    },
-  },
+
   {
     key: "ADD_CELLS_OF_SHAPE",
     name: "add-cells-of-shape",
@@ -309,21 +282,13 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   {
     key: "LIST_LAYERS",
     name: "list-layers",
-    description: "List all layers in the diagram with IDs, names, and which layer is currently active.",
+    description: "List all layers in the diagram with IDs and names. Also returns the active layer ID.",
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
     },
   },
-  {
-    key: "GET_ACTIVE_LAYER",
-    name: "get-active-layer",
-    description: "Get the currently active layer.",
-    hasArgs: true,
-    inputSchema: {
-      diagram_xml: diagramXmlSchema,
-    },
-  },
+
   {
     key: "SET_ACTIVE_LAYER",
     name: "set-active-layer",

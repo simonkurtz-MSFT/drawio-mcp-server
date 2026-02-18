@@ -1,11 +1,11 @@
 /**
  * Tests for the MCP console logger.
  * Verifies that log() and debug() correctly delegate to console.error
- * with proper level prefixes and spread data arguments.
+ * with proper level prefixes, timestamps, and spread data arguments.
  */
 import { afterEach, beforeEach, describe, it } from "@std/testing/bdd";
 import { assert, assertEquals } from "@std/assert";
-import { assertSpyCallArgs, assertSpyCalls, type Spy, spy } from "@std/testing/mock";
+import { assertSpyCalls, type Spy, spy } from "@std/testing/mock";
 import { create_logger } from "../src/loggers/mcp_console_logger.ts";
 
 describe("create_logger", () => {
@@ -24,6 +24,8 @@ describe("create_logger", () => {
     console.error = originalConsoleError;
   });
 
+  const ISO_PREFIX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z /;
+
   it("should return a Logger object with log and debug methods", () => {
     const logger = create_logger();
 
@@ -32,7 +34,7 @@ describe("create_logger", () => {
     assertEquals(typeof logger.debug, "function");
   });
 
-  it("log method should call console.error with message and data", () => {
+  it("log method should call console.error with timestamp, message and data", () => {
     const logger = create_logger();
     const testMessage = "test message";
     const testData = { key: "value" };
@@ -41,13 +43,13 @@ describe("create_logger", () => {
     logger.log(testLevel, testMessage, testData);
 
     assertSpyCalls(mockConsoleError, 1);
-    assertSpyCallArgs(mockConsoleError, 0, [
-      `${testLevel.toUpperCase()}: ${testMessage}`,
-      testData,
-    ]);
+    const firstArg = mockConsoleError.calls[0].args[0] as string;
+    assert(ISO_PREFIX.test(firstArg), "should start with ISO timestamp");
+    assert(firstArg.endsWith(`${testLevel.toUpperCase()}: ${testMessage}`));
+    assertEquals(mockConsoleError.calls[0].args[1], testData);
   });
 
-  it("debug method should call console.error with message and data", () => {
+  it("debug method should call console.error with timestamp, message and data", () => {
     const logger = create_logger();
     const testMessage = "debug message";
     const testData = { debug: true };
@@ -55,10 +57,10 @@ describe("create_logger", () => {
     logger.debug(testMessage, testData);
 
     assertSpyCalls(mockConsoleError, 1);
-    assertSpyCallArgs(mockConsoleError, 0, [
-      `DEBUG: ${testMessage}`,
-      testData,
-    ]);
+    const firstArg = mockConsoleError.calls[0].args[0] as string;
+    assert(ISO_PREFIX.test(firstArg), "should start with ISO timestamp");
+    assert(firstArg.endsWith(`DEBUG: ${testMessage}`));
+    assertEquals(mockConsoleError.calls[0].args[1], testData);
   });
 
   it("should handle no additional data parameters", () => {
@@ -66,14 +68,20 @@ describe("create_logger", () => {
     const testMessage = "message without data";
 
     logger.log("warn", testMessage);
-    assertSpyCallArgs(mockConsoleError, 0, [`WARN: ${testMessage}`]);
+    const logArg = mockConsoleError.calls[0].args[0] as string;
+    assert(ISO_PREFIX.test(logArg));
+    assert(logArg.endsWith(`WARN: ${testMessage}`));
+    assertEquals(mockConsoleError.calls[0].args.length, 1);
 
     // Reset by creating a fresh spy
     mockConsoleError = spy();
     console.error = mockConsoleError;
 
     logger.debug(testMessage);
-    assertSpyCallArgs(mockConsoleError, 0, [`DEBUG: ${testMessage}`]);
+    const debugArg = mockConsoleError.calls[0].args[0] as string;
+    assert(ISO_PREFIX.test(debugArg));
+    assert(debugArg.endsWith(`DEBUG: ${testMessage}`));
+    assertEquals(mockConsoleError.calls[0].args.length, 1);
   });
 
   it("should handle multiple data parameters", () => {
@@ -84,23 +92,17 @@ describe("create_logger", () => {
     const data3 = "string data";
 
     logger.log("error", testMessage, data1, data2, data3);
-    assertSpyCallArgs(mockConsoleError, 0, [
-      `ERROR: ${testMessage}`,
-      data1,
-      data2,
-      data3,
-    ]);
+    const logArg = mockConsoleError.calls[0].args[0] as string;
+    assert(logArg.endsWith(`ERROR: ${testMessage}`));
+    assertEquals(mockConsoleError.calls[0].args.slice(1), [data1, data2, data3]);
 
     // Reset by creating a fresh spy
     mockConsoleError = spy();
     console.error = mockConsoleError;
 
     logger.debug(testMessage, data1, data2, data3);
-    assertSpyCallArgs(mockConsoleError, 0, [
-      `DEBUG: ${testMessage}`,
-      data1,
-      data2,
-      data3,
-    ]);
+    const debugArg = mockConsoleError.calls[0].args[0] as string;
+    assert(debugArg.endsWith(`DEBUG: ${testMessage}`));
+    assertEquals(mockConsoleError.calls[0].args.slice(1), [data1, data2, data3]);
   });
 });

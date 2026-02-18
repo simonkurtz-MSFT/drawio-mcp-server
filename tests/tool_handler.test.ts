@@ -140,7 +140,7 @@ describe("createToolHandlerFactory", () => {
 
       const firstCallMsg = debugSpy.calls[0].args[0] as string;
       assert(!firstCallMsg.includes("session="));
-      assert(firstCallMsg.includes("req=r1"));
+      assert(firstCallMsg.includes("req=000r1"));
     });
 
     it("should handle undefined extra without logging session", async () => {
@@ -308,9 +308,9 @@ describe("createToolHandlerFactory", () => {
       const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
       const calledLog = debugMessages.find((msg: string) => msg.includes("called"));
       const okLog = debugMessages.find((msg: string) => msg.includes("ok in"));
-      // Both lines should start with an ISO timestamp followed by the padded tool prefix
-      assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[tool:a\]\s+called/.test(calledLog!));
-      assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z \[tool:a\]\s+ok in/.test(okLog!));
+      // Both lines should start with an ISO timestamp followed by padded req tag and padded tool prefix
+      assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z: \[req:.+?\] \[tool:a\]\s+called/.test(calledLog!));
+      assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z: \[req:.+?\] \[tool:a\]\s+ok in/.test(okLog!));
       // "called" and "ok in" should start at the same column (aligned by padEnd)
       assertEquals(calledLog!.indexOf("called"), okLog!.indexOf("ok in"));
     });

@@ -49,9 +49,10 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
       const extra = hasArgs ? params[1] : params[0];
       const args = hasArgs ? params[0] : {};
       const requestId = extra?.requestId;
+      const reqTag = `[req:${String(requestId ?? 0).padStart(5, "0")}]`;
       const prefix = `[tool:${toolName}]`.padEnd(30);
-      //log.debug(`${timestamp()} ${prefix} called (req=${requestId})`, JSON.stringify(args));  // good for troubleshooting
-      log.debug(`${timestamp()} ${prefix} called (req=${requestId})`);
+      //log.debug(`${timestamp()}: ${reqTag} ${prefix} called`, JSON.stringify(args));  // good for troubleshooting
+      log.debug(`${timestamp()}: ${reqTag} ${prefix} called`);
 
       const handler = handlerMap[toolName];
       if (handler) {
@@ -64,11 +65,11 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
         const payloadLength = textContent && "text" in textContent ? textContent.text.length : 0;
         const payloadSize = formatBytes(payloadLength);
         log.debug(
-          `${timestamp()} ${prefix} ${isError ? "error" : "ok"} in ${duration}ms, ${payloadSize} (req=${requestId})`,
+          `${timestamp()}: ${reqTag} ${prefix} ${isError ? "error" : "ok"} in ${duration}ms, ${payloadSize}`,
         );
         return result;
       }
-      log.debug(`${timestamp()} ${prefix} not found (req=${requestId})`);
+      log.debug(`${timestamp()}: ${reqTag} ${prefix} not found`);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ error: `Tool ${toolName} not available` }) }],
         isError: true,

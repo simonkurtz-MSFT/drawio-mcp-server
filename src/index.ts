@@ -22,7 +22,7 @@ import { create_logger as create_server_logger, validLogLevels } from "./loggers
 import { createHandlers } from "./tools.ts";
 import { createToolHandlerFactory } from "./tool_handler.ts";
 import { initializeShapes, resetAzureIconLibrary } from "./shapes/azure_icon_library.ts";
-import { registerTools } from "./tool_registrations.ts";
+import { registerTools, TOOL_DEFINITIONS } from "./tool_registrations.ts";
 import { readRelativeFile } from "./utils.ts";
 
 /**
@@ -244,7 +244,7 @@ async function start_streamable_http_transport(http_port: number) {
   });
 
   // Deno.serve replaces @hono/node-server — zero extra dependencies
-  httpServer = Deno.serve({ port: http_port }, app.fetch);
+  httpServer = Deno.serve({ port: http_port, onListen: () => {} }, app.fetch);
   log.debug(`Draw.io MCP Server Streamable HTTP transport active`);
   log.debug(`Health check: http://localhost:${http_port}/health`);
   log.debug(`MCP endpoint: http://localhost:${http_port}/mcp`);
@@ -270,6 +270,7 @@ async function main() {
 
   log.debug(`Draw.io MCP Server v${VERSION} starting`);
   log.debug(`Transports: ${config.transports.join(", ")}`);
+  log.debug(`Tools: ${TOOL_DEFINITIONS.length}`);
 
   // Eagerly load all shapes and build the fuzzy-search index at startup so
   // they are ready for the first tool call with no cold-start penalty.
@@ -278,7 +279,7 @@ async function main() {
   const shapeLoadStart = performance.now();
   const shapeLibrary = initializeShapes(config.azureIconLibraryPath);
   const shapeLoadMs = (performance.now() - shapeLoadStart).toFixed(1);
-  log.debug(`Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} categories in ${shapeLoadMs}ms (includes search index)`);
+  log.debug(`Loaded ${shapeLibrary.shapes.length} Azure icon(s) across ${shapeLibrary.categories.size} categories in ${shapeLoadMs}ms (includes search index + JIT warm-up)`);
 
   if (config.transports.indexOf("stdio") > -1) {
     await start_stdio_transport();

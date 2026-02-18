@@ -20,11 +20,12 @@ import {
 } from "./shapes/azure_icon_library.ts";
 import { BASIC_SHAPE_CATEGORIES, BASIC_SHAPES, getBasicShape } from "./shapes/basic_shapes.ts";
 import type { ToolLogger } from "./tool_handler.ts";
-import { formatBytes, timestamp } from "./tool_handler.ts";
+import { formatBytes } from "./tool_handler.ts";
 
 /** Shared TextEncoder for UTF-8 byte length calculations (replaces Node's Buffer.byteLength) */
 const textEncoder = new TextEncoder();
 const allBasicShapes = Object.values(BASIC_SHAPES);
+const allBasicShapesLower = allBasicShapes.map((s) => ({ ...s, nameLower: s.name.toLowerCase() }));
 const INTERNAL_SUCCESS_DATA = Symbol("internal_success_data");
 
 type InternalSuccessResult = CallToolResult & { [INTERNAL_SUCCESS_DATA]?: unknown };
@@ -234,36 +235,7 @@ export function createHandlers(log: ToolLogger) {
       });
     },
 
-    "delete-edge": (args: {
-      diagram_xml?: string;
-      cell_id: string;
-    }): CallToolResult => {
-      return withDiagramState(args, (diagram) => {
-        const cell = diagram.getCell(args.cell_id);
-        if (!cell) {
-          return errorResult({
-            code: "CELL_NOT_FOUND",
-            message: `Edge '${args.cell_id}' not found`,
-            cell_id: args.cell_id,
-            suggestion: "Use list-paged-model with filter {cell_type: 'edge'} to see available edges",
-          });
-        }
-        if (cell.type !== "edge") {
-          return errorResult({
-            code: "NOT_AN_EDGE",
-            message: `Cell '${args.cell_id}' is a ${cell.type}, not an edge`,
-            cell_id: args.cell_id,
-            suggestion: "Use delete-cell-by-id to delete vertices",
-          });
-        }
-        diagram.deleteCell(args.cell_id);
-        const stats = diagram.getStats();
-        return successResult({
-          deleted: args.cell_id,
-          remaining: { total_cells: stats.total_cells, vertices: stats.vertices, edges: stats.edges },
-        });
-      });
-    },
+
 
     "edit-edge": (args: {
       diagram_xml?: string;
@@ -337,13 +309,7 @@ export function createHandlers(log: ToolLogger) {
       }, { readOnly: true });
     },
 
-    "get-active-layer": (args: {
-      diagram_xml?: string;
-    }): CallToolResult => {
-      return withDiagramState(args, (diagram) => {
-        return successResult({ layer: diagram.getActiveLayer() });
-      }, { readOnly: true });
-    },
+
 
     "set-active-layer": (args: {
       diagram_xml?: string;
@@ -391,7 +357,7 @@ export function createHandlers(log: ToolLogger) {
         if (compressed) {
           const compressedSize = textEncoder.encode(xml).length;
           const prefix = "[tool:export-diagram]".padEnd(30);
-          log.debug(`${timestamp()} ${prefix} compressed size: ${formatBytes(compressedSize)}`);
+          log.debug(`${prefix} compressed size: ${formatBytes(compressedSize)}`);
         }
 
         return successResult({
@@ -603,28 +569,7 @@ export function createHandlers(log: ToolLogger) {
       });
     },
 
-    "get-shape-by-name": (args: {
-      shape_name: string;
-    }): CallToolResult => {
-      const resolved = resolveShape(args.shape_name);
-      if (resolved) {
-        return successResult({
-          shape: {
-            name: resolved.name,
-            style: resolved.style,
-            width: resolved.width,
-            height: resolved.height,
-            source: resolved.source,
-            ...(resolved.score !== undefined && { confidence: parseFloat(resolved.score.toFixed(3)) }),
-          },
-        });
-      }
-      return errorResult({
-        code: "SHAPE_NOT_FOUND",
-        message: `Shape '${args.shape_name}' not found`,
-        suggestion: "Use search-shapes to find available shapes",
-      });
-    },
+
 
     "add-cells-of-shape": (args: {
       diagram_xml?: string;
@@ -874,15 +819,15 @@ export function createHandlers(log: ToolLogger) {
       const results = args.queries.map((q) => {
         // Check basic shapes first (exact, case-insensitive)
         const qLower = q.toLowerCase();
-        const basicMatches = allBasicShapes
-          .filter((s) => s.name.toLowerCase().includes(qLower))
+        const basicMatches = allBasicShapesLower
+          .filter((s) => s.nameLower.includes(qLower))
           .map((s) => ({
             name: s.name,
             id: s.name,
             category: "basic",
             width: s.defaultWidth,
             height: s.defaultHeight,
-            confidence: s.name.toLowerCase() === qLower ? 1.0 : 0.8,
+            confidence: s.nameLower === qLower ? 1.0 : 0.8,
           }));
 
         // Then search Azure icons

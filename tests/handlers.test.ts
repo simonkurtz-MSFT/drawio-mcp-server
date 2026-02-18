@@ -84,34 +84,7 @@ describe("tool handlers", () => {
     });
   });
 
-  describe("delete-edge", () => {
-    it("should delete an existing edge", async () => {
-      const a = await addVertex({ text: "A" });
-      const b = await addVertex({ text: "B" });
-      const edge = await addEdge(a.id, b.id);
-      const result = await handlers["delete-edge"]({ cell_id: edge.id });
-      const parsed = parseResult(result);
-      assertEquals(parsed.success, true);
-      assertEquals(parsed.data.deleted, edge.id);
-      assertExists(parsed.data.remaining);
-    });
 
-    it("should return error for non-existent cell", async () => {
-      const result = await handlers["delete-edge"]({ cell_id: "nope" });
-      assertEquals(result.isError, true);
-      const parsed = JSON.parse((result.content[0] as any).text);
-      assertEquals(parsed.error.code, "CELL_NOT_FOUND");
-    });
-
-    it("should return error when target is a vertex, not an edge", async () => {
-      const cell = await addVertex({ text: "NotAnEdge" });
-      const result = await handlers["delete-edge"]({ cell_id: cell.id });
-      assertEquals(result.isError, true);
-      const parsed = JSON.parse((result.content[0] as any).text);
-      assertEquals(parsed.error.code, "NOT_AN_EDGE");
-      assert(parsed.error.message.includes("vertex"));
-    });
-  });
 
   describe("edit-edge", () => {
     it("should update edge text", async () => {
@@ -247,9 +220,9 @@ describe("tool handlers", () => {
       const layers = parseResult(listResult).data.layers;
       assertEquals(layers.length, 2);
       await handlers["set-active-layer"]({ layer_id: created.data.layer.id });
-      const activeResult = await handlers["get-active-layer"]();
-      const active = parseResult(activeResult).data.layer;
-      assertEquals(active.name, "Network");
+      const listResult2 = await handlers["list-layers"]();
+      const listParsed2 = parseResult(listResult2);
+      assertEquals(listParsed2.data.active_layer_id, created.data.layer.id);
     });
 
     it("should move cell to different layer", async () => {
@@ -371,51 +344,7 @@ describe("tool handlers", () => {
     });
   });
 
-  describe("get-shape-by-name", () => {
-    it("should find basic shapes", async () => {
-      const result = await handlers["get-shape-by-name"]({ shape_name: "rectangle" });
-      const parsed = parseResult(result);
-      assertEquals(parsed.success, true);
-      assertEquals(parsed.data.shape.name, "rectangle");
-    });
 
-    it("should return error for unknown shape", async () => {
-      const result = await handlers["get-shape-by-name"]({ shape_name: "xyznonexistent" });
-      assertEquals(result.isError, true);
-      const parsed = parseResult(result);
-      assertEquals(parsed.error.code, "SHAPE_NOT_FOUND");
-    });
-
-    it("should find Azure shapes by exact title", async () => {
-      const searchResult = await handlers["search-shapes"]({ queries: ["virtual machine"], limit: 1 });
-      const shapeName = parseResult(searchResult).data.results[0].matches[0].name;
-      const result = await handlers["get-shape-by-name"]({ shape_name: shapeName });
-      const parsed = parseResult(result);
-      assertEquals(parsed.success, true);
-      assertEquals(parsed.data.shape.name, shapeName);
-    });
-
-    it("should find Azure shapes via fuzzy search", async () => {
-      const result = await handlers["get-shape-by-name"]({ shape_name: "storage account" });
-      const parsed = parseResult(result);
-      assertEquals(parsed.success, true);
-      assert("style" in parsed.data.shape);
-    });
-
-    it("should prioritize basic shapes over Azure fuzzy matches", async () => {
-      const startResult = await handlers["get-shape-by-name"]({ shape_name: "start" });
-      const startParsed = parseResult(startResult);
-      assertEquals(startParsed.success, true);
-      assertEquals(startParsed.data.shape.name, "start");
-      assert(startParsed.data.shape.style.includes("ellipse"));
-
-      const endResult = await handlers["get-shape-by-name"]({ shape_name: "end" });
-      const endParsed = parseResult(endResult);
-      assertEquals(endParsed.success, true);
-      assertEquals(endParsed.data.shape.name, "end");
-      assert(endParsed.data.shape.style.includes("ellipse"));
-    });
-  });
 
   describe("add-cells", () => {
     it("should add multiple cells and resolve temp IDs", async () => {
