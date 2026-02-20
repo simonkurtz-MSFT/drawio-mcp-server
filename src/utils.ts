@@ -86,7 +86,7 @@ export function devSaveDiagram(
     const diagramsDir = "./diagrams";
     try {
       Deno.mkdirSync(diagramsDir, { recursive: true });
-    // deno-coverage-ignore
+      // deno-coverage-ignore
     } catch (error) {
       // deno-coverage-ignore
       // Ignore error if directory already exists

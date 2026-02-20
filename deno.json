@@ -22,7 +22,8 @@
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
     "compile": "deno compile --include=src/instructions.md --include=assets/ --output=build/drawio-mcp-server src/index.ts",
-    "inspect": "deno run --allow-all npm:@modelcontextprotocol/inspector --config ./inspector.json --server drawio"
+    "inspect": "deno run --allow-all npm:@modelcontextprotocol/inspector --config ./inspector.json --server drawio",
+    "setup": "git config core.hooksPath .githooks"
   },
   "imports": {
     "@modelcontextprotocol/sdk/server/mcp.js": "npm:@modelcontextprotocol/sdk@^1.25/server/mcp.js",

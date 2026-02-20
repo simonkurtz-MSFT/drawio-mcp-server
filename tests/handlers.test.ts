@@ -1,13 +1,7 @@
 import { afterEach, beforeEach, describe, it } from "@std/testing/bdd";
 import { assert, assertEquals, assertExists, assertGreater } from "@std/assert";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import {
-  clearResolveShapeCache,
-  getResolveCacheSize,
-  handlers as baseHandlers,
-  setMaxResolveCacheSize,
-  warmupSearchPath,
-} from "../src/tools.ts";
+import { clearResolveShapeCache, getResolveCacheSize, handlers as baseHandlers, setMaxResolveCacheSize, warmupSearchPath } from "../src/tools.ts";
 
 /**
  * Extract and parse the JSON text payload from a CallToolResult.

@@ -1,0 +1,7 @@
+#!/bin/sh
+
+# Pre-commit hook: auto-format staged files with Deno
+deno task fmt
+
+# Re-stage any files that were reformatted
+git add -u

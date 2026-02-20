@@ -494,7 +494,7 @@ export function createHandlers(logger?: ToolLogger) {
         // deno-coverage-ignore
         if (savedPath) (result as any)[DEV_SAVED_PATH] = savedPath;
         return result;
-      // deno-coverage-ignore
+        // deno-coverage-ignore
       } catch (err) {
         // deno-coverage-ignore
         log.debug(`[finish-diagram] Caught error: ${err instanceof Error ? err.message : String(err)}`);
