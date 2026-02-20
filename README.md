@@ -6,6 +6,10 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for pro
 
 [![Docker Hub](https://img.shields.io/docker/v/simonkurtzmsft/drawio-mcp-server?label=Docker%20Hub&logo=docker&sort=semver)](https://hub.docker.com/r/simonkurtzmsft/drawio-mcp-server)
 
+## Demo Video
+
+[![Draw.io MCP Server Demo](https://img.youtube.com/vi/YAz-qjDPVZI/0.jpg)](https://youtu.be/YAz-qjDPVZI)
+
 ## Acknowledgements
 
 This project would not exist in this manner if it weren't for the following repositories and their authors. Thank you!
