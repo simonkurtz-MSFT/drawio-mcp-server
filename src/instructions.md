@@ -62,6 +62,8 @@ search-shapes(...)
 
 **Key point:** Intermediate responses are tiny, fast placeholders. Real SVGs are only generated once at the end via `finish-diagram`.
 
+**CRITICAL:** When using the transactional workflow, you MUST invoke `finish-diagram` at the end of your process. If you do not call `finish-diagram`, the user will be left with an incomplete diagram containing placeholder shapes instead of the actual diagram.
+
 ```
 search-shapes(...) 
 → add-cells(..., diagram_xml: null, transactional: true)     // Returns placeholder XML (~2KB)
@@ -224,8 +226,8 @@ Use these standard positions as starting points. Adjust as needed for more or fe
 
 - **Group children must be visually inside their container**: ALL children must be positioned within the group's visible boundary. Size groups large enough to contain every child with padding. Stack sibling children vertically.
 - **ALL compute resources of a workload belong inside the workload's group**: If a workload has a Container Apps Environment with Container Apps AND an App Service, both the Container Apps and the App Service are children of the group. Do NOT place any compute resource of the workload outside its group. If a resource logically belongs to the workload, it goes inside the group.
-- **Group labels go above, not inside**: The group's own `text`/`value` must be set to the desired visible label (e.g., "Container Apps Environment"). Additionally, create a **separate bold text vertex** positioned above the group rectangle with the workload name (e.g., "Workload A"). This text cell is NOT a child of the group — it sits at the layer level above the group's top edge.
-- **Group `text` parameter**: When calling `create-groups`, always provide a descriptive `text` value for the group (e.g., `"Container Apps Environment"`, `"VNet"`, `"Subnet"`). Never pass `text: ""` — the group should self-describe what it represents.
+- **Group labels go above, not inside**: The group's own `text`/`value` must be empty (i.e., pass `""`). Instead, create a **separate bold text vertex** positioned above the group rectangle with the workload name and the group type combined via a dash (e.g., "Workload A - Container Apps Environment"). This text cell is NOT a child of the group — it sits at the layer level above the group's top edge.
+- **Group `text` parameter**: When calling `create-groups`, pass `text: ""` to leave the group's internal label empty. Instead, create a separate text vertex above the group with the combined workload and group name.
 
 ### Branching & Routing Around Groups
 
@@ -262,7 +264,7 @@ Use these standard positions as starting points. Adjust as needed for more or fe
 ### Edge Labels
 
 - Add labels for traffic paths (e.g., "HTTPS", "gRPC") on edges where they clarify the flow.
-- **Edge label placement**: Place labels **above** horizontal edges and **to the left** of vertical edges. Use `verticalAlign=bottom;labelBackgroundColor=none;` in the edge style to position labels above horizontal segments.
+- **Edge label placement**: Place labels **above** horizontal edges and **to the left** of vertical edges. Use `verticalAlign=bottom;labelBackgroundColor=#ffffff;` in the edge style to position labels above horizontal segments and ensure the label covers the edge line.
 - Labels must never overlap shapes or other labels.
 
 ### External Endpoint Labels
@@ -314,18 +316,18 @@ Call `search-shapes` exactly **ONE time** with the **`queries` array parameter**
 
 Call `create-groups` exactly **ONE time** with every group/container (VNets, subnets, resource groups, Container Apps Environments, etc.). **Groups must be created before the components that will go inside them**, so you can calculate the proper group size based on the number and placement of children. Leave adequate padding (at least 20px on each side).
 
-**CRITICAL**: Always provide a descriptive `text` label for every group. Never use `text: ""`.
+**CRITICAL**: Always provide an empty `text` label for every group and create a separate text cell above it.
 
-**Sizing formula**: For N children stacked vertically inside a group (each ~48px tall with 40px gaps):
+**Sizing formula**: For N children stacked vertically inside a group (each ~48px tall with 20px gaps):
 
 - Width: child width (48px) + 80px horizontal padding = **~180px minimum** (wider for children with long labels)
-- Height: N × 48 + (N-1) × 40 + 80px vertical padding = **~(N × 88 + 40)px**
+- Height: N × 48 + (N-1) × 20 + 60px vertical padding = **~(N × 68 + 52)px**
 
 ```json
 {
   "groups": [
-    { "text": "Container Apps Environment", "x": 380, "y": 60, "width": 180, "height": 216, "temp_id": "env" },
-    { "text": "VNet", "x": 340, "y": 20, "width": 300, "height": 300, "temp_id": "vnet" }
+    { "text": "", "x": 380, "y": 60, "width": 180, "height": 200, "temp_id": "env" },
+    { "text": "", "x": 340, "y": 20, "width": 300, "height": 300, "temp_id": "vnet" }
   ]
 }
 ```

@@ -11,14 +11,10 @@
 
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { DiagramModel, StructuredError } from "./diagram_model.ts";
-import {
-  displayTitle,
-  getAzureCategories,
-  getAzureShapeByName,
-  getShapesInCategory,
-  searchAzureIcons,
-} from "./shapes/azure_icon_library.ts";
+import { displayTitle, getAzureCategories, getAzureShapeByName, getShapesInCategory, searchAzureIcons } from "./shapes/azure_icon_library.ts";
 import { BASIC_SHAPE_CATEGORIES, BASIC_SHAPES, getBasicShape } from "./shapes/basic_shapes.ts";
+import { findPlaceholdersInXml, resolvePlaceholdersInXml } from "./placeholder.ts";
+import { DEV_SAVED_PATH, devSaveDiagram } from "./utils.ts";
 const allBasicShapes = Object.values(BASIC_SHAPES);
 const allBasicShapesLower = allBasicShapes.map((s) => ({ ...s, nameLower: s.name.toLowerCase() }));
 const INTERNAL_SUCCESS_DATA = Symbol("internal_success_data");
@@ -148,7 +144,7 @@ function errorResult(error: StructuredError): CallToolResult {
   };
 }
 
-type StatefulArgs = { diagram_xml?: string; active_layer_id?: string };
+type StatefulArgs = { diagram_xml?: string; active_layer_id?: string; transactional?: boolean };
 
 function withDiagramState<T extends StatefulArgs>(
   args: T | undefined,
@@ -157,6 +153,7 @@ function withDiagramState<T extends StatefulArgs>(
 ): CallToolResult {
   const normalizedArgs: StatefulArgs = args ?? {};
   const diagram = new DiagramModel();
+  const transactional = normalizedArgs.transactional ?? false;
 
   if (normalizedArgs.diagram_xml) {
     const importResult = diagram.importXml(normalizedArgs.diagram_xml);
@@ -182,7 +179,7 @@ function withDiagramState<T extends StatefulArgs>(
     | Record<string, unknown>
     | undefined;
   if (dataFromInternal) {
-    const diagramXml = options?.readOnly ? (normalizedArgs.diagram_xml ?? diagram.toXml()) : diagram.toXml();
+    const diagramXml = options?.readOnly ? (normalizedArgs.diagram_xml ?? diagram.toXml({ transactional })) : diagram.toXml({ transactional });
 
     return {
       ...result,
@@ -205,7 +202,12 @@ function withDiagramState<T extends StatefulArgs>(
   return result;
 }
 
-export function createHandlers() {
+export interface ToolLogger {
+  debug: (...args: any[]) => void;
+}
+
+export function createHandlers(logger?: ToolLogger) {
+  const log = logger || { debug: () => {} };
   return {
     "delete-cell-by-id": (args: {
       diagram_xml?: string;
@@ -230,7 +232,7 @@ export function createHandlers() {
       });
     },
 
-    "edit-edge": (args: {
+    "edit-edges": (args: {
       diagram_xml?: string;
       edges: Array<{
         cell_id: string;
@@ -247,12 +249,38 @@ export function createHandlers() {
         });
       }
       return withDiagramState(args, (diagram) => {
-        const results = diagram.batchEditEdges(args.edges);
-        const successCount = results.reduce((n, r) => n + (r.success ? 1 : 0), 0);
-        const errorCount = results.length - successCount;
+        // Strip caller-provided edge anchor properties so the server's
+        // symmetric anchor calculation always runs
+        const sanitized = args.edges.map((e) => {
+          if (e.style) {
+            return {
+              ...e,
+              style: e.style.replace(
+                /\b(exit[XY]|entry[XY]|exitD[xy]|entryD[xy])=[^;]*;?/gi,
+                "",
+              ),
+            };
+          }
+          return e;
+        });
+        const results = diagram.batchEditEdges(sanitized);
+
+        // Validate edge conventions and attach warnings to successful results
+        const enrichedResults = results.map((r) => {
+          if (r.success && r.cell?.id) {
+            const warnings = diagram.validateEdgeConventions(r.cell.id);
+            if (warnings.length > 0) {
+              return { ...r, warnings };
+            }
+          }
+          return r;
+        });
+
+        const successCount = enrichedResults.reduce((n, r) => n + (r.success ? 1 : 0), 0);
+        const errorCount = enrichedResults.length - successCount;
         return successResult({
-          summary: { total: results.length, succeeded: successCount, failed: errorCount },
-          results,
+          summary: { total: enrichedResults.length, succeeded: successCount, failed: errorCount },
+          results: enrichedResults,
         });
       });
     },
@@ -340,19 +368,127 @@ export function createHandlers() {
     },
 
     "export-diagram": (args: { diagram_xml?: string; compress?: boolean }): CallToolResult => {
-      return withDiagramState(args, (diagram) => {
+      let savedPath: string | null = null;
+      const result = withDiagramState(args, (diagram) => {
         const compressed = args?.compress ?? false;
         const xml = diagram.toXml({ compress: compressed });
         const stats = diagram.getStats();
 
+        // ⚠️ DEV MODE ONLY — Save diagram to local file if SAVE_DIAGRAMS=true
+        savedPath = devSaveDiagram(xml, "export-diagram");
+
         return successResult({
           xml,
           stats,
-          compression: compressed
-            ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" }
-            : { enabled: false },
+          compression: compressed ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" } : { enabled: false },
         });
       }, { readOnly: true });
+      if (savedPath) (result as any)[DEV_SAVED_PATH] = savedPath;
+      return result;
+    },
+
+    "finish-diagram": (args: { diagram_xml?: string; compress?: boolean }): CallToolResult => {
+      // finish-diagram replaces placeholder cells (marked with placeholder=1) with real SVG icon data
+      // and optionally compresses the final XML. It does NOT use withDiagramState because it
+      // works directly with XML to resolve placeholders created during transactional operations.
+      if (!args?.diagram_xml) {
+        return errorResult({
+          code: "INVALID_INPUT",
+          message: "diagram_xml is required for finish-diagram",
+        });
+      }
+
+      try {
+        const compress = args.compress ?? true;
+
+        // Find all placeholders in the XML
+        const placeholders = findPlaceholdersInXml(args.diagram_xml);
+
+        if (placeholders.length === 0) {
+          // No placeholders - just return the XML as-is, optionally compressed
+          const diagram = new DiagramModel();
+          const importResult = diagram.importXml(args.diagram_xml);
+          if ("error" in importResult) {
+            return errorResult(importResult.error);
+          }
+          const xml = diagram.toXml({ compress });
+          const stats = diagram.getStats();
+
+          // ⚠️ DEV MODE ONLY — Save diagram to local file if SAVE_DIAGRAMS=true
+          const savedPath = devSaveDiagram(xml, "finish-diagram");
+
+          const result = successResult({
+            message: "No placeholders found - diagram already complete",
+            xml,
+            stats,
+            resolved_count: 0,
+            compression: compress ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" } : { enabled: false },
+          });
+          if (savedPath) (result as any)[DEV_SAVED_PATH] = savedPath;
+          return result;
+        }
+
+        // Resolve placeholders to real shapes
+        const shapeResolver = (shapeName: string, _placeholderId: string) => {
+          const resolved = resolveShape(shapeName);
+          if (resolved) {
+            return {
+              style: resolved.style,
+              source: resolved.source,
+            };
+          }
+          return null;
+        };
+
+        const resolutionResult = resolvePlaceholdersInXml(args.diagram_xml, shapeResolver);
+
+        // Check if resolution failed (has error property)
+        if ("xml" in resolutionResult === false) {
+          const detailsMsg = resolutionResult.details && resolutionResult.details.length > 0
+            ? `Could not resolve placeholders: ${
+              resolutionResult.details
+                .map((d: { placeholderId: string; shapeName: string }) => `"${d.shapeName}"`)
+                .join(", ")
+            }`
+            : undefined;
+          return errorResult({
+            code: "PLACEHOLDER_RESOLUTION_FAILED",
+            message: resolutionResult.error,
+            suggestion: detailsMsg,
+          });
+        }
+
+        // Load the resolved XML and prepare final output
+        const diagram = new DiagramModel();
+        const importResult = diagram.importXml(resolutionResult.xml);
+        if ("error" in importResult) {
+          return errorResult(importResult.error);
+        }
+
+        // Generate final XML with compression if requested
+        // Note: We generate without transactional=true to get the real SVG images
+        const finalXml = diagram.toXml({ compress });
+        const stats = diagram.getStats();
+
+        // ⚠️ DEV MODE ONLY — Save diagram to local file if SAVE_DIAGRAMS=true
+        const savedPath = devSaveDiagram(finalXml, "finish-diagram");
+
+        const result = successResult({
+          message: `Resolved ${placeholders.length} ${placeholders.length === 1 ? "placeholder" : "placeholders"} to real shapes`,
+          xml: finalXml,
+          stats,
+          resolved_count: placeholders.length,
+          compression: compress ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" } : { enabled: false },
+        });
+        if (savedPath) (result as any)[DEV_SAVED_PATH] = savedPath;
+        return result;
+      } catch (err) {
+        log.debug(`[finish-diagram] Caught error: ${err instanceof Error ? err.message : String(err)}`);
+        return errorResult({
+          code: "FINISH_DIAGRAM_ERROR",
+          message: err instanceof Error ? err.message : "Unknown error during diagram finishing",
+        });
+      }
     },
 
     "get-diagram-stats": (args: {
@@ -382,7 +518,7 @@ export function createHandlers() {
         y?: number;
         width?: number;
         height?: number;
-        text?: string;
+        text: string;
         style?: string;
         temp_id?: string;
       }>;
@@ -445,6 +581,7 @@ export function createHandlers() {
             cell_id: r.cellId,
             group_id: r.groupId,
             ...(r.cell && { cell: r.cell }),
+            ...(r.warnings && { warnings: r.warnings }),
             ...(r.error && { error: r.error }),
           })),
         });
@@ -477,6 +614,77 @@ export function createHandlers() {
       }, { readOnly: true });
     },
 
+    "validate-group-containment": (args: {
+      diagram_xml?: string;
+      group_id: string;
+    }): CallToolResult => {
+      return withDiagramState(args, (diagram) => {
+        const result = diagram.validateGroupContainment(args.group_id);
+        if ("error" in result) {
+          return errorResult(result.error);
+        }
+        return successResult({
+          group: result.group,
+          summary: {
+            total_children: result.totalChildren,
+            in_bounds_children: result.inBoundsChildren,
+            out_of_bounds_children: result.outOfBoundsChildren,
+          },
+          warnings: result.warnings,
+        });
+      }, { readOnly: true });
+    },
+
+    "suggest-group-sizing": (args: {
+      child_count: number;
+      child_width?: number;
+      child_height?: number;
+      vertical_spacing?: number;
+      horizontal_padding?: number;
+      vertical_padding?: number;
+      min_width?: number;
+      min_height?: number;
+    }): CallToolResult => {
+      const childCount = args.child_count;
+      const childWidth = args.child_width ?? 48;
+      const childHeight = args.child_height ?? 48;
+      const verticalSpacing = args.vertical_spacing ?? 40;
+      const horizontalPadding = args.horizontal_padding ?? 40;
+      const verticalPadding = args.vertical_padding ?? 40;
+      const minWidth = args.min_width ?? 180;
+      const minHeight = args.min_height ?? 120;
+
+      const stackedChildrenHeight = childCount * childHeight;
+      const spacingHeight = Math.max(0, childCount - 1) * verticalSpacing;
+      const contentHeight = stackedChildrenHeight + spacingHeight;
+      const rawWidth = childWidth + horizontalPadding * 2;
+      const rawHeight = contentHeight + verticalPadding * 2;
+
+      const recommendedWidth = Math.max(minWidth, Math.ceil(rawWidth));
+      const recommendedHeight = Math.max(minHeight, Math.ceil(rawHeight));
+
+      return successResult({
+        inputs: {
+          child_count: childCount,
+          child_width: childWidth,
+          child_height: childHeight,
+          vertical_spacing: verticalSpacing,
+          horizontal_padding: horizontalPadding,
+          vertical_padding: verticalPadding,
+          min_width: minWidth,
+          min_height: minHeight,
+        },
+        recommended: {
+          width: recommendedWidth,
+          height: recommendedHeight,
+        },
+        formula: {
+          width: "max(min_width, child_width + 2*horizontal_padding)",
+          height: "max(min_height, label_height + (child_count*child_height) + ((child_count-1)*vertical_spacing) + 2*vertical_padding)",
+        },
+      });
+    },
+
     // ─── Import Handler ─────────────────────────────────────────────
 
     "import-diagram": (args: {
@@ -507,8 +715,7 @@ export function createHandlers() {
 
       return successResult({
         categories: [...basicCategories, ...azureCategories],
-        info:
-          "Includes basic shapes and 700+ Azure architecture icons from dwarfered/azure-architecture-icons-for-drawio.",
+        info: "Includes basic shapes and 700+ Azure architecture icons from dwarfered/azure-architecture-icons-for-drawio.",
       });
     },
 
@@ -634,6 +841,7 @@ export function createHandlers() {
         temp_id?: string;
       }>;
       dry_run?: boolean;
+      transactional?: boolean;
     }): CallToolResult => {
       return withDiagramState(args, (diagram) => {
         // Pre-resolve shapes and track per-cell metadata
@@ -652,6 +860,9 @@ export function createHandlers() {
           tempId?: string;
         }> = [];
         const batchToInput: number[] = [];
+        // In transactional mode, vertex temp_ids are replaced with placeholder IDs.
+        // This map lets edges resolve their source_id/target_id references to the new IDs.
+        const placeholderIdMap = new Map<string, string>();
 
         for (let i = 0; i < args.cells.length; i++) {
           const c = args.cells[i];
@@ -659,6 +870,7 @@ export function createHandlers() {
           let width = c.width;
           let height = c.height;
           let text = c.text;
+          let cellId = c.temp_id; // Preserve temp_id for batch cross-references
 
           if (c.type === "vertex" && c.shape_name) {
             const resolved = resolveShape(c.shape_name);
@@ -676,10 +888,44 @@ export function createHandlers() {
               continue;
             }
             resolvedMap.set(i, resolved);
-            style = resolved.style;
-            width = width ?? resolved.width;
-            height = height ?? resolved.height;
-            text = text ?? (resolved.source !== "basic" ? resolved.name : undefined);
+            // In transactional mode, use minimal placeholder style to save bandwidth
+            // Otherwise, use the full resolved style with image data
+            if (args.transactional) {
+              // Minimal placeholder: just a simple box with border + placeholder marker
+              style = "fillColor=#d4d4d4;strokeColor=#999999;placeholder=1";
+              // Use placeholder ID format so finish-diagram can extract shape name
+              // Format: placeholder-{hyphenated-shape-name}-{uuid-suffix}
+              const hyphenatedName = c.shape_name.toLowerCase().replace(/\s+/g, "-");
+              const uuid = crypto.randomUUID().split("-")[0];
+              cellId = `placeholder-${hyphenatedName}-${uuid}`;
+              // Track mapping so edges can resolve original temp_id → placeholder ID
+              if (c.temp_id) {
+                placeholderIdMap.set(c.temp_id, cellId);
+              }
+            } else {
+              style = resolved.style;
+            }
+            // ALWAYS use resolved dimensions when shape_name is specified
+            // This ensures placeholders have exact final dimensions (critical in transactional mode)
+            // and icons maintain correct aspect ratios
+            width = resolved.width;
+            height = resolved.height;
+            // For non-basic shapes: fall back to the shape's display name when text is
+            // missing, empty, or whitespace-only.  The ?? operator alone doesn't
+            // catch "" which callers sometimes send unintentionally.
+            if (!text?.trim() && resolved.source !== "basic") {
+              text = resolved.name;
+            }
+          }
+
+          // Strip caller-provided edge anchor properties so the server's
+          // symmetric anchor calculation always runs (withSymmetricEdgeAnchors
+          // skips edges that already have explicit anchors).
+          if (c.type === "edge" && style) {
+            style = style.replace(
+              /\b(exit[XY]|entry[XY]|exitD[xy]|entryD[xy])=[^;]*;?/gi,
+              "",
+            );
           }
 
           batchToInput.push(i);
@@ -691,9 +937,9 @@ export function createHandlers() {
             height,
             text,
             style,
-            sourceId: c.source_id,
-            targetId: c.target_id,
-            tempId: c.temp_id,
+            sourceId: placeholderIdMap.get(c.source_id!) ?? c.source_id,
+            targetId: placeholderIdMap.get(c.target_id!) ?? c.target_id,
+            tempId: cellId,
           });
         }
 
@@ -718,6 +964,19 @@ export function createHandlers() {
             };
           } else {
             results[origIdx] = batchResults[j];
+          }
+        }
+
+        // Validate edge conventions and attach warnings to successful edge results
+        for (let j = 0; j < batchResults.length; j++) {
+          const origIdx = batchToInput[j];
+          const result = results[origIdx] as Record<string, unknown>;
+          const cell = result.cell as { type?: string; id?: string } | undefined;
+          if (result.success && cell?.type === "edge" && cell.id) {
+            const warnings = diagram.validateEdgeConventions(cell.id);
+            if (warnings.length > 0) {
+              results[origIdx] = { ...result, warnings };
+            }
           }
         }
 

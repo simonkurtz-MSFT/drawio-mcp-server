@@ -84,12 +84,12 @@ describe("tool handlers", () => {
     });
   });
 
-  describe("edit-edge", () => {
+  describe("edit-edges", () => {
     it("should update edge text", async () => {
       const a = await addVertex({ text: "A" });
       const b = await addVertex({ text: "B" });
       const edge = await addEdge(a.id, b.id, "old");
-      const result = await handlers["edit-edge"]({
+      const result = await handlers["edit-edges"]({
         edges: [{ cell_id: edge.id, text: "new label" }],
       });
       const parsed = parseResult(result);
@@ -104,7 +104,7 @@ describe("tool handlers", () => {
       const c = await addVertex({ text: "C" });
       const edge1 = await addEdge(a.id, b.id, "e1");
       const edge2 = await addEdge(b.id, c.id, "e2");
-      const result = await handlers["edit-edge"]({
+      const result = await handlers["edit-edges"]({
         edges: [
           { cell_id: edge1.id, text: "updated-e1" },
           { cell_id: edge2.id, text: "updated-e2", style: "dashed=1;" },
@@ -121,7 +121,7 @@ describe("tool handlers", () => {
     });
 
     it("should return error for non-existent edge", async () => {
-      const result = await handlers["edit-edge"]({
+      const result = await handlers["edit-edges"]({
         edges: [{ cell_id: "nonexistent", text: "X" }],
       });
       const parsed = parseResult(result);
@@ -131,7 +131,7 @@ describe("tool handlers", () => {
 
     it("should return error when editing a vertex as an edge", async () => {
       const cell = await addVertex({ text: "A" });
-      const result = await handlers["edit-edge"]({
+      const result = await handlers["edit-edges"]({
         edges: [{ cell_id: cell.id, text: "X" }],
       });
       const parsed = parseResult(result);
@@ -140,7 +140,7 @@ describe("tool handlers", () => {
     });
 
     it("should return error for empty edges array", async () => {
-      const result = await handlers["edit-edge"]({ edges: [] });
+      const result = await handlers["edit-edges"]({ edges: [] });
       assertEquals(result.isError, true);
       const parsed = parseResult(result);
       assertEquals(parsed.error.code, "INVALID_INPUT");
@@ -150,7 +150,7 @@ describe("tool handlers", () => {
       const a = await addVertex({ text: "A" });
       const b = await addVertex({ text: "B" });
       const edge = await addEdge(a.id, b.id, "e1");
-      const result = await handlers["edit-edge"]({
+      const result = await handlers["edit-edges"]({
         edges: [
           { cell_id: edge.id, text: "updated" },
           { cell_id: "nonexistent", text: "fail" },
@@ -421,6 +421,29 @@ describe("tool handlers", () => {
       const cell = parsed.data.results[0].cell;
       assert(cell.style.includes("image=data:image/svg+xml,"), "shape_name should override explicit style");
     });
+
+    it("should resolve temp_id cross-references for edges in transactional mode", async () => {
+      const result = await handlers["add-cells"]({
+        transactional: true,
+        cells: [
+          { type: "vertex", shape_name: "Front Doors", x: 100, y: 100, temp_id: "fd" },
+          { type: "vertex", shape_name: "Container Apps", x: 400, y: 100, temp_id: "ca" },
+          { type: "edge", source_id: "fd", target_id: "ca" },
+        ],
+      });
+      const parsed = parseResult(result);
+      assertEquals(parsed.data.summary.succeeded, 3);
+      assertEquals(parsed.data.summary.failed, 0);
+      // Vertex cells should have placeholder IDs
+      const fdCell = parsed.data.results[0].cell;
+      const caCell = parsed.data.results[1].cell;
+      assert(fdCell.id.startsWith("placeholder-"), "Front Doors should have placeholder ID");
+      assert(caCell.id.startsWith("placeholder-"), "Container Apps should have placeholder ID");
+      // Edge should connect the two placeholder cells
+      const edgeCell = parsed.data.results[2].cell;
+      assertEquals(edgeCell.sourceId, fdCell.id);
+      assertEquals(edgeCell.targetId, caCell.id);
+    });
   });
 
   describe("edit-cells", () => {
@@ -448,6 +471,31 @@ describe("tool handlers", () => {
       const parsed = parseResult(result);
       assertEquals(parsed.data.summary.succeeded, 1);
       assertEquals(parsed.data.summary.failed, 1);
+    });
+
+    it("should update text on transactional placeholder cells and reflect in response", async () => {
+      // Create cells in transactional mode
+      const addResult = await handlers["add-cells"]({
+        transactional: true,
+        cells: [
+          { type: "vertex", shape_name: "Front Doors", x: 100, y: 100, temp_id: "fd" },
+        ],
+      });
+      const addParsed = parseResult(addResult);
+      const placeholderId = addParsed.data.results[0].cell.id;
+      assert(placeholderId.startsWith("placeholder-"), "Should have placeholder ID");
+
+      // Edit the text — this should work and the new value should appear in the response
+      const editResult = await handlers["edit-cells"]({
+        transactional: true,
+        cells: [{ cell_id: placeholderId, text: "My Custom Label" }],
+      });
+      const editParsed = parseResult(editResult);
+      assertEquals(editParsed.data.summary.succeeded, 1);
+      assertEquals(editParsed.data.results[0].cell.value, "My Custom Label");
+
+      // The diagram_xml should also contain the updated value
+      assert(editParsed.data.diagram_xml.includes("My Custom Label"));
     });
   });
 
@@ -479,7 +527,7 @@ describe("tool handlers", () => {
       // Use a partial/approximate name that is NOT an alias hit so it falls
       // through to the fuzzy-search path in resolveShape.
       const result = await handlers["add-cells"]({
-        cells: [{ type: "vertex", shape_name: "defender for cloud", x: 100, y: 100 }],
+        cells: [{ type: "vertex", shape_name: "defender distributer control", x: 100, y: 100 }],
       });
       const parsed = parseResult(result);
       assertEquals(parsed.data.summary.succeeded, 1);
@@ -503,15 +551,16 @@ describe("tool handlers", () => {
       assertEquals(parsed.data.results[1].error.code, "SHAPE_NOT_FOUND");
     });
 
-    it("should use custom dimensions over shape defaults", async () => {
+    it("should always use shape dimensions when shape_name is specified", async () => {
       const result = await handlers["add-cells"]({
         cells: [
           { type: "vertex", shape_name: "rectangle", x: 50, y: 50, width: 400, height: 200, text: "Big" },
         ],
       });
       const parsed = parseResult(result);
-      assertEquals(parsed.data.results[0].cell.width, 400);
-      assertEquals(parsed.data.results[0].cell.height, 200);
+      // Shape dimensions are always used when shape_name is specified (ignores user-provided width/height)
+      assertEquals(parsed.data.results[0].cell.width, 200); // rectangle default
+      assertEquals(parsed.data.results[0].cell.height, 100); // rectangle default
       assertEquals(parsed.data.results[0].cell.value, "Big");
     });
   });
@@ -632,6 +681,82 @@ describe("tool handlers", () => {
       });
       const parsed = parseResult(result);
       assertEquals(parsed.data.summary.failed, 1);
+    });
+  });
+
+  describe("edge convention warnings", () => {
+    it("should attach warnings when add-cells creates a leftward edge", async () => {
+      const result = await handlers["add-cells"]({
+        cells: [
+          { type: "vertex", x: 400, y: 100, width: 50, height: 50, text: "Source", temp_id: "src" },
+          { type: "vertex", x: 100, y: 100, width: 50, height: 50, text: "Target", temp_id: "tgt" },
+          { type: "edge", source_id: "src", target_id: "tgt" },
+        ],
+      });
+      const parsed = parseResult(result);
+      assertEquals(parsed.data.summary.succeeded, 3);
+      const edgeResult = parsed.data.results[2];
+      assertExists(edgeResult.warnings);
+      assert(edgeResult.warnings.some((w: string) => w.includes("leftward")));
+    });
+
+    it("should attach warnings when add-cells edge targets child inside group", async () => {
+      // Create a group with a child, then add an external source and edge to the child
+      const groupResult = await handlers["create-groups"]({
+        groups: [{ x: 200, y: 100, width: 300, height: 200, text: "Env", temp_id: "grp" }],
+      });
+      const grpData = parseResult(groupResult).data;
+      const groupId = grpData.results[0].cell.id;
+
+      const cellsResult = await handlers["add-cells"]({
+        cells: [
+          { type: "vertex", x: 30, y: 30, width: 50, height: 50, text: "App", temp_id: "app" },
+          { type: "vertex", x: 10, y: 150, width: 50, height: 50, text: "FrontDoor", temp_id: "fd" },
+        ],
+      });
+      const cellsData = parseResult(cellsResult).data;
+      const appId = cellsData.results[0].cell.id;
+      const fdId = cellsData.results[1].cell.id;
+
+      await handlers["add-cells-to-group"]({
+        assignments: [{ cell_id: appId, group_id: groupId }],
+      });
+
+      const edgeResult = await handlers["add-cells"]({
+        cells: [{ type: "edge", source_id: fdId, target_id: appId }],
+      });
+      const edgeParsed = parseResult(edgeResult);
+      const edgeData = edgeParsed.data.results[0];
+      assertExists(edgeData.warnings);
+      assert(edgeData.warnings.some((w: string) => w.includes("group cell")));
+    });
+
+    it("should not attach warnings for well-formed edges", async () => {
+      const result = await handlers["add-cells"]({
+        cells: [
+          { type: "vertex", x: 100, y: 100, width: 50, height: 50, text: "A", temp_id: "a" },
+          { type: "vertex", x: 400, y: 100, width: 50, height: 50, text: "B", temp_id: "b" },
+          { type: "edge", source_id: "a", target_id: "b" },
+        ],
+      });
+      const parsed = parseResult(result);
+      const edgeResult = parsed.data.results[2];
+      assertEquals(edgeResult.warnings, undefined);
+    });
+
+    it("should attach warnings from edit-edges when source/target creates backwards flow", async () => {
+      const a = await addVertex({ x: 400, y: 100, width: 50, height: 50, text: "A" });
+      const b = await addVertex({ x: 100, y: 100, width: 50, height: 50, text: "B" });
+      const edge = await addEdge(a.id, b.id);
+      // Re-edit the edge (same bad direction)
+      const result = await handlers["edit-edges"]({
+        edges: [{ cell_id: edge.id, text: "updated" }],
+      });
+      const parsed = parseResult(result);
+      assertEquals(parsed.data.summary.succeeded, 1);
+      const edgeData = parsed.data.results[0];
+      assertExists(edgeData.warnings);
+      assert(edgeData.warnings.some((w: string) => w.includes("leftward")));
     });
   });
 

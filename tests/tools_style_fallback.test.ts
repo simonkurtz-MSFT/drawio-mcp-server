@@ -11,12 +11,7 @@ import { afterAll, describe, it } from "@std/testing/bdd";
 import { assertEquals } from "@std/assert";
 import { resolve } from "@std/path";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import {
-  clearResolveShapeCache,
-  getResolveCacheSize,
-  handlers as baseHandlers,
-  setMaxResolveCacheSize,
-} from "../src/tools.ts";
+import { clearResolveShapeCache, getResolveCacheSize, handlers as baseHandlers, setMaxResolveCacheSize } from "../src/tools.ts";
 import { initializeShapes, resetAzureIconLibrary, setAzureIconLibraryPath } from "../src/shapes/azure_icon_library.ts";
 
 /** Parse the JSON payload out of a handler result. */

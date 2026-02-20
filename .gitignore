@@ -29,3 +29,6 @@ coverage_detail.txt
 
 # Draw.io files (possibly created during testing or development)
 *.drawio
+
+# DEV MODE ONLY — Auto-saved diagrams from export-diagram/finish-diagram
+diagrams/

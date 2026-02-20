@@ -223,78 +223,6 @@ describe("DiagramModel", () => {
     });
   });
 
-  describe("alignment waypoints", () => {
-    it("should not add waypoints when horizontal cells are Y-aligned", () => {
-      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
-      const right = model.addRectangle({ x: 400, y: 100, width: 100, height: 60, text: "Right" });
-      model.addEdge({ sourceId: left.id, targetId: right.id });
-      const xml = model.toXml();
-      // Perfectly aligned → no mxPoint waypoints on this edge
-      // The edge's geometry should have no <Array as="points">
-      assert(!xml.match(new RegExp(`source=\\"${left.id}\\"[^>]*>.*?<Array`, "s")));
-    });
-
-    it("should add midpoint waypoints for horizontal flow with Y offset", () => {
-      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
-      const right = model.addRectangle({ x: 400, y: 160, width: 100, height: 60, text: "Right" });
-      model.addEdge({ sourceId: left.id, targetId: right.id });
-      const xml = model.toXml();
-      // Source center Y = 130, target center Y = 190 → midX waypoints should exist
-      assert(xml.includes('<Array as="points">'), "expected alignment waypoints for Y-offset horizontal edge");
-      assert(xml.includes("<mxPoint"), "expected mxPoint elements for alignment");
-    });
-
-    it("should add midpoint waypoints for vertical flow with X offset", () => {
-      const top = model.addRectangle({ x: 100, y: 0, width: 100, height: 60, text: "Top" });
-      const bottom = model.addRectangle({ x: 200, y: 400, width: 100, height: 60, text: "Bottom" });
-      model.addEdge({ sourceId: top.id, targetId: bottom.id });
-      const xml = model.toXml();
-      assert(xml.includes('<Array as="points">'), "expected alignment waypoints for X-offset vertical edge");
-    });
-
-    it("should not add waypoints when vertical cells are X-aligned", () => {
-      const top = model.addRectangle({ x: 100, y: 0, width: 100, height: 60, text: "Top" });
-      const bottom = model.addRectangle({ x: 100, y: 400, width: 100, height: 60, text: "Bottom" });
-      model.addEdge({ sourceId: top.id, targetId: bottom.id });
-      const xml = model.toXml();
-      assert(!xml.match(new RegExp(`source=\\"${top.id}\\"[^>]*>.*?<Array`, "s")));
-    });
-
-    it("should not add alignment waypoints when explicit anchors are set", () => {
-      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
-      const right = model.addRectangle({ x: 400, y: 160, width: 100, height: 60, text: "Right" });
-      model.addEdge({
-        sourceId: left.id,
-        targetId: right.id,
-        style: "edgeStyle=orthogonalEdgeStyle;exitX=0.5;exitY=1;entryX=0;entryY=0.5;",
-      });
-      const xml = model.toXml();
-      // Explicit anchors → alignment waypoints should NOT be added
-      assert(!xml.match(new RegExp(`source=\\"${left.id}\\"[^>]*>.*?<Array`, "s")));
-    });
-
-    it("should compute correct midpoint X for horizontal Z-bend", () => {
-      // Source at x=0..100 (right edge=100), target at x=400..500 (left edge=400)
-      // midX = (100 + 400) / 2 = 250
-      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
-      const right = model.addRectangle({ x: 400, y: 140, width: 100, height: 60, text: "Right" });
-      model.addEdge({ sourceId: left.id, targetId: right.id });
-      const xml = model.toXml();
-      assert(xml.includes('x="250"'), "expected midpoint X=250 for Z-bend");
-    });
-
-    it("should prefer group avoidance waypoints over alignment waypoints", () => {
-      model.createGroup({ x: 200, y: 50, width: 200, height: 200, text: "Group" });
-      const left = model.addRectangle({ x: 0, y: 100, width: 80, height: 60, text: "Left" });
-      const right = model.addRectangle({ x: 500, y: 160, width: 80, height: 60, text: "Right" });
-      model.addEdge({ sourceId: left.id, targetId: right.id });
-      const xml = model.toXml();
-      // The edge should have avoidance waypoints (routing around the group),
-      // not alignment waypoints. Verify waypoints exist.
-      assert(xml.includes('<Array as="points">'), "expected avoidance waypoints");
-    });
-  });
-
   describe("addRectangle", () => {
     it("should create a cell with defaults", () => {
       const cell = model.addRectangle({});
@@ -984,6 +912,113 @@ describe("DiagramModel", () => {
         assertExists(styleMatch);
         // Should have a semicolon between the original style and the anchor suffix
         assert(styleMatch![1].startsWith("html=1;exitX="));
+      }
+    });
+  });
+
+  describe("group-aligned edge anchors", () => {
+    it("should align entryY to source center when target is a group (horizontal flow)", () => {
+      // Source vertex at y=100..160 (center y=130).
+      // Target group at y=50..350 (height=300, center y=200).
+      // Expected entryY = (130 - 50) / 300 = 0.27
+      const group = model.createGroup({ x: 400, y: 50, width: 200, height: 300, text: "Group" });
+      const source = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Source" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: group.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        assert(styleMatch![1].includes("exitX=1;exitY=0.5;"));
+        assert(styleMatch![1].includes("entryX=0;entryY=0.27;"));
+      }
+    });
+
+    it("should align exitY to target center when source is a group (horizontal flow)", () => {
+      // Source group at y=50..350 (height=300, center y=200).
+      // Target vertex at y=100..160 (center y=130).
+      // Expected exitY = (130 - 50) / 300 = 0.27
+      const group = model.createGroup({ x: 0, y: 50, width: 200, height: 300, text: "Group" });
+      const target = model.addRectangle({ x: 400, y: 100, width: 100, height: 60, text: "Target" });
+      const edge = model.addEdge({ sourceId: group.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        assert(styleMatch![1].includes("exitX=1;exitY=0.27;"));
+        assert(styleMatch![1].includes("entryX=0;entryY=0.5;"));
+      }
+    });
+
+    it("should use midpoint Y for group-to-group horizontal edges", () => {
+      // Source group: y=0..200 (center y=100). Target group: y=100..400 (center y=250).
+      // midY = (100+250)/2 = 175. exitY = (175-0)/200 = 0.88. entryY = (175-100)/300 = 0.25.
+      const srcGroup = model.createGroup({ x: 0, y: 0, width: 200, height: 200, text: "SrcGroup" });
+      const tgtGroup = model.createGroup({ x: 400, y: 100, width: 200, height: 300, text: "TgtGroup" });
+      const edge = model.addEdge({ sourceId: srcGroup.id, targetId: tgtGroup.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        assert(styleMatch![1].includes("exitY=0.88;"));
+        assert(styleMatch![1].includes("entryY=0.25;"));
+      }
+    });
+
+    it("should not add waypoints for edges targeting a group", () => {
+      const group = model.createGroup({ x: 400, y: 50, width: 200, height: 300, text: "Group" });
+      const source = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Source" });
+      model.addEdge({ sourceId: source.id, targetId: group.id });
+      const xml = model.toXml();
+      // No <Array as="points"> for this edge — straight line with aligned anchors
+      assert(!xml.match(new RegExp(`source=\\"${source.id}\\"[^>]*>.*?<Array`, "s")));
+    });
+
+    it("should clamp anchor to 0.05 when source is near top of target group", () => {
+      // Source center above group top → anchor clamped to 0.05
+      const group = model.createGroup({ x: 400, y: 200, width: 200, height: 300, text: "Group" });
+      const source = model.addRectangle({ x: 0, y: 170, width: 100, height: 60, text: "Source" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: group.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        // sourceCenter.y=200, groupTop=200 → (200-200)/300 = 0 → clamped to 0.05
+        assert(styleMatch![1].includes("entryY=0.05;"));
+      }
+    });
+
+    it("should align entryX to source center when target is a group (vertical flow)", () => {
+      // Source vertex at x=100..200 (center x=150).
+      // Target group at x=50..350 (width=300, center x=200).
+      // Expected entryX = (150 - 50) / 300 = 0.33
+      const group = model.createGroup({ x: 50, y: 400, width: 300, height: 200, text: "Group" });
+      const source = model.addRectangle({ x: 100, y: 0, width: 100, height: 60, text: "Source" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: group.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        assert(styleMatch![1].includes("exitX=0.5;exitY=1;"));
+        assert(styleMatch![1].includes("entryX=0.33;entryY=0;"));
+      }
+    });
+
+    it("should keep 0.5 anchors for non-group vertices", () => {
+      // Both are normal vertices → standard 0.5 anchors
+      const left = model.addRectangle({ x: 0, y: 100, width: 100, height: 60, text: "Left" });
+      const right = model.addRectangle({ x: 400, y: 200, width: 100, height: 60, text: "Right" });
+      const edge = model.addEdge({ sourceId: left.id, targetId: right.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        assert(styleMatch![1].includes("exitX=1;exitY=0.5;entryX=0;entryY=0.5;"));
       }
     });
   });
@@ -1755,94 +1790,6 @@ describe("DiagramModel", () => {
       const waypoints = m.getGroupAvoidanceWaypoints(edge, centers);
       // Should still produce waypoints using center-based spatial comparison
       assertGreater(waypoints.length, 0);
-    });
-  });
-
-  describe("getAlignmentWaypoints edge cases", () => {
-    it("should handle edge with undefined style", () => {
-      const m = model as any;
-      const edge: Cell = {
-        id: "e-undef-style",
-        type: "edge",
-        value: "",
-        sourceId: "src",
-        targetId: "tgt",
-        parent: "1",
-      };
-      m.cells.set("e-undef-style", edge);
-
-      const centers = new Map();
-      centers.set("src", { x: 100, y: 100 });
-      centers.set("tgt", { x: 400, y: 200 });
-
-      const boundsCache = new Map();
-      boundsCache.set("src", { x: 50, y: 70, width: 100, height: 60 });
-      boundsCache.set("tgt", { x: 350, y: 170, width: 100, height: 60 });
-
-      const waypoints = m.getAlignmentWaypoints(edge, centers, boundsCache);
-      assertGreater(waypoints.length, 0);
-    });
-
-    it("should return empty when source center is not in precomputedCenters", () => {
-      const m = model as any;
-      const edge: Cell = {
-        id: "e-no-center",
-        type: "edge",
-        value: "",
-        style: "",
-        sourceId: "src",
-        targetId: "tgt",
-        parent: "1",
-      };
-      m.cells.set("e-no-center", edge);
-
-      const centers = new Map();
-      centers.set("tgt", { x: 400, y: 200 });
-      // src not in centers
-
-      const boundsCache = new Map();
-      const waypoints = m.getAlignmentWaypoints(edge, centers, boundsCache);
-      assertEquals(waypoints.length, 0);
-    });
-
-    it("should return empty when source bounds is not in cache", () => {
-      const m = model as any;
-      const edge: Cell = {
-        id: "e-no-bounds",
-        type: "edge",
-        value: "",
-        style: "",
-        sourceId: "src",
-        targetId: "tgt",
-        parent: "1",
-      };
-      m.cells.set("e-no-bounds", edge);
-
-      const centers = new Map();
-      centers.set("src", { x: 100, y: 100 });
-      centers.set("tgt", { x: 400, y: 200 });
-
-      const boundsCache = new Map();
-      // No bounds for src or tgt
-
-      const waypoints = m.getAlignmentWaypoints(edge, centers, boundsCache);
-      assertEquals(waypoints.length, 0);
-    });
-
-    it("should produce Z-bend waypoints for vertical upward flow", () => {
-      // Source below-right, target above-left. |dy| > |dx|, dy < 0, dx != 0
-      const source = model.addRectangle({ x: 200, y: 400, width: 100, height: 60, text: "Src" });
-      const target = model.addRectangle({ x: 100, y: 100, width: 100, height: 60, text: "Tgt" });
-      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
-      assertEquals("error" in edge, false);
-      if (!("error" in edge)) {
-        const xml = model.toXml();
-        // Should contain alignment waypoints for vertical upward flow
-        const pointsMatch = xml.match(
-          new RegExp(`id="${edge.id}"[^>]*>.*?<Array as="points">(.*?)</Array>`, "s"),
-        );
-        assertExists(pointsMatch);
-      }
     });
   });
 

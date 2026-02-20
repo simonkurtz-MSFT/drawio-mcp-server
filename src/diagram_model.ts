@@ -681,7 +681,7 @@ export class DiagramModel {
       id,
       type: "edge",
       value: params.text ?? "",
-      style: params.style ?? "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;verticalAlign=bottom;labelBackgroundColor=none;",
+      style: params.style ?? "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;verticalAlign=bottom;labelBackgroundColor=#ffffff;",
       sourceId: params.sourceId,
       targetId: params.targetId,
       parent: this.activeLayerId,

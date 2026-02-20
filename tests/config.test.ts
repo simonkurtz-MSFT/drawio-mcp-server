@@ -1,14 +1,6 @@
 import { describe, it } from "@std/testing/bdd";
 import { assert, assertEquals, assertInstanceOf } from "@std/assert";
-import {
-  buildConfig,
-  parseConfig,
-  parseHttpPortValue,
-  parseLoggerType,
-  parseTransports,
-  type ServerConfig,
-  shouldShowHelp,
-} from "../src/config.ts";
+import { buildConfig, parseConfig, parseHttpPortValue, parseLoggerType, parseTransports, type ServerConfig, shouldShowHelp } from "../src/config.ts";
 
 describe("parseHttpPortValue", () => {
   it("valid port returns number", () => {

@@ -70,8 +70,7 @@ describe("DiagramModel compression", () => {
     });
 
     it("should roundtrip XML with special characters", () => {
-      const xml =
-        '<mxGraphModel><root><mxCell id="0" value="Hello &amp; &lt;World&gt; &quot;test&quot;"/></root></mxGraphModel>';
+      const xml = '<mxGraphModel><root><mxCell id="0" value="Hello &amp; &lt;World&gt; &quot;test&quot;"/></root></mxGraphModel>';
       const compressed = DiagramModel.compressXml(xml);
       const decompressed = DiagramModel.decompressXml(compressed);
       assertEquals(decompressed, xml);
@@ -96,11 +95,9 @@ describe("DiagramModel compression", () => {
       const cells = Array.from(
         { length: 100 },
         (_, i) =>
-          `<mxCell id="${
-            i + 2
-          }" value="Cell ${i}" style="fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="${
+          `<mxCell id="${i + 2}" value="Cell ${i}" style="fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="${i * 10}" y="${
             i * 10
-          }" y="${i * 10}" width="120" height="60" as="geometry"/></mxCell>`,
+          }" width="120" height="60" as="geometry"/></mxCell>`,
       ).join("");
       const xml = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
       const compressed = DiagramModel.compressXml(xml);
@@ -203,9 +200,9 @@ describe("DiagramModel compression", () => {
       const page2Xml =
         '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="20" value="Page2" style="" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="50" as="geometry"/></mxCell></root></mxGraphModel>';
 
-      const xml = `<mxfile host="test"><diagram id="p1" name="Page-1">${
-        DiagramModel.compressXml(page1Xml)
-      }</diagram><diagram id="p2" name="Second">${DiagramModel.compressXml(page2Xml)}</diagram></mxfile>`;
+      const xml = `<mxfile host="test"><diagram id="p1" name="Page-1">${DiagramModel.compressXml(page1Xml)}</diagram><diagram id="p2" name="Second">${
+        DiagramModel.compressXml(page2Xml)
+      }</diagram></mxfile>`;
 
       const model2 = new DiagramModel();
       const result = model2.importXml(xml);
@@ -342,5 +339,4 @@ describe("DiagramModel compression", () => {
       assertEquals(imported.data.cells, 3);
     });
   });
-
 });

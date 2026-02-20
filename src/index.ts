@@ -15,6 +15,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { load as loadEnv } from "@std/dotenv";
 
 import { buildConfig, parseLoggerType, type ServerConfig, shouldShowHelp, VERSION } from "./config.ts";
 import { create_logger as create_console_logger } from "./loggers/mcp_console_logger.ts";
@@ -106,8 +107,13 @@ function createMcpServer(): McpServer {
     create_server_logger(srv);
   }
 
+  // Log protocol/transport errors to the server console
+  srv.server.onerror = (error: Error) => {
+    log.log("error", `MCP server error: ${error.message}`);
+  };
+
   // Register all MCP tools (schemas + descriptions)
-  const handlers = createHandlers();
+  const handlers = createHandlers(log);
   const createToolHandler = createToolHandlerFactory(handlers, log);
   registerTools(srv, createToolHandler);
 
@@ -146,7 +152,10 @@ async function shutdown(reason: string): Promise<void> {
     log.debug("HTTP server closed");
   }
 
-  // 2. Close all MCP server instances (flushes pending messages, disconnects transports)
+  // 2. Clear HTTP sessions
+  httpSessions.clear();
+
+  // 3. Close all MCP server instances (flushes pending messages, disconnects transports)
   for (const srv of servers) {
     try {
       await srv.close();
@@ -180,13 +189,13 @@ if (Deno.build.os !== "windows") {
 
 // Global error handlers — Deno equivalents of Node's uncaughtException / unhandledRejection
 globalThis.addEventListener("error", (event) => {
-  console.error("Uncaught exception:", event.error);
+  log.log("error", "Uncaught exception:", event.error);
   event.preventDefault();
   shutdown("uncaughtException").finally(() => Deno.exit(1));
 });
 
 globalThis.addEventListener("unhandledrejection", (event) => {
-  console.error("Unhandled rejection:", event.reason);
+  log.log("error", "Unhandled rejection:", event.reason);
   event.preventDefault();
   shutdown("unhandledRejection").finally(() => Deno.exit(1));
 });
@@ -197,9 +206,18 @@ async function start_stdio_transport() {
   const srv = createMcpServer();
   servers.push(srv);
   const transport = new StdioServerTransport();
+  transport.onerror = (error: Error) => {
+    log.log("error", `STDIO transport error: ${error.message}`);
+  };
   await srv.connect(transport);
   log.debug(`Draw.io MCP Server STDIO transport active`);
 }
+
+/** Active HTTP sessions — maps session ID → transport + server */
+const httpSessions = new Map<string, {
+  transport: WebStandardStreamableHTTPServerTransport;
+  server: McpServer;
+}>();
 
 async function start_streamable_http_transport(http_port: number) {
   // Create the Hono app
@@ -234,13 +252,75 @@ async function start_streamable_http_transport(http_port: number) {
 
   app.get("/health", (c) => c.json({ status: "ok" }));
 
-  // Stateless transports are single-use — create a fresh transport
-  // and server per request so the SDK doesn't reject reuse.
+  // Stateful HTTP sessions — route requests to the correct transport
+  // by session ID so the MCP SDK can track request/session metadata.
   app.all("/mcp", async (c) => {
-    const transport = new WebStandardStreamableHTTPServerTransport();
-    const srv = createMcpServer();
-    await srv.connect(transport);
-    return transport.handleRequest(c.req.raw);
+    try {
+      const sessionId = c.req.header("mcp-session-id");
+
+      // New session — log initial HTTP contact
+      if (!sessionId) {
+        log.debug(`New session HTTP connection request received`);
+      }
+
+      // Existing session — reuse its transport
+      if (sessionId) {
+        const session = httpSessions.get(sessionId);
+        if (session) {
+          try {
+            return await session.transport.handleRequest(c.req.raw);
+          } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            log.log("error", `HTTP request error [${sessionId.slice(-6)}]: ${errorMsg}`);
+            throw error;
+          }
+        }
+        // Unknown session ID — the SDK's handleRequest will reject with 404
+      }
+
+      // New session — create transport with session ID generator
+      const transport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: () => crypto.randomUUID(),
+        onsessioninitialized: (id: string) => {
+          httpSessions.set(id, { transport, server: srv });
+          // Session created — logging happens after first request is handled
+        },
+        onsessionclosed: (id: string) => {
+          httpSessions.delete(id);
+          log.debug(`HTTP session closed: ${id.slice(-6)}`);
+        },
+      });
+      transport.onerror = (error: Error) => {
+        log.log("error", `HTTP transport error: ${error.message}`);
+      };
+      const srv = createMcpServer();
+      servers.push(srv);
+      await srv.connect(transport);
+
+      // Handle request with error logging for network failures
+      let response: Response;
+      try {
+        response = await transport.handleRequest(c.req.raw);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        log.log("error", `HTTP request error: ${errorMsg}`);
+        throw error; // Re-throw to let Hono handle the 500 response
+      }
+
+      // Log session creation only after successfully handling the first request
+      const newSessionId = c.req.raw.headers.get("mcp-session-id") ||
+        response.headers.get("mcp-session-id");
+      if (newSessionId && httpSessions.has(newSessionId)) {
+        log.debug(`HTTP session created: ${newSessionId.slice(-6)}`);
+      }
+
+      return response;
+    } catch (error) {
+      // Unexpected errors at route level — log and return 500
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      log.log("error", `Unexpected error in /mcp route: ${errorMsg}`);
+      return c.json({ error: "Internal server error" }, 500);
+    }
   });
 
   // Deno.serve replaces @hono/node-server — zero extra dependencies
@@ -251,6 +331,10 @@ async function start_streamable_http_transport(http_port: number) {
 }
 
 async function main() {
+  // ── Load .env file if present ──────────────────────────────────────────
+  // Loads variables from .env file into Deno.env (no-op if file missing)
+  await loadEnv({ export: true });
+
   // Check if help was requested (before parsing config)
   if (shouldShowHelp(Deno.args)) {
     showHelp();
@@ -262,15 +346,29 @@ async function main() {
 
   // Handle errors from configuration parsing
   if (configResult instanceof Error) {
-    console.error(`Error: ${configResult.message}`);
+    log.log("error", configResult.message);
     Deno.exit(1);
   }
 
   const config: ServerConfig = configResult;
 
   log.debug(`Draw.io MCP Server v${VERSION} starting`);
-  log.debug(`Transports: ${config.transports.join(", ")}`);
-  log.debug(`Tools: ${TOOL_DEFINITIONS.length}`);
+
+  // Log environment variables with aligned colons
+  const envVars: [string, string | undefined][] = [
+    ["AZURE_ICON_LIBRARY_PATH", Deno.env.get("AZURE_ICON_LIBRARY_PATH")],
+    ["HTTP_PORT", Deno.env.get("HTTP_PORT")],
+    ["LOGGER_TYPE", Deno.env.get("LOGGER_TYPE")],
+    ["SAVE_DIAGRAMS", Deno.env.get("SAVE_DIAGRAMS")],
+    ["TRANSPORT", Deno.env.get("TRANSPORT")],
+  ];
+  const maxKeyLen = Math.max(...envVars.map(([k]) => k.length));
+  for (const [key, value] of envVars) {
+    log.debug(`  ${key.padEnd(maxKeyLen)} : ${value ?? "(not set)"}`);
+  }
+
+  log.debug(`  ${"Transports".padEnd(maxKeyLen)} : ${config.transports.join(", ")}`);
+  log.debug(`  ${"Tools".padEnd(maxKeyLen)} : ${TOOL_DEFINITIONS.length}`);
 
   // Eagerly load all shapes and build the fuzzy-search index at startup so
   // they are ready for the first tool call with no cold-start penalty.

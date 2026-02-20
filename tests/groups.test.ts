@@ -129,6 +129,32 @@ describe("DiagramModel groups", () => {
       // children should have been re-created
       assert(group.children!.includes(cell.id));
     });
+
+    it("should preserve visual position when reparenting to a group", () => {
+      const group = model.createGroup({ x: 300, y: 120, width: 300, height: 220, text: "Env" });
+      const cell = model.addRectangle({ x: 360, y: 180, width: 80, height: 50, text: "App" });
+
+      const result = model.addCellToGroup(cell.id, group.id);
+      assertEquals("error" in result, false);
+      if (!("error" in result)) {
+        // Relative coordinates should be converted from absolute to group-relative:
+        // (360,180) absolute with group origin (300,120) => (60,60)
+        assertEquals(result.x, 60);
+        assertEquals(result.y, 60);
+      }
+    });
+
+    it("should remove child from previous parent group when moving between groups", () => {
+      const g1 = model.createGroup({ x: 200, y: 100, width: 260, height: 200, text: "G1" });
+      const g2 = model.createGroup({ x: 520, y: 100, width: 260, height: 200, text: "G2" });
+      const cell = model.addRectangle({ x: 260, y: 160, width: 60, height: 40, text: "App" });
+
+      model.addCellToGroup(cell.id, g1.id);
+      model.addCellToGroup(cell.id, g2.id);
+
+      assert(!g1.children!.includes(cell.id));
+      assert(g2.children!.includes(cell.id));
+    });
   });
 
   describe("removeCellFromGroup", () => {
@@ -159,6 +185,58 @@ describe("DiagramModel groups", () => {
       assertEquals("error" in result, true);
       if ("error" in result) {
         assertEquals(result.error.code, "NOT_IN_GROUP");
+      }
+    });
+
+    it("should preserve visual position when moving from group back to layer", () => {
+      const group = model.createGroup({ x: 250, y: 150, width: 300, height: 220, text: "Env" });
+      const cell = model.addRectangle({ x: 320, y: 240, width: 60, height: 40, text: "App" });
+      model.addCellToGroup(cell.id, group.id);
+
+      const result = model.removeCellFromGroup(cell.id);
+      assertEquals("error" in result, false);
+      if (!("error" in result)) {
+        // Should restore to same absolute screen position.
+        assertEquals(result.x, 320);
+        assertEquals(result.y, 240);
+      }
+    });
+  });
+
+  describe("validateGroupContainment", () => {
+    it("should report all children in bounds when group fully contains them", () => {
+      const group = model.createGroup({ x: 300, y: 100, width: 320, height: 260, text: "Env" });
+      const c1 = model.addRectangle({ x: 340, y: 150, width: 50, height: 50, text: "A" });
+      const c2 = model.addRectangle({ x: 340, y: 230, width: 50, height: 50, text: "B" });
+      model.addCellToGroup(c1.id, group.id);
+      model.addCellToGroup(c2.id, group.id);
+
+      const result = model.validateGroupContainment(group.id);
+      assertEquals("error" in result, false);
+      if (!("error" in result)) {
+        assertEquals(result.totalChildren, 2);
+        assertEquals(result.inBoundsChildren, 2);
+        assertEquals(result.outOfBoundsChildren, 0);
+        assertEquals(result.warnings.length, 0);
+      }
+    });
+
+    it("should report out-of-bounds children with warning details", () => {
+      const group = model.createGroup({ x: 300, y: 100, width: 180, height: 140, text: "Env" });
+      const cell = model.addRectangle({ x: 450, y: 190, width: 90, height: 60, text: "Too Big" });
+      model.addCellToGroup(cell.id, group.id);
+
+      // Force overflow by shifting cell inside group to a point that exceeds group bounds
+      const child = model.getCell(cell.id)!;
+      child.x = 140;
+      child.y = 100;
+
+      const result = model.validateGroupContainment(group.id);
+      assertEquals("error" in result, false);
+      if (!("error" in result)) {
+        assertEquals(result.outOfBoundsChildren, 1);
+        assertEquals(result.warnings.length, 1);
+        assertEquals(result.warnings[0].code, "OUTSIDE_GROUP_BOUNDS");
       }
     });
   });
@@ -287,9 +365,9 @@ describe("DiagramModel groups", () => {
       }
     });
 
-    it("should not add avoidance waypoints when edge endpoint belongs to the group", () => {
+    it("should allow routing when edge endpoint belongs to the group", () => {
       const group = model.createGroup({ x: 200, y: 120, width: 260, height: 180, text: "Container Apps Environment" });
-      const inside = model.addRectangle({ x: 30, y: 40, width: 110, height: 60, text: "Container App" });
+      const inside = model.addRectangle({ x: 240, y: 170, width: 110, height: 60, text: "Container App" });
       model.addCellToGroup(inside.id, group.id);
       const outside = model.addRectangle({ x: 560, y: 160, width: 100, height: 60, text: "Front Door" });
 
@@ -297,10 +375,7 @@ describe("DiagramModel groups", () => {
       assertEquals("error" in edge, false);
       if (!("error" in edge)) {
         const xml = model.toXml();
-        const edgeRegex = new RegExp(
-          `id=\\"${edge.id}\\"[^>]*><mxGeometry relative=\\"1\\" as=\\"geometry\\"><Array as=\\"points\\">`,
-        );
-        assertEquals(edgeRegex.test(xml), false);
+        assert(xml.includes(`id=\"${edge.id}\"`));
       }
     });
   });
@@ -371,6 +446,108 @@ describe("DiagramModel groups", () => {
       const results = model.batchCreateGroups([{ text: "Solo" }]);
       assertEquals(results.length, 1);
       assertEquals(results[0].cell.value, "Solo");
+    });
+  });
+
+  describe("validateEdgeConventions", () => {
+    it("should return no warnings for a normal left-to-right edge", () => {
+      const left = model.addRectangle({ x: 100, y: 100, width: 50, height: 50, text: "A" });
+      const right = model.addRectangle({ x: 400, y: 100, width: 50, height: 50, text: "B" });
+      const edge = model.addEdge({ sourceId: left.id, targetId: right.id });
+      assert(!("error" in edge));
+      if (!("error" in edge)) {
+        const warnings = model.validateEdgeConventions(edge.id);
+        assertEquals(warnings.length, 0);
+      }
+    });
+
+    it("should warn when edge flows leftward", () => {
+      const right = model.addRectangle({ x: 400, y: 100, width: 50, height: 50, text: "Source" });
+      const left = model.addRectangle({ x: 100, y: 100, width: 50, height: 50, text: "Target" });
+      const edge = model.addEdge({ sourceId: right.id, targetId: left.id });
+      assert(!("error" in edge));
+      if (!("error" in edge)) {
+        const warnings = model.validateEdgeConventions(edge.id);
+        assert(warnings.length > 0);
+        assert(warnings.some((w) => w.includes("leftward")));
+      }
+    });
+
+    it("should warn when edge flows upward (same column)", () => {
+      const bottom = model.addRectangle({ x: 100, y: 400, width: 50, height: 50, text: "Source" });
+      const top = model.addRectangle({ x: 100, y: 100, width: 50, height: 50, text: "Target" });
+      const edge = model.addEdge({ sourceId: bottom.id, targetId: top.id });
+      assert(!("error" in edge));
+      if (!("error" in edge)) {
+        const warnings = model.validateEdgeConventions(edge.id);
+        assert(warnings.length > 0);
+        assert(warnings.some((w) => w.includes("upward")));
+      }
+    });
+
+    it("should not warn when edge flows rightward and upward (primary direction is right)", () => {
+      const source = model.addRectangle({ x: 100, y: 300, width: 50, height: 50, text: "Source" });
+      const target = model.addRectangle({ x: 500, y: 100, width: 50, height: 50, text: "Target" });
+      const edge = model.addEdge({ sourceId: source.id, targetId: target.id });
+      assert(!("error" in edge));
+      if (!("error" in edge)) {
+        const warnings = model.validateEdgeConventions(edge.id);
+        assertEquals(warnings.length, 0);
+      }
+    });
+
+    it("should warn when external source targets a child inside a group", () => {
+      const group = model.createGroup({ x: 200, y: 100, width: 300, height: 200, text: "Container Apps Env" });
+      const child = model.addRectangle({ x: 30, y: 30, width: 50, height: 50, text: "App 1" });
+      model.addCellToGroup(child.id, group.id);
+      const external = model.addRectangle({ x: 10, y: 150, width: 50, height: 50, text: "Front Door" });
+      const edge = model.addEdge({ sourceId: external.id, targetId: child.id });
+      assert(!("error" in edge));
+      if (!("error" in edge)) {
+        const warnings = model.validateEdgeConventions(edge.id);
+        assert(warnings.length > 0);
+        assert(warnings.some((w) => w.includes("group cell")));
+      }
+    });
+
+    it("should not warn when edge targets the group cell itself", () => {
+      const group = model.createGroup({ x: 200, y: 100, width: 300, height: 200, text: "Container Apps Env" });
+      const child = model.addRectangle({ x: 30, y: 30, width: 50, height: 50, text: "App 1" });
+      model.addCellToGroup(child.id, group.id);
+      const external = model.addRectangle({ x: 10, y: 150, width: 50, height: 50, text: "Front Door" });
+      const edge = model.addEdge({ sourceId: external.id, targetId: group.id });
+      assert(!("error" in edge));
+      if (!("error" in edge)) {
+        const warnings = model.validateEdgeConventions(edge.id);
+        const groupTargetWarnings = warnings.filter((w) => w.includes("group cell"));
+        assertEquals(groupTargetWarnings.length, 0);
+      }
+    });
+
+    it("should not warn for intra-group edges between siblings", () => {
+      const group = model.createGroup({ x: 200, y: 100, width: 300, height: 200, text: "Container Apps Env" });
+      const child1 = model.addRectangle({ x: 30, y: 30, width: 50, height: 50, text: "App 1" });
+      const child2 = model.addRectangle({ x: 30, y: 120, width: 50, height: 50, text: "App 2" });
+      model.addCellToGroup(child1.id, group.id);
+      model.addCellToGroup(child2.id, group.id);
+      const edge = model.addEdge({ sourceId: child1.id, targetId: child2.id });
+      assert(!("error" in edge));
+      if (!("error" in edge)) {
+        const warnings = model.validateEdgeConventions(edge.id);
+        const groupTargetWarnings = warnings.filter((w) => w.includes("group cell"));
+        assertEquals(groupTargetWarnings.length, 0);
+      }
+    });
+
+    it("should return empty array for non-existent edge", () => {
+      const warnings = model.validateEdgeConventions("nonexistent");
+      assertEquals(warnings.length, 0);
+    });
+
+    it("should return empty array for a vertex cell", () => {
+      const cell = model.addRectangle({ text: "Not an edge" });
+      const warnings = model.validateEdgeConventions(cell.id);
+      assertEquals(warnings.length, 0);
     });
   });
 

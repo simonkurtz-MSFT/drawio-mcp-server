@@ -27,6 +27,10 @@ This project would not exist in this manner if it weren't for the following repo
 - **Multiple Transports** — stdio (default) and streamable HTTP
 - **XML Export** — Standard Draw.io XML format compatible with Draw.io desktop and web
 
+## Documentation
+
+- Transactional mode design: [docs/transactional_mode_design.md](docs/transactional_mode_design.md)
+
 ## Requirements
 
 - **[Deno](https://deno.com/)** v2.3 or higher
@@ -148,6 +152,67 @@ The `--transport` flag controls which transports to start. Default is `stdio`.
 | `--transport stdio`      | stdio only (default) |
 | `--transport http`       | HTTP only            |
 | `--transport stdio,http` | Both transports      |
+
+### Environment Variables
+
+| Variable                  | Description                                                                           | Default    |
+| ------------------------- | ------------------------------------------------------------------------------------- | ---------- |
+| `AZURE_ICON_LIBRARY_PATH` | Path to Azure icon library XML file (auto-detected from `assets/` if unset)           | (detected) |
+| `LOGGER_TYPE`             | Logger implementation: `console` or `mcp_server`                                      | `console`  |
+| `HTTP_PORT`               | HTTP server port (CLI `--http-port` takes precedence)                                 | `8080`     |
+| `TRANSPORT`               | Transport type: `stdio`, `http`, or `stdio,http` (CLI `--transport` takes precedence) | `stdio`    |
+| **`SAVE_DIAGRAMS`**       | **⚠️ DEV MODE ONLY** — Auto-save diagram XML to `./diagrams/` on export/finish        | (disabled) |
+
+> **Tip**: You can create a `.env` file from `.env.example` to configure environment variables locally:
+>
+> ```sh
+> cp .env.example .env
+> # Edit .env and uncomment/set SAVE_DIAGRAMS=true or other variables
+> ```
+>
+> The server automatically loads `.env` files at startup. The `.env` file is gitignored and won't be committed to the repository.
+
+### Development Mode — Auto-save Diagrams
+
+> **⚠️ WARNING: DEVELOPMENT MODE ONLY — NOT FOR PRODUCTION USE**
+
+For local debugging and development, you can enable automatic saving of diagram XML to a local `diagrams/` folder. This is useful for inspecting generated diagrams without manually copying XML output.
+
+**To enable:**
+
+```sh
+export SAVE_DIAGRAMS=true
+deno task start
+```
+
+or
+
+```sh
+SAVE_DIAGRAMS=true deno task start
+```
+
+**Behavior when enabled:**
+
+- Every call to `export-diagram` or `finish-diagram` automatically saves the XML to `./diagrams/<timestamp>_<tool-name>.drawio`
+- Timestamp format: `YYYYMMDD_HHMMSS` (e.g., `20260219_143052_export-diagram.drawio`)
+- The `diagrams/` folder is created automatically if it doesn't exist
+- Errors during file saving are logged but do not fail the tool operation
+
+**To disable (default):**
+
+Simply unset the environment variable or set it to any value other than `true` or `1`:
+
+```sh
+unset SAVE_DIAGRAMS
+```
+
+or
+
+```sh
+export SAVE_DIAGRAMS=false
+```
+
+**Security note**: This feature is **disabled by default** and should **never be enabled in production** or containerized deployments. It is intended solely for local development and debugging.
 
 ### HTTP Transport
 
@@ -292,7 +357,7 @@ The `.env` file supports:
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
 | `add-cells`         | Add vertices and/or edges. Supports `shape_name` for icon resolution, `temp_id` for within-batch references, and `dry_run` validation. |
 | `edit-cells`        | Update vertex cell properties (position, size, text, style).                                                                           |
-| `edit-edge`         | Update an edge's properties (text, source, target, style).                                                                             |
+| `edit-edges`        | Update edge properties (text, source, target, style).                                                                                  |
 | `set-cell-shape`    | Apply library shape styles to existing cells.                                                                                          |
 | `delete-cell-by-id` | Remove a cell (vertex or edge) by ID. Cascade-deletes connected edges for vertices.                                                    |
 
@@ -428,6 +493,31 @@ deno task inspect
 ```
 
 After making changes, **Restart** the Inspector. After changing tool definitions, **Clear** and **List** the tools again.
+
+## Related Approaches
+
+> **Note**: The comparisons below are all **as of February 2026**. Both projects and the agent skill continue to evolve — check their repositories for the latest state.
+
+This project is a fork of [lgazo/drawio-mcp-server](https://github.com/lgazo/drawio-mcp-server) by Ladislav Gazo. The original acts as a **bridge to a live Draw.io instance** via a WebSocket browser extension for interactive, real-time diagram control. This fork is a **standalone XML generator** — it builds diagrams in memory and outputs Draw.io XML without needing a browser or Draw.io instance. [thomast1906/github-copilot-agent-skills](https://github.com/thomast1906/github-copilot-agent-skills/tree/main/.github/skills/drawio-mcp-diagramming) takes yet another approach: a **Copilot Agent Skill** that constructs raw Draw.io XML and sends it to the hosted `mcp.draw.io` service, guided by prompt instructions and a static Azure icon catalog.
+
+| Aspect                           | simonkurtz-MSFT                                        | Original (lgazo)                                       | Agent Skill (thomast1906)                           |
+| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------ | --------------------------------------------------- |
+| **Architecture**                 | Standalone MCP server — generates XML in memory        | Bridge to live Draw.io via WebSocket browser extension | Copilot Agent Skill + hosted `mcp.draw.io` endpoint |
+| **Runtime**                      | Deno (TypeScript)                                      | Node.js + pnpm (TypeScript + JavaScript)               | None (prompt-driven)                                |
+| **Draw.io instance required**    | ❌                                                     | ✅ Browser + MCP extension                             | ❌ (uses hosted endpoint)                           |
+| **Setup effort**                 | Clone + Deno, or `docker pull`                         | `npx` + browser extension + open Draw.io               | Drop `SKILL.md` + catalog into repo                 |
+| **Batch operations**             | ✅ Arrays in `add-cells`, `edit-cells`, etc.           | ❌ One tool call per cell                              | ✅ Full XML in one shot                             |
+| **Azure icons**                  | ✅ 700+ embedded base64 SVG                            | ✅ From live Draw.io libraries                         | ✅ Static catalog (`img/lib/azure2/…`)              |
+| **Fuzzy shape search**           | ✅ `search-shapes`                                     | ❌ Exact name lookup only                              | ❌                                                  |
+| **Page management**              | ✅                                                     | ❌                                                     | ❌                                                  |
+| **Group / container management** | ✅                                                     | ❌                                                     | ❌                                                  |
+| **Iterative editing**            | ✅ Stateful model, incremental calls                   | ✅ Live edits in Draw.io                               | ❌ Regenerate full XML each time                    |
+| **Interactive features**         | ❌ Stateless XML generation                            | ✅ `get-selected-cell`, `set-cell-data`                | ❌                                                  |
+| **Docker / cloud deployment**    | ✅ Distroless image (~20 MB)                           | ❌ npm package only                                    | ❌ Relies on hosted endpoint                        |
+| **Offline support**              | ✅ Fully offline                                       | ⚠️ Needs browser with Draw.io                          | ❌ Requires internet                                |
+| **Best for**                     | CI/CD, containers, headless / offline batch generation | Interactive diagramming with real-time visual feedback | Quick one-shot diagrams with zero install           |
+
+All three approaches are valid — the right choice depends on whether you need interactive visual feedback (original), headless batch generation (this fork), or a zero-install agent skill.
 
 ## License
 

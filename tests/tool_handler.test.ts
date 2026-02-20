@@ -6,13 +6,8 @@
 import { beforeEach, describe, it } from "@std/testing/bdd";
 import { assert, assertEquals, assertExists } from "@std/assert";
 import { assertSpyCalls, type Spy, spy } from "@std/testing/mock";
-import {
-  createToolHandlerFactory,
-  formatBytes,
-  timestamp,
-  type ToolHandlerMap,
-  type ToolLogger,
-} from "../src/tool_handler.ts";
+import { createToolHandlerFactory, formatBytes, timestamp, type ToolHandlerMap, type ToolLogger } from "../src/tool_handler.ts";
+import { DEV_SAVED_PATH } from "../src/utils.ts";
 
 describe("createToolHandlerFactory", () => {
   let debugSpy: Spy;
@@ -107,6 +102,54 @@ describe("createToolHandlerFactory", () => {
       assertEquals(result.isError, true);
       const parsed = JSON.parse(result.content[0].text);
       assert(parsed.error.includes("missing-tool"));
+    });
+
+    it("should catch handler exceptions and return structured error", async () => {
+      const handlerSpy = spy((_args: any) => {
+        throw new Error("unexpected boom");
+      });
+      const handlerMap: ToolHandlerMap = { "throwing-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("throwing-tool", true);
+      const result = await handler({ x: 1 }, mockExtra);
+
+      assertSpyCalls(handlerSpy, 1);
+      assertEquals(result.isError, true);
+      const parsed = JSON.parse(result.content[0].text);
+      assertEquals(parsed.success, false);
+      assertEquals(parsed.error.code, "INTERNAL_ERROR");
+      assertEquals(parsed.error.message, "unexpected boom");
+    });
+
+    it("should catch async handler rejections and return structured error", async () => {
+      const handlerSpy = spy((_args: any) => Promise.reject(new Error("async failure")));
+      const handlerMap: ToolHandlerMap = { "rejecting-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("rejecting-tool", true);
+      const result = await handler({}, mockExtra);
+
+      assertSpyCalls(handlerSpy, 1);
+      assertEquals(result.isError, true);
+      const parsed = JSON.parse(result.content[0].text);
+      assertEquals(parsed.error.code, "INTERNAL_ERROR");
+      assertEquals(parsed.error.message, "async failure");
+    });
+
+    it("should handle non-Error throws and stringify them", async () => {
+      const handlerSpy = spy((_args: any) => {
+        throw "string error";
+      });
+      const handlerMap: ToolHandlerMap = { "string-throw": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("string-throw", true);
+      const result = await handler({}, mockExtra);
+
+      assertEquals(result.isError, true);
+      const parsed = JSON.parse(result.content[0].text);
+      assertEquals(parsed.error.message, "string error");
     });
   });
 
@@ -291,7 +334,7 @@ describe("createToolHandlerFactory", () => {
       const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
       const resultLog = debugMessages.find((msg: string) => msg.includes("ms"));
       assertExists(resultLog);
-      assert(/\d+ms/.test(resultLog!));
+      assert(/\d+\s*ms/.test(resultLog!));
     });
 
     it("should pad tool prefix to align status words", async () => {
@@ -313,6 +356,45 @@ describe("createToolHandlerFactory", () => {
       assert(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z: \[req:.+?\] \[tool:a\]\s+ok in/.test(okLog!));
       // "called" and "ok in" should start at the same column (aligned by padEnd)
       assertEquals(calledLog!.indexOf("called"), okLog!.indexOf("ok in"));
+    });
+
+    it("should log DEV_SAVED_PATH with formatted prefix when present on result", async () => {
+      const mockResult: any = {
+        content: [{ type: "text" as const, text: '{"success":true}' }],
+      };
+      mockResult[DEV_SAVED_PATH] = "diagrams/20260219_182125_finish-diagram.drawio";
+      const handlerSpy = spy((_args: any) => Promise.resolve(mockResult));
+      const handlerMap: ToolHandlerMap = { "save-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("save-tool", true);
+      const result = await handler({}, mockExtra);
+
+      const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
+      const devLog = debugMessages.find((msg: string) => msg.includes("diagram saved to"));
+      assertExists(devLog);
+      assert(devLog!.includes("[tool:save-tool]"));
+      assert(devLog!.includes("[req:req-1]"));
+      assert(devLog!.includes("[ses:ession]"));
+      assert(devLog!.includes("diagrams/20260219_182125_finish-diagram.drawio"));
+      // Symbol should be cleaned from the result
+      assertEquals((result as any)[DEV_SAVED_PATH], undefined);
+    });
+
+    it("should not log DEV_SAVED_PATH when not present on result", async () => {
+      const mockResult = {
+        content: [{ type: "text" as const, text: '{"success":true}' }],
+      };
+      const handlerSpy = spy((_args: any) => Promise.resolve(mockResult));
+      const handlerMap: ToolHandlerMap = { "no-save-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("no-save-tool", true);
+      await handler({}, mockExtra);
+
+      const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
+      const devLog = debugMessages.find((msg: string) => msg.includes("diagram saved to"));
+      assertEquals(devLog, undefined);
     });
   });
 });
