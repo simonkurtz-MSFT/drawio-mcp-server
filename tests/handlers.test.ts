@@ -871,6 +871,17 @@ describe("tool handlers", () => {
       assert(parsed.data.message.includes("already complete"));
     });
 
+    it("should return uncompressed output when compress is false and no placeholders", async () => {
+      await addVertex({ text: "Normal" });
+      const exportResult = await handlers["export-diagram"]({ compress: false });
+      const xml = parseResult(exportResult).data.xml;
+
+      const result = baseHandlers["finish-diagram"]({ diagram_xml: xml, compress: false });
+      const parsed = parseResult(result);
+      assertEquals(parsed.success, true);
+      assertEquals(parsed.data.compression.enabled, false);
+    });
+
     it("should resolve placeholders for transactional cells", async () => {
       const addResult = await handlers["add-cells"]({
         transactional: true,
@@ -980,6 +991,9 @@ describe("tool handlers", () => {
   describe("export-diagram with SAVE_DIAGRAMS", () => {
     afterEach(() => {
       Deno.env.delete("SAVE_DIAGRAMS");
+      try {
+        Deno.removeSync("./diagrams", { recursive: true });
+      } catch { /* ignore */ }
     });
 
     it("should include DEV_SAVED_PATH when SAVE_DIAGRAMS is enabled", async () => {

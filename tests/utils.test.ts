@@ -70,8 +70,6 @@ describe("readRelativeFile", () => {
 // ─── devSaveDiagram ────────────────────────────────────────────
 
 describe("devSaveDiagram", () => {
-  const testDiagramsDir = "./diagrams_test_tmp";
-
   beforeEach(() => {
     // Clear the env var before each test
     Deno.env.delete("SAVE_DIAGRAMS");
@@ -79,9 +77,9 @@ describe("devSaveDiagram", () => {
 
   afterEach(() => {
     Deno.env.delete("SAVE_DIAGRAMS");
-    // Clean up test diagrams directory
+    // Clean up the diagrams directory created by devSaveDiagram
     try {
-      Deno.removeSync(testDiagramsDir, { recursive: true });
+      Deno.removeSync("./diagrams", { recursive: true });
     } catch { /* ignore */ }
   });
 
@@ -105,8 +103,6 @@ describe("devSaveDiagram", () => {
     // Verify the file was written
     const content = Deno.readTextFileSync(result!);
     assertEquals(content, xml);
-    // Clean up
-    Deno.removeSync(result!);
   });
 
   it("saves diagram when SAVE_DIAGRAMS=1", () => {
@@ -115,8 +111,6 @@ describe("devSaveDiagram", () => {
     const result = devSaveDiagram(xml, "finish-diagram");
     assert(result !== null);
     assert(result!.includes("finish-diagram.drawio"));
-    // Clean up
-    Deno.removeSync(result!);
   });
 
   it("generates filename with timestamp and tool name", () => {
@@ -125,8 +119,6 @@ describe("devSaveDiagram", () => {
     assert(result !== null);
     // Format: YYYYMMDD_HHMMSS_my-tool.drawio
     assertMatch(result!, /\d{8}_\d{6}_my-tool\.drawio$/);
-    // Clean up
-    Deno.removeSync(result!);
   });
 
   it("returns null and logs error when writeTextFileSync fails", () => {
@@ -155,8 +147,5 @@ describe("devSaveDiagram", () => {
     // Save again — directory already exists, should not fail
     const result2 = devSaveDiagram("<xml/>", "second-save");
     assert(result2 !== null);
-    // Clean up
-    Deno.removeSync(result1!);
-    Deno.removeSync(result2!);
   });
 });
