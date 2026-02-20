@@ -1529,11 +1529,12 @@ export class DiagramModel {
    *   during batch diagram creation. Real SVG is restored only at finish-diagram time.
    *   Defaults to `false` (full production XML with all image data).
    */
-  toXml(options?: { compress?: boolean; transactional?: boolean }): string {
+  toXml(options?: { compress?: boolean; transactional?: boolean; watermark?: boolean }): string {
     const compress = options?.compress ?? false;
     const transactional = options?.transactional ?? false;
+    const watermark = options?.watermark ?? false;
 
-    const pageXml = this.renderPageXml(this.cells, this.layers, { transactional });
+    const pageXml = this.renderPageXml(this.cells, this.layers, { transactional, watermark });
     const graphModelXml =
       `<mxGraphModel dx="800" dy="600" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0"><root><mxCell id="0"/><mxCell id="1" parent="0"/>${pageXml}</root></mxGraphModel>`;
     const diagramContent = compress ? DiagramModel.compressXml(graphModelXml) : graphModelXml;
@@ -1574,7 +1575,7 @@ export class DiagramModel {
    * Render cells and layers for a single page.
    * @param options.transactional - If true, strip SVG image data from styles (for placeholders)
    */
-  private renderPageXml(cells: Map<string, Cell>, layers: Layer[], options?: { transactional?: boolean }): string {
+  private renderPageXml(cells: Map<string, Cell>, layers: Layer[], options?: { transactional?: boolean; watermark?: boolean }): string {
     // Emit custom layer cells (skip the default layer id="1" which is always present)
     const layerCellsXml = layers
       .filter((l) => l.id !== "1")
@@ -1655,33 +1656,20 @@ export class DiagramModel {
       })
       .join("");
 
-    const watermarkXml = this.renderWatermarkXml(absoluteBoundsCache);
+    const watermarkXml = options?.watermark ? this.renderWatermarkXml() : "";
     return `${layerCellsXml}${cellsXml}${watermarkXml}`;
   }
 
   /**
-   * Render the server watermark positioned below all diagram content.
+   * Render the server watermark at a fixed position near the bottom of the diagram page.
    * Uses a static XML template — only version, date, and position are injected.
+   * Position is based on the page dimensions (850×1100) with a fixed bottom offset.
    */
-  private renderWatermarkXml(absoluteBoundsCache: Map<string, Rect | null>): string {
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let maxY = -Infinity;
-    let hasPositions = false;
-
-    for (const bounds of absoluteBoundsCache.values()) {
-      if (bounds) {
-        hasPositions = true;
-        if (bounds.x < minX) minX = bounds.x;
-        if (bounds.x + bounds.width > maxX) maxX = bounds.x + bounds.width;
-        if (bounds.y + bounds.height > maxY) maxY = bounds.y + bounds.height;
-      }
-    }
-
-    const w = 450;
-    const h = 60;
-    const x = hasPositions ? minX : 0;
-    const y = hasPositions ? maxY + 80 : 100;
+  private renderWatermarkXml(): string {
+    const w = 320;
+    const h = 50;
+    const x = 40;
+    const y = 1100 - h - 5; // 5 from the bottom of the page
 
     const now = new Date();
     const date = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, "0")}/${String(now.getDate()).padStart(2, "0")}`;

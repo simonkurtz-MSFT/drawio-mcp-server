@@ -109,7 +109,7 @@ function createMcpServer(): McpServer {
 
   // Log protocol/transport errors to the server console
   srv.server.onerror = (error: Error) => {
-    log.log("error", `MCP server error: ${error.message}`);
+    log.error(`MCP server error: ${error.message}`);
   };
 
   // Register all MCP tools (schemas + descriptions)
@@ -141,7 +141,18 @@ async function shutdown(reason: string): Promise<void> {
 
   log.debug(`Shutting down (reason: ${reason})`);
 
-  // 1. Stop accepting new HTTP connections
+  // 1. Close all MCP server instances (flushes pending messages, disconnects transports)
+  log.debug(`Closing ${servers.length} MCP server instance(s)`);
+  for (const srv of servers) {
+    try {
+      await srv.close();
+    } catch {
+      // best-effort — transport may already be gone
+    }
+  }
+  log.debug("MCP server(s) closed");
+
+  // 2. Stop accepting new HTTP connections
   if (httpServer) {
     try {
       await httpServer.shutdown();
@@ -152,20 +163,13 @@ async function shutdown(reason: string): Promise<void> {
     log.debug("HTTP server closed");
   }
 
-  // 2. Clear HTTP sessions
+  // 3. Clear HTTP sessions
+  if (httpSessions.size > 0) {
+    log.debug(`Closing ${httpSessions.size} active HTTP session(s)`);
+  }
   httpSessions.clear();
 
-  // 3. Close all MCP server instances (flushes pending messages, disconnects transports)
-  for (const srv of servers) {
-    try {
-      await srv.close();
-    } catch {
-      // best-effort — transport may already be gone
-    }
-  }
-  log.debug("MCP server(s) closed");
-
-  // 3. Release cached resources so memory is freed immediately
+  // 4. Release cached resources so memory is freed immediately
   resetAzureIconLibrary();
 
   log.debug("Shutdown complete");
@@ -189,13 +193,13 @@ if (Deno.build.os !== "windows") {
 
 // Global error handlers — Deno equivalents of Node's uncaughtException / unhandledRejection
 globalThis.addEventListener("error", (event) => {
-  log.log("error", "Uncaught exception:", event.error);
+  log.error("Uncaught exception:", event.error);
   event.preventDefault();
   shutdown("uncaughtException").finally(() => Deno.exit(1));
 });
 
 globalThis.addEventListener("unhandledrejection", (event) => {
-  log.log("error", "Unhandled rejection:", event.reason);
+  log.error("Unhandled rejection:", event.reason);
   event.preventDefault();
   shutdown("unhandledRejection").finally(() => Deno.exit(1));
 });
@@ -207,10 +211,10 @@ async function start_stdio_transport() {
   servers.push(srv);
   const transport = new StdioServerTransport();
   transport.onerror = (error: Error) => {
-    log.log("error", `STDIO transport error: ${error.message}`);
+    log.error(`STDIO transport error: ${error.message}`);
   };
   await srv.connect(transport);
-  log.debug(`Draw.io MCP Server STDIO transport active`);
+  log.info(`Draw.io MCP Server STDIO transport active`);
 }
 
 /** Active HTTP sessions — maps session ID → transport + server */
@@ -271,7 +275,7 @@ async function start_streamable_http_transport(http_port: number) {
             return await session.transport.handleRequest(c.req.raw);
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);
-            log.log("error", `HTTP request error [${sessionId.slice(-6)}]: ${errorMsg}`);
+            log.error(`HTTP request error [${sessionId.slice(-6)}]: ${errorMsg}`);
             throw error;
           }
         }
@@ -287,11 +291,11 @@ async function start_streamable_http_transport(http_port: number) {
         },
         onsessionclosed: (id: string) => {
           httpSessions.delete(id);
-          log.debug(`HTTP session closed: ${id.slice(-6)}`);
+          log.debug(`HTTP session closed : ${id.slice(-6)} (${httpSessions.size} active)`);
         },
       });
       transport.onerror = (error: Error) => {
-        log.log("error", `HTTP transport error: ${error.message}`);
+        log.error(`HTTP transport error: ${error.message}`);
       };
       const srv = createMcpServer();
       servers.push(srv);
@@ -303,7 +307,7 @@ async function start_streamable_http_transport(http_port: number) {
         response = await transport.handleRequest(c.req.raw);
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        log.log("error", `HTTP request error: ${errorMsg}`);
+        log.error(`HTTP request error: ${errorMsg}`);
         throw error; // Re-throw to let Hono handle the 500 response
       }
 
@@ -311,23 +315,23 @@ async function start_streamable_http_transport(http_port: number) {
       const newSessionId = c.req.raw.headers.get("mcp-session-id") ||
         response.headers.get("mcp-session-id");
       if (newSessionId && httpSessions.has(newSessionId)) {
-        log.debug(`HTTP session created: ${newSessionId.slice(-6)}`);
+        log.debug(`HTTP session created: ${newSessionId.slice(-6)} (${httpSessions.size} active)`);
       }
 
       return response;
     } catch (error) {
       // Unexpected errors at route level — log and return 500
       const errorMsg = error instanceof Error ? error.message : String(error);
-      log.log("error", `Unexpected error in /mcp route: ${errorMsg}`);
+      log.error(`Unexpected error in /mcp route: ${errorMsg}`);
       return c.json({ error: "Internal server error" }, 500);
     }
   });
 
   // Deno.serve replaces @hono/node-server — zero extra dependencies
   httpServer = Deno.serve({ port: http_port, onListen: () => {} }, app.fetch);
-  log.debug(`Draw.io MCP Server Streamable HTTP transport active`);
+  log.info(`Draw.io MCP Server Streamable HTTP transport active`);
   log.debug(`Health check: http://localhost:${http_port}/health`);
-  log.debug(`MCP endpoint: http://localhost:${http_port}/mcp`);
+  log.info(`MCP endpoint: http://localhost:${http_port}/mcp`);
 }
 
 async function main() {
@@ -346,13 +350,13 @@ async function main() {
 
   // Handle errors from configuration parsing
   if (configResult instanceof Error) {
-    log.log("error", configResult.message);
+    log.error(configResult.message);
     Deno.exit(1);
   }
 
   const config: ServerConfig = configResult;
 
-  log.debug(`Draw.io MCP Server v${VERSION} starting`);
+  log.info(`Draw.io MCP Server v${VERSION} starting`);
 
   // Log environment variables with aligned colons
   const envVars: [string, string | undefined][] = [
@@ -389,10 +393,11 @@ async function main() {
     await start_streamable_http_transport(config.httpPort);
   }
 
-  log.debug(`Draw.io MCP Server v${VERSION} is ready`);
+  log.info(`Draw.io MCP Server v${VERSION} is ready`);
+  log.info("-------------------------------------------");
 }
 
 main().catch((error) => {
-  log.debug("Fatal error in main():", error);
+  log.error("Fatal error in main():", error);
   Deno.exit(1);
 });

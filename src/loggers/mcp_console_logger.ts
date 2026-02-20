@@ -1,5 +1,7 @@
 export type Logger = {
-  log: (level: string, message?: any, ...data: any[]) => void;
+  error: (message?: any, ...data: any[]) => void;
+  warn: (message?: any, ...data: any[]) => void;
+  info: (message?: any, ...data: any[]) => void;
   debug: (message?: any, ...data: any[]) => void;
 };
 
@@ -7,25 +9,16 @@ function timestamp(): string {
   return new Date().toISOString();
 }
 
-/** Map log levels to emoji prefixes for console output. */
-const LEVEL_EMOJI: Record<string, string> = {
-  emergency: "\u274C",
-  alert: "\u274C",
-  critical: "\u274C",
-  error: "\u274C",
-  warning: "\u26A0\uFE0F",
-  notice: "\u26A0\uFE0F",
-};
+function write(level: string, message?: any, ...data: any[]): void {
+  const line = `${timestamp()}: ${level.padEnd(10)}: ${message}`;
+  data.length > 0 ? console.error(line, ...data) : console.error(line);
+}
 
 export function create_logger(): Logger {
   return {
-    log: (level, message, ...data) => {
-      const emoji = LEVEL_EMOJI[level?.toLowerCase()] ?? "";
-      const prefix = emoji ? `${emoji} ${level?.toUpperCase()}` : level?.toUpperCase();
-      return data.length > 0 ? console.error(`${timestamp()} ${prefix}: ${message}`, ...data) : console.error(`${timestamp()} ${prefix}: ${message}`);
-    },
-    debug: (message, ...data) => {
-      return data.length > 0 ? console.error(`${timestamp()} DEBUG: ${message}`, ...data) : console.error(`${timestamp()} DEBUG: ${message}`);
-    },
+    error: (message, ...data) => write("ERROR \u274C", message, ...data),
+    warn: (message, ...data) => write("WARNING \u26A0\uFE0F", message, ...data),
+    info: (message, ...data) => write("INFO", message, ...data),
+    debug: (message, ...data) => write("DEBUG", message, ...data),
   };
 }

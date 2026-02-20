@@ -56,7 +56,7 @@ function parseLibraryXml(xmlContent: string): AzureIconShape[] {
     // Extract JSON array from mxlibrary XML
     const match = xmlContent.match(/<mxlibrary\s*>\s*\[(.*)\]\s*<\/mxlibrary>/s);
     if (!match) {
-      log.log("warning", "No mxlibrary found in XML");
+      log.warn("No mxlibrary found in XML");
       return [];
     }
 
@@ -95,7 +95,7 @@ function parseLibraryXml(xmlContent: string): AzureIconShape[] {
       };
     });
   } catch (error) {
-    log.log("error", "Error parsing library XML:", error);
+    log.error("Error parsing library XML:", error);
     return [];
   }
 }
@@ -227,9 +227,9 @@ export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
   const filePath = libraryPath || possiblePaths.find((p) => fileExistsSync(p));
 
   if (!filePath || !fileExistsSync(filePath)) {
-    log.log("warning", "Azure icon library not found. Tried paths:", possiblePaths);
-    log.log("warning", `Current working directory: ${Deno.cwd()}`);
-    log.log("warning", `__dirname: ${__dirname}`);
+    log.warn("Azure icon library not found. Tried paths:", possiblePaths);
+    log.warn(`Current working directory: ${Deno.cwd()}`);
+    log.warn(`__dirname: ${__dirname}`);
     return {
       shapes: [],
       categories: new Map(),
@@ -268,7 +268,7 @@ export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
       indexByTitle,
     };
   } catch (error) {
-    log.log("error", `Error loading Azure icon library from ${filePath}:`, error);
+    log.error(`Error loading Azure icon library from ${filePath}:`, error);
     return {
       shapes: [],
       categories: new Map(),

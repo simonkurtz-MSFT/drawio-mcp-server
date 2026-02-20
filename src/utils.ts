@@ -110,7 +110,7 @@ export function devSaveDiagram(
     // Log error but do NOT fail the tool operation
     // Local file saves are strictly a dev convenience feature
     const errorMsg = error instanceof Error ? error.message : String(error);
-    log.log("error", `Failed to save diagram: ${errorMsg}`);
+    log.error(`Failed to save diagram: ${errorMsg}`);
     return null;
   }
 }

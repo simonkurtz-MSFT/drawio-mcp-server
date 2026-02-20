@@ -371,7 +371,7 @@ export function createHandlers(logger?: ToolLogger) {
       let savedPath: string | null = null;
       const result = withDiagramState(args, (diagram) => {
         const compressed = args?.compress ?? false;
-        const xml = diagram.toXml({ compress: compressed });
+        const xml = diagram.toXml({ compress: compressed, watermark: true });
         const stats = diagram.getStats();
 
         // ⚠️ DEV MODE ONLY — Save diagram to local file if SAVE_DIAGRAMS=true
@@ -411,7 +411,7 @@ export function createHandlers(logger?: ToolLogger) {
           if ("error" in importResult) {
             return errorResult(importResult.error);
           }
-          const xml = diagram.toXml({ compress });
+          const xml = diagram.toXml({ compress, watermark: true });
           const stats = diagram.getStats();
 
           // ⚠️ DEV MODE ONLY — Save diagram to local file if SAVE_DIAGRAMS=true
@@ -467,7 +467,7 @@ export function createHandlers(logger?: ToolLogger) {
 
         // Generate final XML with compression if requested
         // Note: We generate without transactional=true to get the real SVG images
-        const finalXml = diagram.toXml({ compress });
+        const finalXml = diagram.toXml({ compress, watermark: true });
         const stats = diagram.getStats();
 
         // ⚠️ DEV MODE ONLY — Save diagram to local file if SAVE_DIAGRAMS=true

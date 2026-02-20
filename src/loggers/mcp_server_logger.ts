@@ -115,11 +115,17 @@ export function create_logger(server: McpServer): Logger {
   });
 
   return {
-    log: (level, message, ...data) => {
-      sendLog(level as McpLogLevel, ".", { message, data });
+    error: (message, ...data) => {
+      sendLog("error", ".", { message, data });
+    },
+    warn: (message, ...data) => {
+      sendLog("warning", ".", { message, data });
+    },
+    info: (message, ...data) => {
+      sendLog("info", ".", { message, data });
     },
     debug: (message, ...data) => {
-      sendLog("debug" as McpLogLevel, ".", { message, data });
+      sendLog("debug", ".", { message, data });
     },
   };
 }
