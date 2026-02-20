@@ -4,6 +4,7 @@
  */
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { DEV_SAVED_PATH } from "./utils.ts";
 
 /**
  * Minimal logger interface for tool handler logging.
@@ -49,26 +50,95 @@ export function createToolHandlerFactory(handlerMap: ToolHandlerMap, log: ToolLo
       const extra = hasArgs ? params[1] : params[0];
       const args = hasArgs ? params[0] : {};
       const requestId = extra?.requestId;
+      const sessionId = extra?.sessionId;
+      const reqTag = `[req:${String(requestId ?? 0).padStart(5, "0")}]`;
+      const sesTag = sessionId ? ` [ses:${sessionId.slice(-6)}]` : "";
+      const txnTag = args?.transactional ? " (txn)" : "";
       const prefix = `[tool:${toolName}]`.padEnd(30);
-      //log.debug(`${timestamp()} ${prefix} called (req=${requestId})`, JSON.stringify(args));  // good for troubleshooting
-      log.debug(`${timestamp()} ${prefix} called (req=${requestId})`);
+      //log.debug(`${timestamp()}: ${reqTag} ${prefix} called`, JSON.stringify(args));  // good for troubleshooting
+      log.debug(`${timestamp()}: ${reqTag}${sesTag} ${prefix} called${txnTag}`);
 
       const handler = handlerMap[toolName];
       if (handler) {
         const start = Date.now();
-        const result = await handler(args);
+        let result: CallToolResult;
+        try {
+          result = await handler(args);
+        } catch (err) {
+          const duration = Date.now() - start;
+          const durationStr = `${duration} ms`.padStart(7);
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          log.debug(
+            `${timestamp()}: ${reqTag}${sesTag} ${prefix} uncaught error in ${durationStr}: ${errorMessage}`,
+          );
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                success: false,
+                error: {
+                  code: "INTERNAL_ERROR",
+                  message: errorMessage,
+                  suggestion:
+                    "This is an unexpected server error. Do not retry with the same parameters — the error is deterministic. Report the issue at https://github.com/simonkurtz-MSFT/drawio-mcp-server/issues",
+                },
+              }),
+            }],
+            isError: true,
+          };
+        }
         const duration = Date.now() - start;
         const isError = result.isError ?? false;
         // Measure payload from the already-serialized text content to avoid re-serializing
         const textContent = result.content?.[0];
         const payloadLength = textContent && "text" in textContent ? textContent.text.length : 0;
+
+        // Log placeholder resolution count when present (e.g. finish-diagram)
+        if (textContent && "text" in textContent) {
+          try {
+            const data = JSON.parse(textContent.text);
+            if (typeof data.resolved_count === "number") {
+              log.debug(
+                `${timestamp()}: ${reqTag}${sesTag} ${prefix} resolved ${data.resolved_count} ${data.resolved_count === 1 ? "placeholder" : "placeholders"}`,
+              );
+            }
+          } catch { /* not JSON — skip */ }
+        }
+
+        // Log dev-mode diagram save with the standard formatted prefix
+        const devSavedPath = (result as any)[DEV_SAVED_PATH];
+        if (devSavedPath) {
+          log.debug(
+            `${timestamp()}: ${reqTag}${sesTag} ${prefix} diagram saved to ${devSavedPath}`,
+          );
+          delete (result as any)[DEV_SAVED_PATH];
+        }
+
         const payloadSize = formatBytes(payloadLength);
-        log.debug(
-          `${timestamp()} ${prefix} ${isError ? "error" : "ok"} in ${duration}ms, ${payloadSize} (req=${requestId})`,
-        );
+        const durationStr = `${duration} ms`.padStart(7);
+        const sizeStr = payloadSize.padStart(10);
+
+        if (isError && textContent && "text" in textContent) {
+          try {
+            const data = JSON.parse(textContent.text);
+            const errorMsg = data.error?.message || data.error || "Unknown error";
+            log.debug(
+              `${timestamp()}: ${reqTag}${sesTag} ${prefix} error in ${durationStr}, ${sizeStr}: ${errorMsg}`,
+            );
+          } catch {
+            log.debug(
+              `${timestamp()}: ${reqTag}${sesTag} ${prefix} error in ${durationStr}, ${sizeStr}`,
+            );
+          }
+        } else {
+          log.debug(
+            `${timestamp()}: ${reqTag}${sesTag} ${prefix} ok in ${durationStr}, ${sizeStr}`,
+          );
+        }
+
         return result;
       }
-      log.debug(`${timestamp()} ${prefix} not found (req=${requestId})`);
+      log.debug(`${timestamp()}: ${reqTag}${sesTag} ${prefix} not found`);
       return {
         content: [{ type: "text" as const, text: JSON.stringify({ error: `Tool ${toolName} not available` }) }],
         isError: true,

@@ -11,20 +11,12 @@
 
 import { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { DiagramModel, StructuredError } from "./diagram_model.ts";
-import {
-  displayTitle,
-  getAzureCategories,
-  getAzureShapeByName,
-  getShapesInCategory,
-  searchAzureIcons,
-} from "./shapes/azure_icon_library.ts";
+import { displayTitle, getAzureCategories, getAzureShapeByName, getShapesInCategory, searchAzureIcons } from "./shapes/azure_icon_library.ts";
 import { BASIC_SHAPE_CATEGORIES, BASIC_SHAPES, getBasicShape } from "./shapes/basic_shapes.ts";
-import type { ToolLogger } from "./tool_handler.ts";
-import { formatBytes, timestamp } from "./tool_handler.ts";
-
-/** Shared TextEncoder for UTF-8 byte length calculations (replaces Node's Buffer.byteLength) */
-const textEncoder = new TextEncoder();
+import { findPlaceholdersInXml, resolvePlaceholdersInXml } from "./placeholder.ts";
+import { DEV_SAVED_PATH, devSaveDiagram } from "./utils.ts";
 const allBasicShapes = Object.values(BASIC_SHAPES);
+const allBasicShapesLower = allBasicShapes.map((s) => ({ ...s, nameLower: s.name.toLowerCase() }));
 const INTERNAL_SUCCESS_DATA = Symbol("internal_success_data");
 
 type InternalSuccessResult = CallToolResult & { [INTERNAL_SUCCESS_DATA]?: unknown };
@@ -152,7 +144,7 @@ function errorResult(error: StructuredError): CallToolResult {
   };
 }
 
-type StatefulArgs = { diagram_xml?: string; active_layer_id?: string };
+type StatefulArgs = { diagram_xml?: string; active_layer_id?: string; transactional?: boolean };
 
 function withDiagramState<T extends StatefulArgs>(
   args: T | undefined,
@@ -161,6 +153,7 @@ function withDiagramState<T extends StatefulArgs>(
 ): CallToolResult {
   const normalizedArgs: StatefulArgs = args ?? {};
   const diagram = new DiagramModel();
+  const transactional = normalizedArgs.transactional ?? false;
 
   if (normalizedArgs.diagram_xml) {
     const importResult = diagram.importXml(normalizedArgs.diagram_xml);
@@ -186,7 +179,7 @@ function withDiagramState<T extends StatefulArgs>(
     | Record<string, unknown>
     | undefined;
   if (dataFromInternal) {
-    const diagramXml = options?.readOnly ? (normalizedArgs.diagram_xml ?? diagram.toXml()) : diagram.toXml();
+    const diagramXml = options?.readOnly ? (normalizedArgs.diagram_xml ?? diagram.toXml({ transactional })) : diagram.toXml({ transactional });
 
     return {
       ...result,
@@ -202,37 +195,19 @@ function withDiagramState<T extends StatefulArgs>(
         }),
       }],
     };
+    // deno-coverage-ignore
   }
 
-  const content = result.content[0];
-  if (content.type !== "text") {
-    return result;
-  }
-
-  const parsed = JSON.parse(content.text) as { success: boolean; data?: Record<string, unknown> };
-  if (!parsed.success) {
-    return result;
-  }
-
-  const diagramXml = options?.readOnly ? (normalizedArgs.diagram_xml ?? diagram.toXml()) : diagram.toXml();
-
-  return {
-    ...result,
-    content: [{
-      type: "text",
-      text: JSON.stringify({
-        ...parsed,
-        data: {
-          ...(parsed.data ?? {}),
-          diagram_xml: diagramXml,
-          active_layer_id: diagram.getActiveLayer().id,
-        },
-      }),
-    }],
-  };
+  // deno-coverage-ignore
+  return result;
 }
 
-export function createHandlers(log: ToolLogger) {
+export interface ToolLogger {
+  debug: (...args: any[]) => void;
+}
+
+export function createHandlers(logger?: ToolLogger) {
+  const log = logger || { debug: () => {} };
   return {
     "delete-cell-by-id": (args: {
       diagram_xml?: string;
@@ -257,38 +232,7 @@ export function createHandlers(log: ToolLogger) {
       });
     },
 
-    "delete-edge": (args: {
-      diagram_xml?: string;
-      cell_id: string;
-    }): CallToolResult => {
-      return withDiagramState(args, (diagram) => {
-        const cell = diagram.getCell(args.cell_id);
-        if (!cell) {
-          return errorResult({
-            code: "CELL_NOT_FOUND",
-            message: `Edge '${args.cell_id}' not found`,
-            cell_id: args.cell_id,
-            suggestion: "Use list-paged-model with filter {cell_type: 'edge'} to see available edges",
-          });
-        }
-        if (cell.type !== "edge") {
-          return errorResult({
-            code: "NOT_AN_EDGE",
-            message: `Cell '${args.cell_id}' is a ${cell.type}, not an edge`,
-            cell_id: args.cell_id,
-            suggestion: "Use delete-cell-by-id to delete vertices",
-          });
-        }
-        diagram.deleteCell(args.cell_id);
-        const stats = diagram.getStats();
-        return successResult({
-          deleted: args.cell_id,
-          remaining: { total_cells: stats.total_cells, vertices: stats.vertices, edges: stats.edges },
-        });
-      });
-    },
-
-    "edit-edge": (args: {
+    "edit-edges": (args: {
       diagram_xml?: string;
       edges: Array<{
         cell_id: string;
@@ -305,12 +249,38 @@ export function createHandlers(log: ToolLogger) {
         });
       }
       return withDiagramState(args, (diagram) => {
-        const results = diagram.batchEditEdges(args.edges);
-        const successCount = results.reduce((n, r) => n + (r.success ? 1 : 0), 0);
-        const errorCount = results.length - successCount;
+        // Strip caller-provided edge anchor properties so the server's
+        // symmetric anchor calculation always runs
+        const sanitized = args.edges.map((e) => {
+          if (e.style) {
+            return {
+              ...e,
+              style: e.style.replace(
+                /\b(exit[XY]|entry[XY]|exitD[xy]|entryD[xy])=[^;]*;?/gi,
+                "",
+              ),
+            };
+          }
+          return e;
+        });
+        const results = diagram.batchEditEdges(sanitized);
+
+        // Validate edge conventions and attach warnings to successful results
+        const enrichedResults = results.map((r) => {
+          if (r.success && r.cell?.id) {
+            const warnings = diagram.validateEdgeConventions(r.cell.id);
+            if (warnings.length > 0) {
+              return { ...r, warnings };
+            }
+          }
+          return r;
+        });
+
+        const successCount = enrichedResults.reduce((n, r) => n + (r.success ? 1 : 0), 0);
+        const errorCount = enrichedResults.length - successCount;
         return successResult({
-          summary: { total: results.length, succeeded: successCount, failed: errorCount },
-          results,
+          summary: { total: enrichedResults.length, succeeded: successCount, failed: errorCount },
+          results: enrichedResults,
         });
       });
     },
@@ -360,14 +330,6 @@ export function createHandlers(log: ToolLogger) {
       }, { readOnly: true });
     },
 
-    "get-active-layer": (args: {
-      diagram_xml?: string;
-    }): CallToolResult => {
-      return withDiagramState(args, (diagram) => {
-        return successResult({ layer: diagram.getActiveLayer() });
-      }, { readOnly: true });
-    },
-
     "set-active-layer": (args: {
       diagram_xml?: string;
       layer_id: string;
@@ -406,25 +368,146 @@ export function createHandlers(log: ToolLogger) {
     },
 
     "export-diagram": (args: { diagram_xml?: string; compress?: boolean }): CallToolResult => {
-      return withDiagramState(args, (diagram) => {
+      let savedPath: string | null = null;
+      const result = withDiagramState(args, (diagram) => {
         const compressed = args?.compress ?? false;
-        const xml = diagram.toXml({ compress: compressed });
+        const xml = diagram.toXml({ compress: compressed, watermark: true });
         const stats = diagram.getStats();
 
-        if (compressed) {
-          const compressedSize = textEncoder.encode(xml).length;
-          const prefix = "[tool:export-diagram]".padEnd(30);
-          log.debug(`${timestamp()} ${prefix} compressed size: ${formatBytes(compressedSize)}`);
-        }
+        // ⚠️ DEV MODE ONLY — Save diagram to local file if SAVE_DIAGRAMS=true
+        savedPath = devSaveDiagram(xml, "export-diagram");
 
         return successResult({
           xml,
           stats,
-          compression: compressed
-            ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" }
-            : { enabled: false },
+          compression: compressed ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" } : { enabled: false },
         });
       }, { readOnly: true });
+      if (savedPath) (result as any)[DEV_SAVED_PATH] = savedPath;
+      return result;
+    },
+
+    "finish-diagram": (args: { diagram_xml?: string; compress?: boolean }): CallToolResult => {
+      // finish-diagram replaces placeholder cells (marked with placeholder=1) with real SVG icon data
+      // and optionally compresses the final XML. It does NOT use withDiagramState because it
+      // works directly with XML to resolve placeholders created during transactional operations.
+      if (!args?.diagram_xml) {
+        return errorResult({
+          code: "INVALID_INPUT",
+          message: "diagram_xml is required for finish-diagram",
+        });
+      }
+
+      try {
+        const compress = args.compress ?? true;
+
+        // Find all placeholders in the XML
+        const placeholders = findPlaceholdersInXml(args.diagram_xml);
+
+        if (placeholders.length === 0) {
+          // No placeholders - just return the XML as-is, optionally compressed
+          const diagram = new DiagramModel();
+          const importResult = diagram.importXml(args.diagram_xml);
+          if ("error" in importResult) {
+            return errorResult(importResult.error);
+          }
+          const xml = diagram.toXml({ compress, watermark: true });
+          const stats = diagram.getStats();
+
+          // ⚠️ DEV MODE ONLY — Save diagram to local file if SAVE_DIAGRAMS=true
+          const savedPath = devSaveDiagram(xml, "finish-diagram");
+
+          const result = successResult({
+            message: "No placeholders found - diagram already complete",
+            xml,
+            stats,
+            resolved_count: 0,
+            compression: compress ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" } : { enabled: false },
+          });
+          // deno-coverage-ignore
+          if (savedPath) (result as any)[DEV_SAVED_PATH] = savedPath;
+          return result;
+        }
+
+        // Resolve placeholders to real shapes
+        const shapeResolver = (shapeName: string, _placeholderId: string) => {
+          const resolved = resolveShape(shapeName);
+          if (resolved) {
+            return {
+              style: resolved.style,
+              source: resolved.source,
+            };
+          }
+          return null;
+        };
+
+        const resolutionResult = resolvePlaceholdersInXml(args.diagram_xml, shapeResolver);
+
+        // Check if resolution failed (has error property)
+        if ("xml" in resolutionResult === false) {
+          // deno-coverage-ignore
+          const detailsMsg = resolutionResult.details && resolutionResult.details.length > 0
+            // deno-coverage-ignore
+            ? `Could not resolve placeholders: ${
+              // deno-coverage-ignore
+              resolutionResult.details
+                // deno-coverage-ignore
+                .map((d: { placeholderId: string; shapeName: string }) => `"${d.shapeName}"`)
+                // deno-coverage-ignore
+                .join(", ")
+              // deno-coverage-ignore
+            }`
+            // deno-coverage-ignore
+            : undefined;
+          return errorResult({
+            code: "PLACEHOLDER_RESOLUTION_FAILED",
+            message: resolutionResult.error,
+            suggestion: detailsMsg,
+          });
+        }
+
+        // Load the resolved XML and prepare final output
+        const diagram = new DiagramModel();
+        const importResult = diagram.importXml(resolutionResult.xml);
+        // deno-coverage-ignore
+        if ("error" in importResult) {
+          // deno-coverage-ignore
+          return errorResult(importResult.error);
+          // deno-coverage-ignore
+        }
+
+        // Generate final XML with compression if requested
+        // Note: We generate without transactional=true to get the real SVG images
+        const finalXml = diagram.toXml({ compress, watermark: true });
+        const stats = diagram.getStats();
+
+        // ⚠️ DEV MODE ONLY — Save diagram to local file if SAVE_DIAGRAMS=true
+        const savedPath = devSaveDiagram(finalXml, "finish-diagram");
+
+        const result = successResult({
+          message: `Resolved ${placeholders.length} ${placeholders.length === 1 ? "placeholder" : "placeholders"} to real shapes`,
+          xml: finalXml,
+          stats,
+          resolved_count: placeholders.length,
+          compression: compress ? { enabled: true, algorithm: "deflate-raw", encoding: "base64" } : { enabled: false },
+        });
+        // deno-coverage-ignore
+        if (savedPath) (result as any)[DEV_SAVED_PATH] = savedPath;
+        return result;
+        // deno-coverage-ignore
+      } catch (err) {
+        // deno-coverage-ignore
+        log.debug(`[finish-diagram] Caught error: ${err instanceof Error ? err.message : String(err)}`);
+        // deno-coverage-ignore
+        return errorResult({
+          // deno-coverage-ignore
+          code: "FINISH_DIAGRAM_ERROR",
+          // deno-coverage-ignore
+          message: err instanceof Error ? err.message : "Unknown error during diagram finishing",
+          // deno-coverage-ignore
+        });
+        // deno-coverage-ignore
+      }
     },
 
     "get-diagram-stats": (args: {
@@ -454,7 +537,7 @@ export function createHandlers(log: ToolLogger) {
         y?: number;
         width?: number;
         height?: number;
-        text?: string;
+        text: string;
         style?: string;
         temp_id?: string;
       }>;
@@ -517,6 +600,8 @@ export function createHandlers(log: ToolLogger) {
             cell_id: r.cellId,
             group_id: r.groupId,
             ...(r.cell && { cell: r.cell }),
+            // deno-coverage-ignore
+            ...(r.warnings && { warnings: r.warnings }),
             ...(r.error && { error: r.error }),
           })),
         });
@@ -549,6 +634,77 @@ export function createHandlers(log: ToolLogger) {
       }, { readOnly: true });
     },
 
+    "validate-group-containment": (args: {
+      diagram_xml?: string;
+      group_id: string;
+    }): CallToolResult => {
+      return withDiagramState(args, (diagram) => {
+        const result = diagram.validateGroupContainment(args.group_id);
+        if ("error" in result) {
+          return errorResult(result.error);
+        }
+        return successResult({
+          group: result.group,
+          summary: {
+            total_children: result.totalChildren,
+            in_bounds_children: result.inBoundsChildren,
+            out_of_bounds_children: result.outOfBoundsChildren,
+          },
+          warnings: result.warnings,
+        });
+      }, { readOnly: true });
+    },
+
+    "suggest-group-sizing": (args: {
+      child_count: number;
+      child_width?: number;
+      child_height?: number;
+      vertical_spacing?: number;
+      horizontal_padding?: number;
+      vertical_padding?: number;
+      min_width?: number;
+      min_height?: number;
+    }): CallToolResult => {
+      const childCount = args.child_count;
+      const childWidth = args.child_width ?? 48;
+      const childHeight = args.child_height ?? 48;
+      const verticalSpacing = args.vertical_spacing ?? 40;
+      const horizontalPadding = args.horizontal_padding ?? 40;
+      const verticalPadding = args.vertical_padding ?? 40;
+      const minWidth = args.min_width ?? 180;
+      const minHeight = args.min_height ?? 120;
+
+      const stackedChildrenHeight = childCount * childHeight;
+      const spacingHeight = Math.max(0, childCount - 1) * verticalSpacing;
+      const contentHeight = stackedChildrenHeight + spacingHeight;
+      const rawWidth = childWidth + horizontalPadding * 2;
+      const rawHeight = contentHeight + verticalPadding * 2;
+
+      const recommendedWidth = Math.max(minWidth, Math.ceil(rawWidth));
+      const recommendedHeight = Math.max(minHeight, Math.ceil(rawHeight));
+
+      return successResult({
+        inputs: {
+          child_count: childCount,
+          child_width: childWidth,
+          child_height: childHeight,
+          vertical_spacing: verticalSpacing,
+          horizontal_padding: horizontalPadding,
+          vertical_padding: verticalPadding,
+          min_width: minWidth,
+          min_height: minHeight,
+        },
+        recommended: {
+          width: recommendedWidth,
+          height: recommendedHeight,
+        },
+        formula: {
+          width: "max(min_width, child_width + 2*horizontal_padding)",
+          height: "max(min_height, label_height + (child_count*child_height) + ((child_count-1)*vertical_spacing) + 2*vertical_padding)",
+        },
+      });
+    },
+
     // ─── Import Handler ─────────────────────────────────────────────
 
     "import-diagram": (args: {
@@ -579,8 +735,7 @@ export function createHandlers(log: ToolLogger) {
 
       return successResult({
         categories: [...basicCategories, ...azureCategories],
-        info:
-          "Includes basic shapes and 700+ Azure architecture icons from dwarfered/azure-architecture-icons-for-drawio.",
+        info: "Includes basic shapes and 700+ Azure architecture icons from dwarfered/azure-architecture-icons-for-drawio.",
       });
     },
 
@@ -623,101 +778,6 @@ export function createHandlers(log: ToolLogger) {
         code: "CATEGORY_NOT_FOUND",
         message: `Category '${args.category_id}' not found`,
         suggestion: "Use get-shape-categories to list available categories",
-      });
-    },
-
-    "get-shape-by-name": (args: {
-      shape_name: string;
-    }): CallToolResult => {
-      const resolved = resolveShape(args.shape_name);
-      if (resolved) {
-        return successResult({
-          shape: {
-            name: resolved.name,
-            style: resolved.style,
-            width: resolved.width,
-            height: resolved.height,
-            source: resolved.source,
-            ...(resolved.score !== undefined && { confidence: parseFloat(resolved.score.toFixed(3)) }),
-          },
-        });
-      }
-      return errorResult({
-        code: "SHAPE_NOT_FOUND",
-        message: `Shape '${args.shape_name}' not found`,
-        suggestion: "Use search-shapes to find available shapes",
-      });
-    },
-
-    "add-cells-of-shape": (args: {
-      diagram_xml?: string;
-      cells: Array<{
-        shape_name: string;
-        x?: number;
-        y?: number;
-        width?: number;
-        height?: number;
-        text?: string;
-        style?: string;
-        temp_id?: string;
-      }>;
-    }): CallToolResult => {
-      if (!args.cells || args.cells.length === 0) {
-        return errorResult({
-          code: "INVALID_INPUT",
-          message: "Must provide a non-empty 'cells' array",
-        });
-      }
-
-      return withDiagramState(args, (diagram) => {
-        const results = args.cells.map((item) => {
-          const resolved = resolveShape(item.shape_name);
-          if (!resolved) {
-            return {
-              success: false,
-              temp_id: item.temp_id,
-              shape_name: item.shape_name,
-              error: {
-                code: "SHAPE_NOT_FOUND",
-                message: `Unknown shape '${item.shape_name}'`,
-                suggestion: "Use search-shapes to find available shapes",
-              },
-            };
-          }
-
-          const cell = diagram.addRectangle({
-            x: item.x,
-            y: item.y,
-            width: item.width ?? resolved.width,
-            height: item.height ?? resolved.height,
-            text: item.text ?? (resolved.source !== "basic" ? resolved.name : undefined),
-            style: item.style ?? resolved.style,
-          });
-
-          return {
-            success: true,
-            cell,
-            temp_id: item.temp_id,
-            ...(resolved.source === "azure-exact" && { info: `Added Azure icon: ${resolved.name}` }),
-            ...(resolved.source === "azure-fuzzy" && {
-              info: `Added Azure icon (matched from search): ${resolved.name}`,
-              confidence: parseFloat(resolved.score!.toFixed(3)),
-            }),
-          };
-        });
-
-        const successCount = results.reduce((n, r) => n + (r.success ? 1 : 0), 0);
-        const errorCount = results.length - successCount;
-
-        return successResult({
-          success: errorCount === 0,
-          summary: {
-            total: results.length,
-            succeeded: successCount,
-            failed: errorCount,
-          },
-          results,
-        });
       });
     },
 
@@ -795,29 +855,155 @@ export function createHandlers(log: ToolLogger) {
         height?: number;
         text?: string;
         style?: string;
+        shape_name?: string;
         source_id?: string;
         target_id?: string;
         temp_id?: string;
       }>;
       dry_run?: boolean;
+      transactional?: boolean;
     }): CallToolResult => {
       return withDiagramState(args, (diagram) => {
-        const items = args.cells.map((c) => ({
-          type: c.type,
-          x: c.x,
-          y: c.y,
-          width: c.width,
-          height: c.height,
-          text: c.text,
-          style: c.style,
-          sourceId: c.source_id,
-          targetId: c.target_id,
-          tempId: c.temp_id,
-        }));
-        const results = diagram.batchAddCells(items, { dryRun: args.dry_run });
-        const successCount = results.reduce((n, r) => n + (r.success ? 1 : 0), 0);
+        // Pre-resolve shapes and track per-cell metadata
+        const resolvedMap = new Map<number, NonNullable<ReturnType<typeof resolveShape>>>();
+        const failedMap = new Map<number, object>();
+        const batchItems: Array<{
+          type: "vertex" | "edge";
+          x?: number;
+          y?: number;
+          width?: number;
+          height?: number;
+          text?: string;
+          style?: string;
+          sourceId?: string;
+          targetId?: string;
+          tempId?: string;
+        }> = [];
+        const batchToInput: number[] = [];
+        // In transactional mode, vertex temp_ids are replaced with placeholder IDs.
+        // This map lets edges resolve their source_id/target_id references to the new IDs.
+        const placeholderIdMap = new Map<string, string>();
+
+        for (let i = 0; i < args.cells.length; i++) {
+          const c = args.cells[i];
+          let style = c.style;
+          let width = c.width;
+          let height = c.height;
+          let text = c.text;
+          let cellId = c.temp_id; // Preserve temp_id for batch cross-references
+
+          if (c.type === "vertex" && c.shape_name) {
+            const resolved = resolveShape(c.shape_name);
+            if (!resolved) {
+              failedMap.set(i, {
+                success: false,
+                tempId: c.temp_id,
+                shape_name: c.shape_name,
+                error: {
+                  code: "SHAPE_NOT_FOUND",
+                  message: `Unknown shape '${c.shape_name}'`,
+                  suggestion: "Use search-shapes to find available shapes",
+                },
+              });
+              continue;
+            }
+            resolvedMap.set(i, resolved);
+            // In transactional mode, use minimal placeholder style to save bandwidth
+            // Otherwise, use the full resolved style with image data
+            if (args.transactional) {
+              // Minimal placeholder: just a simple box with border + placeholder marker
+              style = "fillColor=#d4d4d4;strokeColor=#999999;placeholder=1";
+              // Use placeholder ID format so finish-diagram can extract shape name
+              // Format: placeholder-{hyphenated-shape-name}-{uuid-suffix}
+              const hyphenatedName = c.shape_name.toLowerCase().replace(/\s+/g, "-");
+              const uuid = crypto.randomUUID().split("-")[0];
+              cellId = `placeholder-${hyphenatedName}-${uuid}`;
+              // Track mapping so edges can resolve original temp_id → placeholder ID
+              if (c.temp_id) {
+                placeholderIdMap.set(c.temp_id, cellId);
+              }
+            } else {
+              style = resolved.style;
+            }
+            // ALWAYS use resolved dimensions when shape_name is specified
+            // This ensures placeholders have exact final dimensions (critical in transactional mode)
+            // and icons maintain correct aspect ratios
+            width = resolved.width;
+            height = resolved.height;
+            // For non-basic shapes: fall back to the shape's display name when text is
+            // missing, empty, or whitespace-only.  The ?? operator alone doesn't
+            // catch "" which callers sometimes send unintentionally.
+            if (!text?.trim() && resolved.source !== "basic") {
+              text = resolved.name;
+            }
+          }
+
+          // Strip caller-provided edge anchor properties so the server's
+          // symmetric anchor calculation always runs (withSymmetricEdgeAnchors
+          // skips edges that already have explicit anchors).
+          if (c.type === "edge" && style) {
+            style = style.replace(
+              /\b(exit[XY]|entry[XY]|exitD[xy]|entryD[xy])=[^;]*;?/gi,
+              "",
+            );
+          }
+
+          batchToInput.push(i);
+          batchItems.push({
+            type: c.type,
+            x: c.x,
+            y: c.y,
+            width,
+            height,
+            text,
+            style,
+            sourceId: placeholderIdMap.get(c.source_id!) ?? c.source_id,
+            targetId: placeholderIdMap.get(c.target_id!) ?? c.target_id,
+            tempId: cellId,
+          });
+        }
+
+        const batchResults = diagram.batchAddCells(batchItems, { dryRun: args.dry_run });
+
+        // Reassemble results in original input order, enriching with shape metadata
+        const results: object[] = new Array(args.cells.length);
+        for (const [i, failure] of failedMap) {
+          results[i] = failure;
+        }
+        for (let j = 0; j < batchResults.length; j++) {
+          const origIdx = batchToInput[j];
+          const resolved = resolvedMap.get(origIdx);
+          if (resolved && batchResults[j].success) {
+            results[origIdx] = {
+              ...batchResults[j],
+              ...(resolved.source === "azure-exact" && { info: `Added Azure icon: ${resolved.name}` }),
+              ...(resolved.source === "azure-fuzzy" && {
+                info: `Added Azure icon (matched from search): ${resolved.name}`,
+                confidence: parseFloat(resolved.score!.toFixed(3)),
+              }),
+            };
+          } else {
+            results[origIdx] = batchResults[j];
+          }
+        }
+
+        // Validate edge conventions and attach warnings to successful edge results
+        for (let j = 0; j < batchResults.length; j++) {
+          const origIdx = batchToInput[j];
+          const result = results[origIdx] as Record<string, unknown>;
+          const cell = result.cell as { type?: string; id?: string } | undefined;
+          if (result.success && cell?.type === "edge" && cell.id) {
+            const warnings = diagram.validateEdgeConventions(cell.id);
+            if (warnings.length > 0) {
+              results[origIdx] = { ...result, warnings };
+            }
+          }
+        }
+
+        const successCount = results.reduce((n, r: any) => n + (r.success ? 1 : 0), 0);
         const errorCount = results.length - successCount;
         return successResult({
+          success: errorCount === 0,
           summary: { total: results.length, succeeded: successCount, failed: errorCount },
           results,
           dry_run: args.dry_run ?? false,
@@ -897,15 +1083,15 @@ export function createHandlers(log: ToolLogger) {
       const results = args.queries.map((q) => {
         // Check basic shapes first (exact, case-insensitive)
         const qLower = q.toLowerCase();
-        const basicMatches = allBasicShapes
-          .filter((s) => s.name.toLowerCase().includes(qLower))
+        const basicMatches = allBasicShapesLower
+          .filter((s) => s.nameLower.includes(qLower))
           .map((s) => ({
             name: s.name,
             id: s.name,
             category: "basic",
             width: s.defaultWidth,
             height: s.defaultHeight,
-            confidence: s.name.toLowerCase() === qLower ? 1.0 : 0.8,
+            confidence: s.nameLower === qLower ? 1.0 : 0.8,
           }));
 
         // Then search Azure icons
@@ -936,5 +1122,16 @@ export function createHandlers(log: ToolLogger) {
   };
 }
 
-/** Default handlers instance with a no-op logger, for backward compatibility in tests. */
-export const handlers = createHandlers({ debug: () => {} });
+/** Default handlers instance for backward compatibility in tests. */
+export const handlers = createHandlers();
+
+/**
+ * Run a throwaway search-shapes handler call to JIT-compile the full
+ * handler path (basic shape filtering, displayTitle mapping, score
+ * formatting, JSON serialization).  Call once at startup after
+ * initializeShapes() so the first real search-shapes call doesn't
+ * pay ~15ms of compilation overhead.
+ */
+export function warmupSearchPath(): void {
+  handlers["search-shapes"]({ queries: ["rectangle", "front door"] });
+}

@@ -6,6 +6,8 @@ build/
 
 # Test coverage
 coverage/
+coverage_lcov.txt
+coverage_detail.txt
 
 # Logs
 *.log
@@ -24,3 +26,9 @@ coverage/
 
 # OS files
 *.tgz
+
+# Draw.io files (possibly created during testing or development)
+*.drawio
+
+# DEV MODE ONLY — Auto-saved diagrams from export-diagram/finish-diagram
+diagrams/

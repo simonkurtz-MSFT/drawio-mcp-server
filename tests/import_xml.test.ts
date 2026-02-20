@@ -345,6 +345,31 @@ describe("DiagramModel importXml", () => {
         assertEquals(result.error.code, "INVALID_XML");
       }
     });
+
+    it("should return DECOMPRESS_FAILED for invalid base64 in diagram text node", () => {
+      const xml = `<mxfile><diagram id="p1" name="Page 1">not-valid-base64!!!</diagram></mxfile>`;
+      const result = model.importXml(xml);
+      assertEquals("error" in result, true);
+      if ("error" in result) {
+        assertEquals(result.error.code, "DECOMPRESS_FAILED");
+      }
+    });
+  });
+
+  describe("CDATA wrapper handling", () => {
+    it("should strip CDATA wrapper and import successfully", () => {
+      const innerXml =
+        `<mxfile><diagram id="p1" name="Page 1"><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="CDATA Cell" style="" vertex="1" parent="1"><mxGeometry x="10" y="10" width="100" height="50" as="geometry"/></mxCell></root></mxGraphModel></diagram></mxfile>`;
+      const xml = `<![CDATA[${innerXml}]]>`;
+      const result = model.importXml(xml);
+      assertEquals("error" in result, false);
+      if (!("error" in result)) {
+        assertEquals(result.cells, 1);
+      }
+      const cells = model.listCells();
+      assertEquals(cells.length, 1);
+      assertEquals(cells[0].value, "CDATA Cell");
+    });
   });
 
   describe("import replaces existing state", () => {

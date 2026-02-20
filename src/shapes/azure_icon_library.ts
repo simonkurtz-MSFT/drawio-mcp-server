@@ -9,7 +9,11 @@
 import { join } from "@std/path";
 // @deno-types="npm:@types/fuzzy-search@2.1.5"
 import FuzzySearch from "fuzzy-search";
+
+import { create_logger } from "../loggers/mcp_console_logger.ts";
 import { esmDirname } from "../utils.ts";
+
+const log = create_logger();
 
 // ESM __dirname via shared utility
 const __dirname = esmDirname(import.meta.url);
@@ -52,7 +56,7 @@ function parseLibraryXml(xmlContent: string): AzureIconShape[] {
     // Extract JSON array from mxlibrary XML
     const match = xmlContent.match(/<mxlibrary\s*>\s*\[(.*)\]\s*<\/mxlibrary>/s);
     if (!match) {
-      console.warn("No mxlibrary found in XML");
+      log.warn("No mxlibrary found in XML");
       return [];
     }
 
@@ -91,7 +95,7 @@ function parseLibraryXml(xmlContent: string): AzureIconShape[] {
       };
     });
   } catch (error) {
-    console.error("Error parsing library XML:", error);
+    log.error("Error parsing library XML:", error);
     return [];
   }
 }
@@ -109,8 +113,7 @@ function extractStyle(xml: string): string | undefined {
     const imageData = match[1];
     // Build a style string that includes the image as a data URL
     // with proper escaping for use in Draw.io
-    const style =
-      `shape=image;verticalLabelPosition=bottom;verticalAlign=top;imageAspect=0;aspect=fixed;image=${imageData}`;
+    const style = `shape=image;verticalLabelPosition=bottom;verticalAlign=top;imageAspect=0;aspect=fixed;image=${imageData}`;
     return style;
   }
   return undefined;
@@ -160,11 +163,9 @@ const CATEGORY_KEYWORDS: Readonly<Record<string, RegExp>> = {
   "SAP on Azure": /^(azure center for sap|central service instance|virtual instance for sap|azure monitors? for sap)/i,
   Security:
     /^(security|key vault|keys$|ssh key|sentinel|azure sentinel|defender(?! (cm|dcs|distribut|engineering|external|freezer|hmi|historian|industrial|marquee|meter|plc|pneumatic|programable|rtu|relay|robot|sensor|slot|web guiding))|microsoft defender|confidential|detonation|customer lockbox|azure information protection|azure(?: )?attestation|extended.?security|application security)/i,
-  Storage:
-    /^(storage|blob|file share|managed file|azure fileshare|azure netapp|data box|azure databox|disk pool|elastic san|edge storage|azure hcp cache|table$|capacity$)/i,
+  Storage: /^(storage|blob|file share|managed file|azure fileshare|azure netapp|data box|azure databox|disk pool|elastic san|edge storage|azure hcp cache|table$|capacity$)/i,
   "Virtual Desktop": /^(azure virtual desktop|virtual visits|virtual enclaves|application group)/i,
-  Web:
-    /^(web |app service|static app|function app|app space|web app|web job|web slot|web test|website|universal print|windows10|windows notification)/i,
+  Web: /^(web |app service|static app|function app|app space|web app|web job|web slot|web test|website|universal print|windows10|windows notification)/i,
   "Maps + Spatial": /^(azure maps)/i,
   "Azure HPC": /^(azure hpc)/i,
 };
@@ -226,9 +227,9 @@ export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
   const filePath = libraryPath || possiblePaths.find((p) => fileExistsSync(p));
 
   if (!filePath || !fileExistsSync(filePath)) {
-    console.warn(`Azure icon library not found. Tried paths:`, possiblePaths);
-    console.warn(`Current working directory: ${Deno.cwd()}`);
-    console.warn(`__dirname: ${__dirname}`);
+    log.warn("Azure icon library not found. Tried paths:", possiblePaths);
+    log.warn(`Current working directory: ${Deno.cwd()}`);
+    log.warn(`__dirname: ${__dirname}`);
     return {
       shapes: [],
       categories: new Map(),
@@ -236,7 +237,7 @@ export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
     };
   }
 
-  console.log(`Loading Azure icon library from: ${filePath}`);
+  log.debug(`Loading Azure icon library from: ${filePath}`);
 
   try {
     const content = Deno.readTextFileSync(filePath);
@@ -267,7 +268,7 @@ export function loadAzureIconLibrary(libraryPath?: string): AzureIconLibrary {
       indexByTitle,
     };
   } catch (error) {
-    console.error(`Error loading Azure icon library from ${filePath}:`, error);
+    log.error(`Error loading Azure icon library from ${filePath}:`, error);
     return {
       shapes: [],
       categories: new Map(),
@@ -426,7 +427,9 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
 
   // ── Azure Monitor ──────────────────────────────────────────────────────
   ["azure monitor", ["02488-icon-service-azure-monitor-dashboard"]],
-
+  // ── Azure Policy ───────────────────────────────────────────────────
+  // Icon title is just "Policy"; common name "Azure Policy" misses exact match
+  ["azure policy", ["10316-icon-service-policy"]],
   // ── Front Doors / CDN ──────────────────────────────────────────────────
   ["front doors", ["10073-icon-service-front-door-and-cdn-profiles"]],
   ["front door", ["10073-icon-service-front-door-and-cdn-profiles"]],
@@ -475,6 +478,60 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
   // ── ExpressRoute ───────────────────────────────────────────────────────
   ["expressroute", ["10079-icon-service-expressroute-circuits"]],
   ["express route", ["10079-icon-service-expressroute-circuits"]],
+
+  // ── NAT Gateway ────────────────────────────────────────────────────────
+  // Icon is titled "NAT"; "NAT Gateway" fuzzy-matches On-Premises Data Gateways
+  ["nat gateway", ["10310-icon-service-nat"]],
+  ["nat gateways", ["10310-icon-service-nat"]],
+  ["azure nat gateway", ["10310-icon-service-nat"]],
+
+  // ── Web Application Firewall (WAF) ────────────────────────────────────
+  // "WAF" fuzzy-matches Power Platform instead of WAF Policies
+  ["waf", ["10362-icon-service-web-application-firewall-policies-waf"]],
+  ["web application firewall", ["10362-icon-service-web-application-firewall-policies-waf"]],
+  ["azure waf", ["10362-icon-service-web-application-firewall-policies-waf"]],
+
+  // ── Data Factory ───────────────────────────────────────────────────────
+  // Singular "Data Factory" doesn't match the plural-titled "Data-Factories"
+  ["data factory", ["10126-icon-service-data-factories"]],
+  ["data factories", ["10126-icon-service-data-factories"]],
+  ["adf", ["10126-icon-service-data-factories"]],
+  ["azure data factory", ["10126-icon-service-data-factories"]],
+
+  // ── Microsoft Defender for Cloud ───────────────────────────────────────
+  ["defender for cloud", ["10241-icon-service-microsoft-defender-for-cloud"]],
+  ["microsoft defender for cloud", ["10241-icon-service-microsoft-defender-for-cloud"]],
+  ["azure defender", ["10241-icon-service-microsoft-defender-for-cloud"]],
+
+  // ── Private Endpoints ──────────────────────────────────────────────────
+  ["private endpoint", ["02579-icon-service-private-endpoints"]],
+  ["private endpoints", ["02579-icon-service-private-endpoints"]],
+  ["azure private endpoint", ["02579-icon-service-private-endpoints"]],
+
+  // ── Virtual Network Gateway / VPN Gateway ──────────────────────────────
+  // "VPN Gateway" returns no fuzzy match; icon is titled "Virtual-Network-Gateways"
+  ["vpn gateway", ["10063-icon-service-virtual-network-gateways"]],
+  ["vpn gateways", ["10063-icon-service-virtual-network-gateways"]],
+  ["virtual network gateway", ["10063-icon-service-virtual-network-gateways"]],
+  ["virtual network gateways", ["10063-icon-service-virtual-network-gateways"]],
+  ["vnet gateway", ["10063-icon-service-virtual-network-gateways"]],
+
+  // ── Azure Managed Grafana ──────────────────────────────────────────────
+  ["grafana", ["02905-icon-service-azure-managed-grafana"]],
+  ["managed grafana", ["02905-icon-service-azure-managed-grafana"]],
+  ["azure managed grafana", ["02905-icon-service-azure-managed-grafana"]],
+  ["azure grafana", ["02905-icon-service-azure-managed-grafana"]],
+
+  // ── Recovery Services / Azure Backup ───────────────────────────────────
+  ["azure backup", ["00017-icon-service-recovery-services-vaults"]],
+  ["backup", ["00017-icon-service-recovery-services-vaults"]],
+  ["recovery services vault", ["00017-icon-service-recovery-services-vaults"]],
+  ["recovery services vaults", ["00017-icon-service-recovery-services-vaults"]],
+
+  // ── Application Insights (full name forms) ─────────────────────────────
+  // Extends existing "app insights" alias with additional name forms
+  ["application insights", ["00012-icon-service-application-insights"]],
+  ["azure application insights", ["00012-icon-service-application-insights"]],
 ]);
 
 /**
@@ -483,8 +540,15 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
  * `undefined`. Used by `getAzureShapeByName` for single-shape resolution.
  */
 export function resolveAzureAlias(query: string): string | undefined {
-  const targets = AZURE_SHAPE_ALIASES.get(query.toLowerCase());
-  return targets?.[0];
+  const lower = query.toLowerCase();
+  const targets = AZURE_SHAPE_ALIASES.get(lower);
+  if (targets) return targets[0];
+  // Try with hyphens as spaces (supports placeholder-extracted names like "container-apps")
+  if (lower.includes("-")) {
+    const normalized = AZURE_SHAPE_ALIASES.get(lower.replace(/-/g, " "));
+    if (normalized) return normalized[0];
+  }
+  return undefined;
 }
 
 /**
@@ -493,7 +557,14 @@ export function resolveAzureAlias(query: string): string | undefined {
  * Used by `searchAzureIcons` to inject every aliased shape into results.
  */
 export function resolveAllAzureAliases(query: string): readonly string[] | undefined {
-  return AZURE_SHAPE_ALIASES.get(query.toLowerCase());
+  const lower = query.toLowerCase();
+  const result = AZURE_SHAPE_ALIASES.get(lower);
+  if (result) return result;
+  // Try with hyphens as spaces (supports placeholder-extracted names)
+  if (lower.includes("-")) {
+    return AZURE_SHAPE_ALIASES.get(lower.replace(/-/g, " "));
+  }
+  return undefined;
 }
 
 /**
@@ -559,6 +630,17 @@ export function initializeShapes(libraryPath?: string): AzureIconLibrary {
   cachedSearchResults = new Map();
   cachedCategoryNames = null;
   cachedLibrary = loadAzureIconLibrary(configuredLibraryPath);
+  // Eagerly build the fuzzy-search index so the first search-shapes call
+  // doesn't pay a cold-start penalty.
+  getSearchIndex();
+  // Run throwaway searches through the full searchAzureIcons pipeline
+  // (alias resolution, normalizeForSearch, score calculation, map/sort)
+  // to force V8 to JIT-compile the entire hot path — not just the raw
+  // fuzzy-search internals.  Without this, the first real search-shapes
+  // call pays ~50ms of JIT compilation overhead.
+  searchAzureIcons("warm-up", 1); // non-alias path
+  searchAzureIcons("container apps", 1); // alias path
+  cachedSearchResults.clear(); // discard throwaway entries
   return cachedLibrary;
 }
 
@@ -611,8 +693,6 @@ function getSearchIndex(): FuzzySearch<SearchableShape> {
     cachedSearchIndex = new FuzzySearch(searchableShapes, [
       "searchTitle",
       "searchId",
-      "title",
-      "id",
     ], {
       caseSensitive: false,
       sort: true,
@@ -736,10 +816,18 @@ export function getShapesInCategory(category: string): AzureIconShape[] {
  */
 export function getAzureShapeByName(name: string): AzureIconShape | undefined {
   const library = getAzureIconLibrary();
-  const direct = library.indexByTitle.get(name.toLowerCase());
+  const lower = name.toLowerCase();
+  const direct = library.indexByTitle.get(lower);
   if (direct) return direct;
 
-  // Check aliases
+  // Try with hyphens as spaces (supports placeholder-extracted names like "azure-policy" → "azure policy")
+  const normalized = lower.includes("-") ? lower.replace(/-/g, " ") : undefined;
+  if (normalized && normalized !== lower) {
+    const bySpaces = library.indexByTitle.get(normalized);
+    if (bySpaces) return bySpaces;
+  }
+
+  // Check aliases (resolveAzureAlias already normalizes hyphens internally)
   const aliasTarget = resolveAzureAlias(name);
   if (aliasTarget) {
     return library.indexByTitle.get(aliasTarget);

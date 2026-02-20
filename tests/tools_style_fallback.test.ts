@@ -11,12 +11,7 @@ import { afterAll, describe, it } from "@std/testing/bdd";
 import { assertEquals } from "@std/assert";
 import { resolve } from "@std/path";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import {
-  clearResolveShapeCache,
-  getResolveCacheSize,
-  handlers as baseHandlers,
-  setMaxResolveCacheSize,
-} from "../src/tools.ts";
+import { clearResolveShapeCache, getResolveCacheSize, handlers as baseHandlers, setMaxResolveCacheSize } from "../src/tools.ts";
 import { initializeShapes, resetAzureIconLibrary, setAzureIconLibraryPath } from "../src/shapes/azure_icon_library.ts";
 
 /** Parse the JSON payload out of a handler result. */
@@ -82,21 +77,25 @@ afterAll(() => {
 describe("resolveShape style ?? fallback", () => {
   it("should default to empty string when Azure exact match has undefined style", async () => {
     diagramXml = undefined;
-    const result = await handlers["get-shape-by-name"]({ shape_name: "ExactMatchNoStyle" });
+    const result = await handlers["add-cells"]({
+      cells: [{ type: "vertex", shape_name: "ExactMatchNoStyle", x: 0, y: 0 }],
+    });
     const parsed = parseResult(result);
     assertEquals(parsed.success, true);
-    assertEquals(parsed.data.shape.style, "");
-    assertEquals(parsed.data.shape.name, "ExactMatchNoStyle");
+    assertEquals(parsed.data.results[0].success, true);
+    assertEquals(parsed.data.results[0].cell.style, "");
   });
 
   it("should default to empty string when Azure fuzzy match has undefined style", async () => {
     diagramXml = undefined;
     // Use a query that won't match basic shapes but will fuzzy-match "FuzzyMatchNoStyle"
-    const result = await handlers["get-shape-by-name"]({ shape_name: "FuzzyMatchNo" });
+    const result = await handlers["add-cells"]({
+      cells: [{ type: "vertex", shape_name: "FuzzyMatchNo", x: 0, y: 0 }],
+    });
     const parsed = parseResult(result);
     assertEquals(parsed.success, true);
-    assertEquals(parsed.data.shape.style, "");
-    assertEquals(parsed.data.shape.name, "FuzzyMatchNoStyle");
+    assertEquals(parsed.data.results[0].success, true);
+    assertEquals(parsed.data.results[0].cell.style, "");
   });
 });
 
@@ -107,11 +106,18 @@ describe("resolveShape cache eviction", () => {
     setMaxResolveCacheSize(2);
     try {
       // Fill cache with 2 entries (at capacity)
-      await handlers["get-shape-by-name"]({ shape_name: "ExactMatchNoStyle" });
-      await handlers["get-shape-by-name"]({ shape_name: "FuzzyMatchNoStyle" });
+      diagramXml = undefined;
+      await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "ExactMatchNoStyle", x: 0, y: 0 }],
+      });
+      await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "FuzzyMatchNoStyle", x: 100, y: 0 }],
+      });
       assertEquals(getResolveCacheSize(), 2, "Cache should have 2 entries");
       // Third distinct query triggers eviction (cache clears then adds the new entry)
-      await handlers["get-shape-by-name"]({ shape_name: "nonexistent-shape-xyz" });
+      await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "nonexistent-shape-xyz", x: 200, y: 0 }],
+      });
       // After eviction: cache was cleared, then the new lookup was added
       // "nonexistent-shape-xyz" resolves to undefined and is cached via .has() sentinel
       assertEquals(getResolveCacheSize(), 1, "Cache should have 1 entry after eviction");

@@ -207,6 +207,35 @@ describe("group tool handlers", () => {
       assertEquals(parsed.data.summary.failed, 1);
       assertEquals(parsed.data.results[0].error.code, "NOT_A_GROUP");
     });
+
+    it("should center cell within group when adding to group", async () => {
+      const group = await createGroup({ x: 300, y: 120, width: 300, height: 220, text: "Env" });
+      const cell = await addVertex({ x: 360, y: 180, width: 60, height: 40, text: "App" });
+
+      const result = await handlers["add-cells-to-group"]({
+        assignments: [{ cell_id: cell.id, group_id: group.id }],
+      });
+      const parsed = parseResult(result);
+
+      assertEquals(parsed.data.summary.succeeded, 1);
+      // Cell should be centered: x = (300-60)/2 = 120, y = (220-40)/2 = 90
+      assertEquals(parsed.data.results[0].cell.x, 120);
+      assertEquals(parsed.data.results[0].cell.y, 90);
+    });
+
+    it("should expand group when child is too large and center it", async () => {
+      const group = await createGroup({ x: 300, y: 120, width: 140, height: 100, text: "Tiny" });
+      const cell = await addVertex({ x: 420, y: 195, width: 100, height: 80, text: "Big" });
+
+      const result = await handlers["add-cells-to-group"]({
+        assignments: [{ cell_id: cell.id, group_id: group.id }],
+      });
+      const parsed = parseResult(result);
+
+      assertEquals(parsed.data.summary.succeeded, 1);
+      // Group was expanded to fit, child centered, so no warnings
+      assertEquals(parsed.data.results[0].warnings, undefined);
+    });
   });
 
   describe("remove-cell-from-group", () => {
@@ -255,6 +284,49 @@ describe("group tool handlers", () => {
       const cell = await addVertex({ text: "A" });
       const result = await handlers["list-group-children"]({ group_id: cell.id });
       assertEquals(result.isError, true);
+    });
+  });
+
+  describe("validate-group-containment", () => {
+    it("should report all children in-bounds after centering", async () => {
+      const group = await createGroup({ x: 300, y: 100, width: 200, height: 150, text: "Env" });
+      const inside = await addVertex({ x: 340, y: 130, width: 40, height: 40, text: "In" });
+      const outside = await addVertex({ x: 470, y: 220, width: 80, height: 60, text: "Out" });
+
+      await handlers["add-cells-to-group"]({
+        assignments: [
+          { cell_id: inside.id, group_id: group.id },
+          { cell_id: outside.id, group_id: group.id },
+        ],
+      });
+
+      const result = await handlers["validate-group-containment"]({ group_id: group.id });
+      const parsed = parseResult(result);
+
+      assertEquals(parsed.success, true);
+      assertEquals(parsed.data.summary.total_children, 2);
+      // Both children should be in bounds after auto-centering
+      assertEquals(parsed.data.summary.in_bounds_children, 2);
+      assertEquals(parsed.data.summary.out_of_bounds_children, 0);
+      assertEquals(parsed.data.warnings.length, 0);
+    });
+  });
+
+  describe("suggest-group-sizing", () => {
+    it("should provide recommended dimensions from child layout inputs", async () => {
+      const result = await handlers["suggest-group-sizing"]({
+        child_count: 3,
+        child_width: 48,
+        child_height: 48,
+        vertical_spacing: 24,
+        horizontal_padding: 20,
+        vertical_padding: 20,
+      });
+      const parsed = parseResult(result);
+
+      assertEquals(parsed.success, true);
+      assertEquals(parsed.data.recommended.width, 180);
+      assertEquals(parsed.data.recommended.height, 232);
     });
   });
 });

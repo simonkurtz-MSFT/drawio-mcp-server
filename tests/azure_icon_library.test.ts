@@ -151,8 +151,7 @@ describe("loadAzureIconLibrary", () => {
 
   it("handles item with URL-encoded XML (entity references)", () => {
     const tmpFile = Deno.makeTempFileSync({ suffix: ".xml" });
-    const xmlContent =
-      `<mxlibrary>[{"xml":"&lt;mxGraphModel&gt;&lt;root/&gt;&lt;/mxGraphModel&gt;","title":"Encoded","w":30,"h":30}]</mxlibrary>`;
+    const xmlContent = `<mxlibrary>[{"xml":"&lt;mxGraphModel&gt;&lt;root/&gt;&lt;/mxGraphModel&gt;","title":"Encoded","w":30,"h":30}]</mxlibrary>`;
     try {
       Deno.writeTextFileSync(tmpFile, xmlContent);
       const result = loadAzureIconLibrary(tmpFile);
@@ -234,8 +233,7 @@ describe("categorizeShapes", () => {
   });
 
   it("well-known shapes land in expected categories", () => {
-    const cleanTitle = (title: string) =>
-      title.replace(/^\d+-icon-service-/, "").replace(/-/g, " ").trim().toLowerCase();
+    const cleanTitle = (title: string) => title.replace(/^\d+-icon-service-/, "").replace(/-/g, " ").trim().toLowerCase();
 
     const expectations: Record<string, string[]> = {
       Compute: ["virtual machine"],
@@ -514,6 +512,69 @@ describe("searchAzureIcons", () => {
     assertEquals(results[0].score, 1.0);
   });
 
+  it("NAT Gateway alias returns NAT as top result", () => {
+    const results = searchAzureIcons("NAT Gateway", 5);
+    assert(results.length > 0);
+    assertEquals(results[0].id, "10310-icon-service-nat");
+    assertEquals(results[0].score, 1.0);
+  });
+
+  it("WAF alias returns Web Application Firewall Policies as top result", () => {
+    const results = searchAzureIcons("WAF", 5);
+    assert(results.length > 0);
+    assert(results[0].title.toLowerCase().includes("web-application-firewall"));
+    assertEquals(results[0].score, 1.0);
+  });
+
+  it("Data Factory alias returns Data Factories as top result", () => {
+    const results = searchAzureIcons("Data Factory", 5);
+    assert(results.length > 0);
+    assert(results[0].title.toLowerCase().includes("data-factories"));
+    assertEquals(results[0].score, 1.0);
+  });
+
+  it("Defender for Cloud alias returns Microsoft Defender for Cloud as top result", () => {
+    const results = searchAzureIcons("Defender for Cloud", 5);
+    assert(results.length > 0);
+    assert(results[0].title.toLowerCase().includes("defender-for-cloud"));
+    assertEquals(results[0].score, 1.0);
+  });
+
+  it("Private Endpoint alias returns Private Endpoints as top result", () => {
+    const results = searchAzureIcons("Private Endpoint", 5);
+    assert(results.length > 0);
+    assert(results[0].title.toLowerCase().includes("private-endpoints"));
+    assertEquals(results[0].score, 1.0);
+  });
+
+  it("VPN Gateway alias returns Virtual Network Gateways as top result", () => {
+    const results = searchAzureIcons("VPN Gateway", 5);
+    assert(results.length > 0);
+    assert(results[0].title.toLowerCase().includes("virtual-network-gateways"));
+    assertEquals(results[0].score, 1.0);
+  });
+
+  it("Managed Grafana alias returns Azure Managed Grafana as top result", () => {
+    const results = searchAzureIcons("Managed Grafana", 5);
+    assert(results.length > 0);
+    assert(results[0].title.toLowerCase().includes("azure-managed-grafana"));
+    assertEquals(results[0].score, 1.0);
+  });
+
+  it("Azure Backup alias returns Recovery Services Vaults as top result", () => {
+    const results = searchAzureIcons("Azure Backup", 5);
+    assert(results.length > 0);
+    assert(results[0].title.toLowerCase().includes("recovery-services-vaults"));
+    assertEquals(results[0].score, 1.0);
+  });
+
+  it("Application Insights full name alias returns correct icon", () => {
+    const results = searchAzureIcons("Application Insights", 5);
+    assert(results.length > 0);
+    assert(results[0].title.toLowerCase().includes("application-insights"));
+    assertEquals(results[0].score, 1.0);
+  });
+
   it("alias respects limit parameter", () => {
     const results = searchAzureIcons("Container Apps", 2);
     assert(results.length <= 2);
@@ -624,6 +685,50 @@ describe("getAzureShapeByName", () => {
     const found = getAzureShapeByName("CONTAINER APPS");
     assertExists(found);
     assert(found!.title.includes("Container-Apps-Environments"));
+  });
+
+  it("resolves hyphenated name via display title (placeholder extraction)", () => {
+    // finish-diagram extracts 'azure-monitor-dashboard' from placeholder ID; must resolve via display title
+    const found = getAzureShapeByName("azure-monitor-dashboard");
+    assertExists(found);
+    assert(found!.title.toLowerCase().includes("azure-monitor-dashboard"));
+  });
+
+  it("resolves hyphenated name via alias (placeholder extraction)", () => {
+    // finish-diagram extracts 'container-apps' from placeholder ID; must resolve via alias
+    const found = getAzureShapeByName("container-apps");
+    assertExists(found);
+    assert(found!.title.includes("Container-Apps-Environments"));
+  });
+
+  it("resolves hyphenated 'app-service' via alias", () => {
+    const found = getAzureShapeByName("app-service");
+    assertExists(found);
+    assert(found!.title.toLowerCase().includes("app-services"));
+  });
+
+  it("resolves hyphenated 'front-doors' via alias", () => {
+    const found = getAzureShapeByName("front-doors");
+    assertExists(found);
+    assert(found!.title.includes("Front-Door-and-CDN-Profiles"));
+  });
+
+  it("resolves hyphenated 'key-vaults' via alias", () => {
+    const found = getAzureShapeByName("key-vaults");
+    assertExists(found);
+    assert(found!.title.toLowerCase().includes("key-vaults"));
+  });
+
+  it("resolves 'Azure Policy' via alias", () => {
+    const found = getAzureShapeByName("Azure Policy");
+    assertExists(found);
+    assert(found!.title.toLowerCase().includes("policy"));
+  });
+
+  it("resolves hyphenated 'azure-policy' via alias (placeholder extraction)", () => {
+    const found = getAzureShapeByName("azure-policy");
+    assertExists(found);
+    assert(found!.title.toLowerCase().includes("policy"));
   });
 });
 
@@ -742,6 +847,22 @@ describe("resolveAzureAlias", () => {
     assertEquals(resolveAzureAlias("Azure Container Apps"), "02989-icon-service-container-apps-environments");
   });
 
+  it("resolves hyphenated 'container-apps' (placeholder extraction)", () => {
+    assertEquals(resolveAzureAlias("container-apps"), "02989-icon-service-container-apps-environments");
+  });
+
+  it("resolves hyphenated 'app-service' (placeholder extraction)", () => {
+    assertEquals(resolveAzureAlias("app-service"), "10035-icon-service-app-services");
+  });
+
+  it("resolves hyphenated 'front-doors' (placeholder extraction)", () => {
+    assertEquals(resolveAzureAlias("front-doors"), "10073-icon-service-front-door-and-cdn-profiles");
+  });
+
+  it("resolves hyphenated 'key-vault' (placeholder extraction)", () => {
+    assertEquals(resolveAzureAlias("key-vault"), "10245-icon-service-key-vaults");
+  });
+
   it("resolves Microsoft Entra ID variant", () => {
     assertEquals(resolveAzureAlias("Microsoft Entra ID"), "10231-icon-service-entra-id-protection");
   });
@@ -755,6 +876,14 @@ describe("resolveAzureAlias", () => {
 
   it("resolves Azure Monitor", () => {
     assertEquals(resolveAzureAlias("Azure Monitor"), "02488-icon-service-azure-monitor-dashboard");
+  });
+
+  it("resolves Azure Policy", () => {
+    assertEquals(resolveAzureAlias("Azure Policy"), "10316-icon-service-policy");
+  });
+
+  it("resolves hyphenated 'azure-policy' (placeholder extraction)", () => {
+    assertEquals(resolveAzureAlias("azure-policy"), "10316-icon-service-policy");
   });
 
   it("resolves Front Doors and variants", () => {
@@ -826,6 +955,69 @@ describe("resolveAzureAlias", () => {
     assertEquals(resolveAzureAlias("ExpressRoute"), "10079-icon-service-expressroute-circuits");
     assertEquals(resolveAzureAlias("Express Route"), "10079-icon-service-expressroute-circuits");
   });
+
+  it("resolves NAT Gateway", () => {
+    assertEquals(resolveAzureAlias("NAT Gateway"), "10310-icon-service-nat");
+    assertEquals(resolveAzureAlias("NAT Gateways"), "10310-icon-service-nat");
+  });
+
+  it("resolves WAF", () => {
+    assertEquals(resolveAzureAlias("WAF"), "10362-icon-service-web-application-firewall-policies-waf");
+    assertEquals(resolveAzureAlias("Web Application Firewall"), "10362-icon-service-web-application-firewall-policies-waf");
+  });
+
+  it("resolves Data Factory and ADF", () => {
+    assertEquals(resolveAzureAlias("Data Factory"), "10126-icon-service-data-factories");
+    assertEquals(resolveAzureAlias("ADF"), "10126-icon-service-data-factories");
+    assertEquals(resolveAzureAlias("Azure Data Factory"), "10126-icon-service-data-factories");
+  });
+
+  it("resolves Defender for Cloud", () => {
+    assertEquals(resolveAzureAlias("Defender for Cloud"), "10241-icon-service-microsoft-defender-for-cloud");
+    assertEquals(resolveAzureAlias("Microsoft Defender for Cloud"), "10241-icon-service-microsoft-defender-for-cloud");
+    assertEquals(resolveAzureAlias("Azure Defender"), "10241-icon-service-microsoft-defender-for-cloud");
+  });
+
+  it("resolves Private Endpoint", () => {
+    assertEquals(resolveAzureAlias("Private Endpoint"), "02579-icon-service-private-endpoints");
+    assertEquals(resolveAzureAlias("Private Endpoints"), "02579-icon-service-private-endpoints");
+  });
+
+  it("resolves VPN Gateway", () => {
+    assertEquals(resolveAzureAlias("VPN Gateway"), "10063-icon-service-virtual-network-gateways");
+    assertEquals(resolveAzureAlias("VPN Gateways"), "10063-icon-service-virtual-network-gateways");
+    assertEquals(resolveAzureAlias("Virtual Network Gateway"), "10063-icon-service-virtual-network-gateways");
+    assertEquals(resolveAzureAlias("VNet Gateway"), "10063-icon-service-virtual-network-gateways");
+  });
+
+  it("resolves Managed Grafana", () => {
+    assertEquals(resolveAzureAlias("Grafana"), "02905-icon-service-azure-managed-grafana");
+    assertEquals(resolveAzureAlias("Managed Grafana"), "02905-icon-service-azure-managed-grafana");
+    assertEquals(resolveAzureAlias("Azure Managed Grafana"), "02905-icon-service-azure-managed-grafana");
+  });
+
+  it("resolves Azure Backup / Recovery Services", () => {
+    assertEquals(resolveAzureAlias("Azure Backup"), "00017-icon-service-recovery-services-vaults");
+    assertEquals(resolveAzureAlias("Backup"), "00017-icon-service-recovery-services-vaults");
+    assertEquals(resolveAzureAlias("Recovery Services Vault"), "00017-icon-service-recovery-services-vaults");
+  });
+
+  it("resolves Application Insights full name", () => {
+    assertEquals(resolveAzureAlias("Application Insights"), "00012-icon-service-application-insights");
+    assertEquals(resolveAzureAlias("Azure Application Insights"), "00012-icon-service-application-insights");
+  });
+
+  it("resolves hyphenated 'nat-gateway' (placeholder extraction)", () => {
+    assertEquals(resolveAzureAlias("nat-gateway"), "10310-icon-service-nat");
+  });
+
+  it("resolves hyphenated 'vpn-gateway' (placeholder extraction)", () => {
+    assertEquals(resolveAzureAlias("vpn-gateway"), "10063-icon-service-virtual-network-gateways");
+  });
+
+  it("resolves hyphenated 'data-factory' (placeholder extraction)", () => {
+    assertEquals(resolveAzureAlias("data-factory"), "10126-icon-service-data-factories");
+  });
 });
 
 describe("resolveAllAzureAliases", () => {
@@ -852,6 +1044,13 @@ describe("resolveAllAzureAliases", () => {
     const lower = resolveAllAzureAliases("container apps");
     const upper = resolveAllAzureAliases("Container Apps");
     assertEquals(lower, upper);
+  });
+
+  it("resolves hyphenated names (placeholder extraction)", () => {
+    const targets = resolveAllAzureAliases("container-apps");
+    assertExists(targets);
+    assertEquals(targets!.length, 2);
+    assertEquals(targets![0], "02989-icon-service-container-apps-environments");
   });
 });
 
@@ -972,6 +1171,9 @@ describe("AZURE_SHAPE_ALIASES", () => {
     // Azure Monitor
     assertEquals(AZURE_SHAPE_ALIASES.has("azure monitor"), true);
 
+    // Azure Policy
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure policy"), true);
+
     // Front Doors
     assertEquals(AZURE_SHAPE_ALIASES.has("front doors"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("front door"), true);
@@ -1018,6 +1220,49 @@ describe("AZURE_SHAPE_ALIASES", () => {
     // ExpressRoute
     assertEquals(AZURE_SHAPE_ALIASES.has("expressroute"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("express route"), true);
+
+    // NAT Gateway
+    assertEquals(AZURE_SHAPE_ALIASES.has("nat gateway"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("nat gateways"), true);
+
+    // WAF
+    assertEquals(AZURE_SHAPE_ALIASES.has("waf"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("web application firewall"), true);
+
+    // Data Factory
+    assertEquals(AZURE_SHAPE_ALIASES.has("data factory"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("data factories"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("adf"), true);
+
+    // Defender for Cloud
+    assertEquals(AZURE_SHAPE_ALIASES.has("defender for cloud"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("microsoft defender for cloud"), true);
+
+    // Private Endpoints
+    assertEquals(AZURE_SHAPE_ALIASES.has("private endpoint"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("private endpoints"), true);
+
+    // VPN Gateway / Virtual Network Gateway
+    assertEquals(AZURE_SHAPE_ALIASES.has("vpn gateway"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("vpn gateways"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("virtual network gateway"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("virtual network gateways"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("vnet gateway"), true);
+
+    // Managed Grafana
+    assertEquals(AZURE_SHAPE_ALIASES.has("grafana"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("managed grafana"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure managed grafana"), true);
+
+    // Recovery Services / Backup
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure backup"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("backup"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("recovery services vault"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("recovery services vaults"), true);
+
+    // Application Insights (full name)
+    assertEquals(AZURE_SHAPE_ALIASES.has("application insights"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure application insights"), true);
   });
 
   it("values are non-empty arrays", () => {

@@ -1,17 +1,24 @@
 export type Logger = {
-  log: (level: string, message?: any, ...data: any[]) => void;
+  error: (message?: any, ...data: any[]) => void;
+  warn: (message?: any, ...data: any[]) => void;
+  info: (message?: any, ...data: any[]) => void;
   debug: (message?: any, ...data: any[]) => void;
 };
 
+function timestamp(): string {
+  return new Date().toISOString();
+}
+
+function write(level: string, message?: any, ...data: any[]): void {
+  const line = `${timestamp()}: ${level.padEnd(10)}: ${message}`;
+  data.length > 0 ? console.error(line, ...data) : console.error(line);
+}
+
 export function create_logger(): Logger {
   return {
-    log: (level, message, ...data) => {
-      return data.length > 0
-        ? console.error(`${level?.toUpperCase()}: ${message}`, ...data)
-        : console.error(`${level?.toUpperCase()}: ${message}`);
-    },
-    debug: (message, ...data) => {
-      return data.length > 0 ? console.error(`DEBUG: ${message}`, ...data) : console.error(`DEBUG: ${message}`);
-    },
+    error: (message, ...data) => write("ERROR \u274C", message, ...data),
+    warn: (message, ...data) => write("WARNING \u26A0\uFE0F", message, ...data),
+    info: (message, ...data) => write("INFO", message, ...data),
+    debug: (message, ...data) => write("DEBUG", message, ...data),
   };
 }

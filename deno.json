@@ -1,21 +1,29 @@
 {
   "name": "@drawio/mcp-server",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "exports": "./src/index.ts",
+  "permissions": {
+    "default": {
+      "read": true,
+      "write": true,
+      "net": true,
+      "env": true
+    }
+  },
   "tasks": {
-    "start": "deno run --allow-net --allow-read --allow-env src/index.ts --transport stdio,http --http-port 8080",
-    "start:http": "deno run --allow-net --allow-read --allow-env src/index.ts --transport http --http-port 8080",
-    "start:both": "deno run --allow-net --allow-read --allow-env src/index.ts --transport stdio,http --http-port 8080",
-    "dev": "deno run --watch --allow-net --allow-read --allow-env src/index.ts",
-    "test": "deno test --allow-read --allow-write --allow-env",
-    "test:watch": "deno test --allow-read --allow-write --allow-env --watch",
-    "test:coverage": "deno test --allow-read --allow-write --allow-env --coverage=coverage/ && deno coverage coverage/ --exclude='index\\.ts' --html",
-    "bench": "deno bench --allow-read --allow-env tests/performance.bench.ts",
+    "start": "deno run -P src/index.ts --transport stdio,http",
+    "start:http": "deno run -P src/index.ts --transport http",
+    "dev": "deno run -P --watch src/index.ts",
+    "test": "deno test -P",
+    "test:watch": "deno test -P --watch",
+    "test:coverage": "deno test -P --coverage=coverage/ && deno coverage coverage/ --exclude='index\\.ts' --html",
+    "bench": "deno bench -P tests/performance.bench.ts",
     "lint": "deno lint && deno check src/ tests/",
     "fmt": "deno fmt",
     "fmt:check": "deno fmt --check",
-    "compile": "deno compile --allow-net --allow-read --allow-env --include=src/instructions.md --include=assets/ --output=build/drawio-mcp-server src/index.ts",
-    "inspect": "deno run --allow-all npm:@modelcontextprotocol/inspector --config ./inspector.json --server drawio"
+    "compile": "deno compile --include=src/instructions.md --include=assets/ --output=build/drawio-mcp-server src/index.ts",
+    "inspect": "deno run --allow-all npm:@modelcontextprotocol/inspector --config ./inspector.json --server drawio",
+    "setup": "git config core.hooksPath .githooks"
   },
   "imports": {
     "@modelcontextprotocol/sdk/server/mcp.js": "npm:@modelcontextprotocol/sdk@^1.25/server/mcp.js",
@@ -32,7 +40,8 @@
     "@std/testing/bdd": "jsr:@std/testing@^1/bdd",
     "@std/testing/mock": "jsr:@std/testing@^1/mock",
     "@std/encoding/base64": "jsr:@std/encoding@^1/base64",
-    "@std/cli/parse-args": "jsr:@std/cli@^1/parse-args"
+    "@std/cli/parse-args": "jsr:@std/cli@^1/parse-args",
+    "@std/dotenv": "jsr:@std/dotenv@^0.225"
   },
   "compilerOptions": {
     "strict": true,
@@ -48,7 +57,7 @@
     }
   },
   "fmt": {
-    "lineWidth": 120,
+    "lineWidth": 180,
     "indentWidth": 2,
     "singleQuote": false,
     "proseWrap": "preserve"

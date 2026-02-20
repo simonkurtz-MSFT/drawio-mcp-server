@@ -1,7 +1,7 @@
 /**
  * Tests for MCP tool registration.
  * Verifies TOOL_NAMES constants, TOOL_DEFINITIONS structure,
- * and that registerTools wires all 32 tools to the MCP server.
+ * and that registerTools wires all 25 tools to the MCP server.
  */
 import { describe, it } from "@std/testing/bdd";
 import { assert, assertEquals, assertExists } from "@std/assert";
@@ -11,9 +11,9 @@ import { registerTools, TOOL_DEFINITIONS, TOOL_NAMES } from "../src/tool_registr
 import { createToolHandlerFactory, type ToolHandlerMap, type ToolLogger } from "../src/tool_handler.ts";
 
 describe("TOOL_NAMES", () => {
-  it("should contain 26 tool name entries", () => {
+  it("should contain 25 tool name entries", () => {
     const entries = Object.entries(TOOL_NAMES);
-    assertEquals(entries.length, 26);
+    assertEquals(entries.length, 25);
   });
 
   it("should have all values in kebab-case format", () => {
@@ -38,8 +38,8 @@ describe("TOOL_NAMES", () => {
 });
 
 describe("TOOL_DEFINITIONS", () => {
-  it("should contain 26 tool definitions", () => {
-    assertEquals(TOOL_DEFINITIONS.length, 26);
+  it("should contain 25 tool definitions", () => {
+    assertEquals(TOOL_DEFINITIONS.length, 25);
   });
 
   it("should have matching TOOL_NAMES derived from TOOL_DEFINITIONS", () => {
@@ -96,14 +96,14 @@ describe("registerTools", () => {
     registerTools(server, createToolHandler);
   });
 
-  it("should register exactly 26 tools", () => {
+  it("should register exactly 25 tools", () => {
     const server = new McpServer({ name: "test", version: "0.0.1" });
     const registerSpy = spy(server, "registerTool");
     const createToolHandler = createMockToolHandler();
 
     registerTools(server, createToolHandler);
 
-    assertEquals(registerSpy.calls.length, 26);
+    assertEquals(registerSpy.calls.length, 25);
     registerSpy.restore();
   });
 

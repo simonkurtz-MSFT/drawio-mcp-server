@@ -5,7 +5,7 @@
  */
 import { beforeEach, describe, it } from "@std/testing/bdd";
 import { assert, assertEquals, assertExists } from "@std/assert";
-import { assertSpyCallArgs, assertSpyCalls, type Spy, spy, stub } from "@std/testing/mock";
+import { assertSpyCallArgs, assertSpyCalls, type Spy, spy } from "@std/testing/mock";
 import { create_logger } from "../src/loggers/mcp_server_logger.ts";
 
 describe("create_logger", () => {
@@ -29,21 +29,22 @@ describe("create_logger", () => {
     };
   });
 
-  it("should return a Logger object with log and debug methods", () => {
+  it("should return a Logger object with error, warn, info, and debug methods", () => {
     const logger = create_logger(mockServer as any);
 
     assert(logger !== undefined);
-    assertEquals(typeof logger.log, "function");
+    assertEquals(typeof logger.error, "function");
+    assertEquals(typeof logger.warn, "function");
+    assertEquals(typeof logger.info, "function");
     assertEquals(typeof logger.debug, "function");
   });
 
-  it("log should call sendLoggingMessage with level and data (message is ignored by implementation)", () => {
+  it("info should call sendLoggingMessage with info level and data", () => {
     const logger = create_logger(mockServer as any);
     const testMessage = "test message";
     const testData = { key: "value" };
-    const testLevel = "info";
 
-    logger.log(testLevel, testMessage, testData);
+    logger.info(testMessage, testData);
 
     assertSpyCalls(mockSendLoggingMessage, 1);
     assertSpyCallArgs(mockSendLoggingMessage, 0, [{
@@ -83,7 +84,7 @@ describe("create_logger", () => {
     const logger = create_logger(mockServer as any);
     const testMessage = "message without data";
 
-    logger.log("warning", testMessage);
+    logger.warn(testMessage);
     assertSpyCallArgs(mockSendLoggingMessage, 0, [{
       level: "warning",
       logger: ".",
@@ -114,7 +115,7 @@ describe("create_logger", () => {
     const data2 = { key2: "value2" };
     const data3 = "string data";
 
-    logger.log("error", testMessage, data1, data2, data3);
+    logger.error(testMessage, data1, data2, data3);
     assertSpyCallArgs(mockSendLoggingMessage, 0, [{
       level: "error",
       logger: ".",
@@ -136,28 +137,6 @@ describe("create_logger", () => {
       logger: ".",
       data: { message: testMessage, data: [data1, data2, data3] },
     });
-  });
-
-  it("should not log and print error if an invalid log level is used directly", () => {
-    const logger = create_logger(mockServer as any);
-
-    const consoleErrorStub = stub(console, "error", () => {});
-    try {
-      logger.log("invalid_level", "this should not be logged");
-
-      assertSpyCalls(consoleErrorStub, 1);
-      assertSpyCallArgs(consoleErrorStub, 0, [
-        "Internal Error: Invalid log level used: invalid_level",
-      ]);
-      // sendLoggingMessage should not have been called for the invalid log call
-      // (only prior calls from create_logger setup, if any)
-      const invalidLevelCalls = mockSendLoggingMessage.calls.filter(
-        (c: any) => c.args[0]?.data?.message === "this should not be logged",
-      );
-      assertEquals(invalidLevelCalls.length, 0);
-    } finally {
-      consoleErrorStub.restore();
-    }
   });
 
   it("should log a warning if logging/setLevel receives an invalid log level", async () => {
@@ -281,5 +260,23 @@ describe("create_logger", () => {
         message: "Invalid log level 'invalid' received for logger 'my.logger'",
       },
     });
+  });
+
+  it("should not delete root logger when null is provided for '.' in setLevels", async () => {
+    create_logger(mockServer as any);
+
+    const setLevelsHandler = mockSetRequestHandler.calls[0].args[1] as any;
+
+    // Try to reset the root logger — should be silently ignored
+    await setLevelsHandler({
+      method: "logging/setLevels",
+      params: { levels: { ".": null } },
+    });
+
+    // No error or warning should be logged, and root logger level should remain unchanged
+    const warningCall = mockSendLoggingMessage.calls.find(
+      (c: any) => c.args[0]?.data?.message?.includes("Reset log level for logger: ."),
+    );
+    assertEquals(warningCall, undefined);
   });
 });
