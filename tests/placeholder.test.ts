@@ -38,6 +38,10 @@ describe("placeholder", () => {
     it("should return null for malformed placeholder IDs", () => {
       assertEquals(extractShapeNameFromPlaceholderId("placeholder-"), null);
     });
+
+    it("should return null when last part is not a hex UUID suffix", () => {
+      assertEquals(extractShapeNameFromPlaceholderId("placeholder-name-ZZZZZZZZ"), null);
+    });
   });
 
   describe("createPlaceholderCell", () => {
@@ -53,6 +57,27 @@ describe("placeholder", () => {
       assertEquals(cell.x, 100);
       assertEquals(cell.y, 200);
       assert(cell.style!.includes("placeholder=1"));
+    });
+
+    it("should not duplicate marker when baseStyle already contains placeholder=1", () => {
+      const cell = createPlaceholderCell("Test", "fillColor=#CCC;placeholder=1;", {
+        x: 0,
+        y: 0,
+        width: 48,
+        height: 48,
+      });
+      assertEquals(cell.style, "fillColor=#CCC;placeholder=1;");
+    });
+
+    it("should add semicolon before marker when baseStyle does not end with one", () => {
+      const cell = createPlaceholderCell("Test", "fillColor=#CCC", {
+        x: 0,
+        y: 0,
+        width: 48,
+        height: 48,
+      });
+      assert(cell.style!.includes(";placeholder=1;"));
+      assert(!cell.style!.includes(";;"));
     });
   });
 
@@ -134,6 +159,19 @@ describe("placeholder", () => {
       }));
       assert("xml" in result);
       assert(result.xml.includes("image=resolved"));
+    });
+
+    it("should handle resolver returning svgImage property", () => {
+      const xml = `<mxCell id="placeholder-front-doors-abc12345" value="FD" style="fillColor=#d4d4d4;placeholder=1" vertex="1" parent="1">` +
+        `<mxGeometry x="100" y="100" width="48" height="48" as="geometry"/></mxCell>`;
+
+      const result = resolvePlaceholdersInXml(xml, (_shapeName, _id) => ({
+        style: "image=data:image/svg+xml,realsvg;",
+        svgImage: "data:image/svg+xml,realsvg",
+      }));
+
+      assert("xml" in result);
+      assert(result.xml.includes("image=data:image/svg+xml,realsvg"));
     });
   });
 

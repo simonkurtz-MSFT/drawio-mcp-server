@@ -1,7 +1,13 @@
-import { beforeEach, describe, it } from "@std/testing/bdd";
-import { assert, assertEquals, assertExists } from "@std/assert";
+import { afterEach, beforeEach, describe, it } from "@std/testing/bdd";
+import { assert, assertEquals, assertExists, assertGreater } from "@std/assert";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { handlers as baseHandlers } from "../src/tools.ts";
+import {
+  clearResolveShapeCache,
+  getResolveCacheSize,
+  handlers as baseHandlers,
+  setMaxResolveCacheSize,
+  warmupSearchPath,
+} from "../src/tools.ts";
 
 /**
  * Extract and parse the JSON text payload from a CallToolResult.
@@ -793,6 +799,242 @@ describe("tool handlers", () => {
       const result = baseHandlers["list-paged-model"]({
         active_layer_id: "nonexistent-layer",
       } as any);
+      assertEquals(result.isError, true);
+    });
+  });
+
+  describe("resolveShape cache", () => {
+    afterEach(() => {
+      clearResolveShapeCache();
+      setMaxResolveCacheSize(10_000);
+    });
+
+    it("should return cached not-found for previously unknown shape_name", async () => {
+      clearResolveShapeCache();
+      // First call: shape not found, caches undefined
+      const result1 = await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "xyznonexistent_shape_cache_test", x: 0, y: 0 }],
+      });
+      const parsed1 = parseResult(result1);
+      assertEquals(parsed1.data.results[0].error.code, "SHAPE_NOT_FOUND");
+      const sizeAfterFirst = getResolveCacheSize();
+      assertGreater(sizeAfterFirst, 0);
+
+      // Second call: hits the "cached as not-found" branch (line 77)
+      const result2 = await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "xyznonexistent_shape_cache_test", x: 0, y: 0 }],
+      });
+      const parsed2 = parseResult(result2);
+      assertEquals(parsed2.data.results[0].error.code, "SHAPE_NOT_FOUND");
+      // Cache size should not have grown
+      assertEquals(getResolveCacheSize(), sizeAfterFirst);
+    });
+
+    it("should evict cache when maxResolveCacheSize is exceeded", async () => {
+      clearResolveShapeCache();
+      setMaxResolveCacheSize(2);
+      // Fill cache with 2 entries
+      await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "rectangle", x: 0, y: 0 }],
+      });
+      await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "ellipse", x: 0, y: 0 }],
+      });
+      assertEquals(getResolveCacheSize(), 2);
+
+      // Third entry triggers eviction then re-caches
+      await handlers["add-cells"]({
+        cells: [{ type: "vertex", shape_name: "diamond", x: 0, y: 0 }],
+      });
+      // After eviction + re-cache, size should be 1
+      assertEquals(getResolveCacheSize(), 1);
+    });
+  });
+
+  describe("finish-diagram", () => {
+    it("should return error when diagram_xml is missing", () => {
+      const result = baseHandlers["finish-diagram"]({} as any);
+      assertEquals(result.isError, true);
+      const parsed = parseResult(result);
+      assertEquals(parsed.error.code, "INVALID_INPUT");
+    });
+
+    it("should return already-complete when no placeholders exist", async () => {
+      await addVertex({ text: "Normal" });
+      const exportResult = await handlers["export-diagram"]({ compress: false });
+      const xml = parseResult(exportResult).data.xml;
+
+      const result = baseHandlers["finish-diagram"]({ diagram_xml: xml });
+      const parsed = parseResult(result);
+      assertEquals(parsed.success, true);
+      assertEquals(parsed.data.resolved_count, 0);
+      assert(parsed.data.message.includes("already complete"));
+    });
+
+    it("should resolve placeholders for transactional cells", async () => {
+      const addResult = await handlers["add-cells"]({
+        transactional: true,
+        cells: [
+          { type: "vertex", shape_name: "Front Doors", x: 100, y: 100, temp_id: "fd" },
+        ],
+      });
+      const addParsed = parseResult(addResult);
+      const txnXml = addParsed.data.diagram_xml;
+
+      const result = baseHandlers["finish-diagram"]({ diagram_xml: txnXml });
+      const parsed = parseResult(result);
+      assertEquals(parsed.success, true);
+      assertEquals(parsed.data.resolved_count, 1);
+      assert(parsed.data.message.includes("Resolved 1 placeholder"));
+    });
+
+    it("should resolve multiple placeholders with plural message", async () => {
+      const addResult = await handlers["add-cells"]({
+        transactional: true,
+        cells: [
+          { type: "vertex", shape_name: "Front Doors", x: 100, y: 100, temp_id: "fd" },
+          { type: "vertex", shape_name: "Container Apps", x: 300, y: 100, temp_id: "ca" },
+        ],
+      });
+      const addParsed = parseResult(addResult);
+      const txnXml = addParsed.data.diagram_xml;
+
+      const result = baseHandlers["finish-diagram"]({ diagram_xml: txnXml });
+      const parsed = parseResult(result);
+      assertEquals(parsed.success, true);
+      assertEquals(parsed.data.resolved_count, 2);
+      assert(parsed.data.message.includes("Resolved 2 placeholders"));
+    });
+
+    it("should return error for unresolvable placeholder shapes", () => {
+      // Construct XML with a placeholder cell that cannot be resolved
+      const fakeXml = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>` +
+        `<mxCell id="placeholder-zzz-nonexist-abc12345" value="X" style="fillColor=#d4d4d4;placeholder=1" vertex="1" parent="1">` +
+        `<mxGeometry x="0" y="0" width="48" height="48" as="geometry"/></mxCell>` +
+        `</root></mxGraphModel>`;
+      const result = baseHandlers["finish-diagram"]({ diagram_xml: fakeXml });
+      assertEquals(result.isError, true);
+      const parsed = parseResult(result);
+      assertEquals(parsed.error.code, "PLACEHOLDER_RESOLUTION_FAILED");
+      // Verify the detailsMsg is constructed with shape names
+      assertExists(parsed.error.suggestion);
+      assert(parsed.error.suggestion.includes("zzz-nonexist"));
+    });
+
+    it("should return error for invalid XML after resolution", () => {
+      // This is hard to trigger naturally; the catch block handles it
+      // Test the catch path by providing malformed XML that passes placeholder detection
+      const malformedXml = "not xml at all but has placeholder-test-abc12345 and placeholder=1";
+      const result = baseHandlers["finish-diagram"]({ diagram_xml: malformedXml });
+      // Should hit either the resolution error or the catch path
+      assertEquals(result.isError, true);
+    });
+  });
+
+  describe("suggest-group-sizing defaults", () => {
+    it("should use default values when optional params are omitted", () => {
+      const result = baseHandlers["suggest-group-sizing"]({ child_count: 3 } as any);
+      const parsed = parseResult(result);
+      assertEquals(parsed.success, true);
+      assertEquals(parsed.data.inputs.child_width, 48);
+      assertEquals(parsed.data.inputs.child_height, 48);
+      assertEquals(parsed.data.inputs.vertical_spacing, 40);
+      assertEquals(parsed.data.inputs.horizontal_padding, 40);
+      assertEquals(parsed.data.inputs.vertical_padding, 40);
+      assertEquals(parsed.data.inputs.min_width, 180);
+      assertEquals(parsed.data.inputs.min_height, 120);
+    });
+  });
+
+  describe("add-cells-to-group warnings spread", () => {
+    it("should include response fields from batchAddCellsToGroup", async () => {
+      // Create a group and assign a cell — verifies the response mapping works
+      const groupResult = await handlers["create-groups"]({
+        groups: [{ x: 100, y: 100, width: 200, height: 200, text: "" }],
+      });
+      const groupId = parseResult(groupResult).data.results[0].cell.id;
+
+      const cellResult = await handlers["add-cells"]({
+        cells: [{ type: "vertex", x: 120, y: 120, width: 50, height: 50, text: "Inside" }],
+      });
+      const cellId = parseResult(cellResult).data.results[0].cell.id;
+
+      const assignResult = await handlers["add-cells-to-group"]({
+        assignments: [{ cell_id: cellId, group_id: groupId }],
+      });
+      const parsed = parseResult(assignResult);
+      assertEquals(parsed.data.summary.succeeded, 1);
+      assertEquals(parsed.data.results[0].success, true);
+      assertEquals(parsed.data.results[0].cell_id, cellId);
+      assertEquals(parsed.data.results[0].group_id, groupId);
+      assertExists(parsed.data.results[0].cell);
+    });
+  });
+
+  describe("warmupSearchPath", () => {
+    it("should execute without error", () => {
+      warmupSearchPath();
+    });
+  });
+
+  describe("export-diagram with SAVE_DIAGRAMS", () => {
+    afterEach(() => {
+      Deno.env.delete("SAVE_DIAGRAMS");
+    });
+
+    it("should include DEV_SAVED_PATH when SAVE_DIAGRAMS is enabled", async () => {
+      Deno.env.set("SAVE_DIAGRAMS", "true");
+      await addVertex({ text: "SaveTest" });
+      const result = await handlers["export-diagram"]({ compress: false });
+      const parsed = parseResult(result);
+      assertEquals(parsed.success, true);
+      // The DEV_SAVED_PATH is a Symbol property — it gets consumed by the tool_handler factory
+      // and won't appear in the parsed JSON. Test that the export itself works.
+      assert(parsed.data.xml.includes("SaveTest"));
+    });
+  });
+
+  describe("add-cells edge anchor stripping", () => {
+    it("should strip exitX/entryX/exitY/entryY properties from edge styles", async () => {
+      const v1 = await addVertex({ x: 0, y: 0, width: 100, height: 60, text: "A" });
+      const v2 = await addVertex({ x: 300, y: 0, width: 100, height: 60, text: "B" });
+      const result = await handlers["add-cells"]({
+        cells: [{
+          type: "edge",
+          source_id: v1.id,
+          target_id: v2.id,
+          style: "exitX=0.5;exitY=1;entryX=0.5;entryY=0;exitDx=0;exitDy=0;entryDx=0;entryDy=0;",
+        }],
+      });
+      const parsed = parseResult(result);
+      assertEquals(parsed.success, true);
+      // The edge style should have the anchor properties stripped
+      const edgeStyle = parsed.data.results[0].cell.style;
+      assertEquals(edgeStyle.includes("exitX="), false);
+      assertEquals(edgeStyle.includes("entryX="), false);
+      assertEquals(edgeStyle.includes("exitY="), false);
+      assertEquals(edgeStyle.includes("entryY="), false);
+      assertEquals(edgeStyle.includes("exitDx="), false);
+      assertEquals(edgeStyle.includes("entryDx="), false);
+    });
+  });
+
+  describe("import-diagram error", () => {
+    it("should return error for completely invalid XML", async () => {
+      await addVertex({ text: "Init" });
+      const result = await handlers["import-diagram"]({
+        xml: "<<<not xml at all>>>",
+      });
+      assertEquals(result.isError, true);
+    });
+  });
+
+  describe("validate-group-containment error", () => {
+    it("should return error for nonexistent group_id", async () => {
+      await addVertex({ text: "Placeholder" });
+      const result = await handlers["validate-group-containment"]({
+        group_id: "nonexistent-group",
+      });
       assertEquals(result.isError, true);
     });
   });

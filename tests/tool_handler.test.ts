@@ -396,5 +396,137 @@ describe("createToolHandlerFactory", () => {
       const devLog = debugMessages.find((msg: string) => msg.includes("diagram saved to"));
       assertEquals(devLog, undefined);
     });
+
+    it("should log (txn) suffix when args.transactional is true", async () => {
+      const mockResult = {
+        content: [{ type: "text" as const, text: '{"success":true}' }],
+      };
+      const handlerSpy = spy((_args: any) => Promise.resolve(mockResult));
+      const handlerMap: ToolHandlerMap = { "txn-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("txn-tool", true);
+      await handler({ transactional: true }, mockExtra);
+
+      const calledMsg = debugSpy.calls[0].args[0] as string;
+      assert(calledMsg.includes("(txn)"));
+    });
+
+    it("should log resolved_count when present in response text", async () => {
+      const mockResult = {
+        content: [{ type: "text" as const, text: '{"resolved_count":3}' }],
+      };
+      const handlerSpy = spy((_args: any) => Promise.resolve(mockResult));
+      const handlerMap: ToolHandlerMap = { "resolve-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("resolve-tool", true);
+      await handler({}, mockExtra);
+
+      const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
+      const resolvedLog = debugMessages.find((msg: string) => msg.includes("resolved 3 placeholders"));
+      assertExists(resolvedLog);
+    });
+
+    it("should log singular placeholder when resolved_count is 1", async () => {
+      const mockResult = {
+        content: [{ type: "text" as const, text: '{"resolved_count":1}' }],
+      };
+      const handlerSpy = spy((_args: any) => Promise.resolve(mockResult));
+      const handlerMap: ToolHandlerMap = { "resolve-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("resolve-tool", true);
+      await handler({}, mockExtra);
+
+      const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
+      const resolvedLog = debugMessages.find((msg: string) => msg.includes("resolved 1 placeholder"));
+      assertExists(resolvedLog);
+      assert(!resolvedLog!.includes("placeholders"));
+    });
+
+    it("should extract error.message from error result JSON", async () => {
+      const errorResult = {
+        content: [{ type: "text" as const, text: '{"error":{"message":"detailed failure"}}' }],
+        isError: true,
+      };
+      const handlerSpy = spy((_args: any) => Promise.resolve(errorResult));
+      const handlerMap: ToolHandlerMap = { "err-msg-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("err-msg-tool", true);
+      await handler({}, mockExtra);
+
+      const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
+      const errorLog = debugMessages.find((msg: string) => msg.includes("detailed failure"));
+      assertExists(errorLog);
+    });
+
+    it("should fall back to data.error string when error.message is absent", async () => {
+      const errorResult = {
+        content: [{ type: "text" as const, text: '{"error":"plain error string"}' }],
+        isError: true,
+      };
+      const handlerSpy = spy((_args: any) => Promise.resolve(errorResult));
+      const handlerMap: ToolHandlerMap = { "err-str-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("err-str-tool", true);
+      await handler({}, mockExtra);
+
+      const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
+      const errorLog = debugMessages.find((msg: string) => msg.includes("plain error string"));
+      assertExists(errorLog);
+    });
+
+    it("should log error without message when result text is not JSON", async () => {
+      const errorResult = {
+        content: [{ type: "text" as const, text: "not valid json" }],
+        isError: true,
+      };
+      const handlerSpy = spy((_args: any) => Promise.resolve(errorResult));
+      const handlerMap: ToolHandlerMap = { "bad-json-err": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("bad-json-err", true);
+      await handler({}, mockExtra);
+
+      const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
+      const errorLog = debugMessages.find((msg: string) => msg.includes("error in") && !msg.includes("not valid json"));
+      assertExists(errorLog);
+    });
+
+    it("should skip resolved_count logging when text is not JSON", async () => {
+      const mockResult = {
+        content: [{ type: "text" as const, text: "not json" }],
+      };
+      const handlerSpy = spy((_args: any) => Promise.resolve(mockResult));
+      const handlerMap: ToolHandlerMap = { "non-json-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("non-json-tool", true);
+      await handler({}, mockExtra);
+
+      const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
+      const resolvedLog = debugMessages.find((msg: string) => msg.includes("resolved"));
+      assertEquals(resolvedLog, undefined);
+    });
+
+    it("should fall back to 'Unknown error' when error has no message or string", async () => {
+      const errorResult = {
+        content: [{ type: "text" as const, text: '{"error":null}' }],
+        isError: true,
+      };
+      const handlerSpy = spy((_args: any) => Promise.resolve(errorResult));
+      const handlerMap: ToolHandlerMap = { "null-err-tool": handlerSpy };
+
+      const createToolHandler = createToolHandlerFactory(handlerMap, log);
+      const handler = createToolHandler("null-err-tool", true);
+      await handler({}, mockExtra);
+
+      const debugMessages = debugSpy.calls.map((c: any) => c.args[0] as string);
+      const errorLog = debugMessages.find((msg: string) => msg.includes("Unknown error"));
+      assertExists(errorLog);
+    });
   });
 });

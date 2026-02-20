@@ -471,9 +471,8 @@ No install step needed — Deno resolves dependencies on first run.
 
 | Command                   | Description                          |
 | ------------------------- | ------------------------------------ |
-| `deno task start`         | Start with stdio transport           |
-| `deno task start:http`    | Start with HTTP transport            |
-| `deno task start:both`    | Start with both transports           |
+| `deno task start`         | Start with stdio + HTTP transports   |
+| `deno task start:http`    | Start with HTTP transport only       |
 | `deno task dev`           | Watch mode — auto-restart on changes |
 | `deno task test`          | Run tests                            |
 | `deno task test:watch`    | Run tests in watch mode              |

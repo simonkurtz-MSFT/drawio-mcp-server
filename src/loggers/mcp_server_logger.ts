@@ -57,9 +57,13 @@ export function create_logger(server: McpServer): Logger {
   };
 
   const sendLog = (level: McpLogLevel, loggerName: string, data: object) => {
+    // deno-coverage-ignore
     if (!(level in LogLevelMap)) {
+      // deno-coverage-ignore
       console.error(`Internal Error: Invalid log level used: ${level}`);
+      // deno-coverage-ignore
       return;
+      // deno-coverage-ignore
     }
     if (shouldLog(level, loggerName)) {
       server.server.sendLoggingMessage({

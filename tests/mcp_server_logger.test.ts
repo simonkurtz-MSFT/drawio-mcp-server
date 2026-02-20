@@ -261,4 +261,22 @@ describe("create_logger", () => {
       },
     });
   });
+
+  it("should not delete root logger when null is provided for '.' in setLevels", async () => {
+    create_logger(mockServer as any);
+
+    const setLevelsHandler = mockSetRequestHandler.calls[0].args[1] as any;
+
+    // Try to reset the root logger — should be silently ignored
+    await setLevelsHandler({
+      method: "logging/setLevels",
+      params: { levels: { ".": null } },
+    });
+
+    // No error or warning should be logged, and root logger level should remain unchanged
+    const warningCall = mockSendLoggingMessage.calls.find(
+      (c: any) => c.args[0]?.data?.message?.includes("Reset log level for logger: ."),
+    );
+    assertEquals(warningCall, undefined);
+  });
 });

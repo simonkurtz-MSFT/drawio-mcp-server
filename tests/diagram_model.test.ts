@@ -1,5 +1,5 @@
 import { beforeEach, describe, it } from "@std/testing/bdd";
-import { assert, assertEquals, assertExists, assertGreater, assertNotEquals } from "@std/assert";
+import { assert, assertEquals, assertExists, assertGreater, assertMatch, assertNotEquals } from "@std/assert";
 import { type Cell, DiagramModel } from "../src/diagram_model.ts";
 
 describe("DiagramModel", () => {
@@ -2075,6 +2075,515 @@ describe("DiagramModel", () => {
       centers.set(tgtCell.id, { x: 640, y: 280 });
       const waypoints = m.getGroupAvoidanceWaypoints(edge, centers);
       assertGreater(waypoints.length, 0);
+    });
+  });
+
+  describe("getAbsoluteParentOffset edge cases", () => {
+    it("should return {0,0} when parentId is undefined", () => {
+      const m = model as any;
+      const result = m.getAbsoluteParentOffset(undefined);
+      assertEquals(result, { x: 0, y: 0 });
+    });
+
+    it("should return {0,0} when parent cell does not exist", () => {
+      const m = model as any;
+      const result = m.getAbsoluteParentOffset("nonexistent");
+      assertEquals(result, { x: 0, y: 0 });
+    });
+
+    it("should return {0,0} when parent cell is not a group", () => {
+      const cell = model.addRectangle({ x: 100, y: 200, text: "Not a group" });
+      const m = model as any;
+      const result = m.getAbsoluteParentOffset(cell.id);
+      assertEquals(result, { x: 0, y: 0 });
+    });
+
+    it("should return group absolute position when parent is a group", () => {
+      const group = model.createGroup({ x: 100, y: 50, width: 200, height: 200, text: "G" });
+      const m = model as any;
+      const result = m.getAbsoluteParentOffset(group.id);
+      assertEquals(result, { x: 100, y: 50 });
+    });
+  });
+
+  describe("getGroupContainmentWarning null bounds", () => {
+    it("should return null when cell bounds cannot be resolved", () => {
+      const m = model as any;
+      const group = model.createGroup({ x: 0, y: 0, width: 200, height: 200, text: "G" });
+      // Create an edge (non-vertex) — getAbsoluteBounds returns null for edges
+      const a = model.addRectangle({ text: "A" });
+      const b = model.addRectangle({ text: "B" });
+      const edge = model.addEdge({ sourceId: a.id, targetId: b.id });
+      if (!("error" in edge)) {
+        const result = m.getGroupContainmentWarning(edge.id, group.id);
+        assertEquals(result, null);
+      }
+    });
+  });
+
+  describe("vertical edge anchors for groups", () => {
+    it("should use midpoint X for group-to-group vertical edges", () => {
+      // Two groups stacked vertically, offset horizontally so it's vertical flow
+      // Source group: x=0..200 (center x=100). Target group: x=100..400 (center x=250).
+      // midX = (100+250)/2 = 175. exitX = (175-0)/200 = 0.88. entryX = (175-100)/300 = 0.25.
+      const srcGroup = model.createGroup({ x: 0, y: 0, width: 200, height: 100, text: "SrcGroup" });
+      const tgtGroup = model.createGroup({ x: 100, y: 300, width: 300, height: 100, text: "TgtGroup" });
+      const edge = model.addEdge({ sourceId: srcGroup.id, targetId: tgtGroup.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        assert(styleMatch![1].includes("exitX=0.88;"));
+        assert(styleMatch![1].includes("entryX=0.25;"));
+        assert(styleMatch![1].includes("exitY=1;"));
+        assert(styleMatch![1].includes("entryY=0;"));
+      }
+    });
+
+    it("should align exitX to target center when source is a group (vertical flow)", () => {
+      // Source group at x=50..350 (width=300, center x=200).
+      // Target vertex at x=100..200 (center x=150).
+      // Expected exitX = (150 - 50) / 300 = 0.33
+      const group = model.createGroup({ x: 50, y: 0, width: 300, height: 100, text: "Group" });
+      const target = model.addRectangle({ x: 100, y: 300, width: 100, height: 60, text: "Target" });
+      const edge = model.addEdge({ sourceId: group.id, targetId: target.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        const xml = model.toXml();
+        const styleMatch = xml.match(new RegExp(`id=\\"${edge.id}\\"[^>]*style=\\"([^\\"]*)\\"`));
+        assertExists(styleMatch);
+        assert(styleMatch![1].includes("exitX=0.33;exitY=1;"));
+        assert(styleMatch![1].includes("entryX=0.5;entryY=0;"));
+      }
+    });
+  });
+
+  describe("addCellToGroup previousParentGroup", () => {
+    it("should remove cell from previous group when moving to a new group", () => {
+      const group1 = model.createGroup({ x: 0, y: 0, width: 200, height: 200, text: "G1" });
+      const group2 = model.createGroup({ x: 300, y: 0, width: 200, height: 200, text: "G2" });
+      const cell = model.addRectangle({ x: 10, y: 10, text: "Child" });
+
+      // Add to group1 first
+      model.addCellToGroup(cell.id, group1.id);
+      let g1 = model.getCell(group1.id);
+      assertExists(g1);
+      assert(g1!.children?.includes(cell.id));
+
+      // Move to group2
+      model.addCellToGroup(cell.id, group2.id);
+      g1 = model.getCell(group1.id);
+      const g2 = model.getCell(group2.id);
+      assertExists(g1);
+      assertExists(g2);
+      // Cell should be removed from group1's children
+      assertEquals(g1!.children?.includes(cell.id), false);
+      // Cell should be in group2's children
+      assert(g2!.children?.includes(cell.id));
+    });
+  });
+
+  describe("batchAddCellsToGroup warnings", () => {
+    it("should include containment warnings spread from getGroupContainmentWarning", () => {
+      const group = model.createGroup({ x: 0, y: 0, width: 50, height: 50, text: "Tiny" });
+      const cell = model.addRectangle({ x: 200, y: 200, width: 100, height: 100, text: "Big" });
+      const results = model.batchAddCellsToGroup([
+        { cellId: cell.id, groupId: group.id },
+      ]);
+      assertEquals(results.length, 1);
+      assertEquals(results[0].success, true);
+    });
+  });
+
+  describe("centerChildrenInGroup edge cases", () => {
+    it("should not crash when group has no children", () => {
+      const group = model.createGroup({ x: 0, y: 0, width: 200, height: 200, text: "Empty" });
+      const m = model as any;
+      // Should not throw
+      m.centerChildrenInGroup(group.id);
+    });
+
+    it("should not crash when called with non-group cell", () => {
+      const cell = model.addRectangle({ text: "NotGroup" });
+      const m = model as any;
+      // Should not throw
+      m.centerChildrenInGroup(cell.id);
+    });
+
+    it("should handle children with undefined dimensions using defaults", () => {
+      const group = model.createGroup({ x: 0, y: 0, width: 200, height: 200, text: "G" });
+      const m = model as any;
+
+      // Manually add a child without width/height
+      const child: Cell = {
+        id: "no-dims",
+        type: "vertex",
+        value: "NoDims",
+        style: "",
+        parent: group.id,
+      };
+      m.cells.set("no-dims", child);
+      const groupCell = m.cells.get(group.id);
+      groupCell.children = ["no-dims"];
+
+      // centerChildrenInGroup uses (c.height ?? 48) in computation but doesn't assign defaults
+      // Just verify it doesn't throw and positions the child
+      m.centerChildrenInGroup(group.id);
+      assertExists(child.x);
+      assertExists(child.y);
+    });
+
+    it("should expand group when children require more space", () => {
+      const group = model.createGroup({ x: 0, y: 0, width: 50, height: 50, text: "Small" });
+      const m = model as any;
+
+      // Manually add large children
+      const child1: Cell = {
+        id: "big1",
+        type: "vertex",
+        value: "Big1",
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 100,
+        style: "",
+        parent: group.id,
+      };
+      const child2: Cell = {
+        id: "big2",
+        type: "vertex",
+        value: "Big2",
+        x: 0,
+        y: 0,
+        width: 150,
+        height: 80,
+        style: "",
+        parent: group.id,
+      };
+      m.cells.set("big1", child1);
+      m.cells.set("big2", child2);
+      const groupCell = m.cells.get(group.id);
+      groupCell.children = ["big1", "big2"];
+
+      m.centerChildrenInGroup(group.id);
+
+      // Group should have expanded
+      assertGreater(groupCell.width, 50);
+      assertGreater(groupCell.height, 50);
+    });
+
+    it("should handle group with zero width/height", () => {
+      const m = model as any;
+      const group: Cell = {
+        id: "zero-group",
+        type: "vertex",
+        value: "Zero",
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        style: "",
+        parent: "1",
+        isGroup: true,
+        children: [],
+      };
+      m.cells.set("zero-group", group);
+
+      // Add a child
+      const child: Cell = {
+        id: "child-of-zero",
+        type: "vertex",
+        value: "Child",
+        x: 0,
+        y: 0,
+        width: 48,
+        height: 48,
+        style: "",
+        parent: "zero-group",
+      };
+      m.cells.set("child-of-zero", child);
+      group.children = ["child-of-zero"];
+
+      m.centerChildrenInGroup("zero-group");
+      // Group should have expanded to fit child + padding
+      assertGreater(group.width!, 0);
+      assertGreater(group.height!, 0);
+    });
+
+    it("should skip edge children and only center vertex children", () => {
+      const group = model.createGroup({ x: 0, y: 0, width: 300, height: 300, text: "G" });
+      const v1 = model.addRectangle({ x: 10, y: 10, width: 48, height: 48, text: "V1" });
+      model.addCellToGroup(v1.id, group.id);
+
+      const m = model as any;
+      const groupCell = m.cells.get(group.id);
+
+      // Add an edge as a child
+      const edgeChild: Cell = {
+        id: "edge-child",
+        type: "edge",
+        value: "",
+        style: "",
+        parent: group.id,
+      };
+      m.cells.set("edge-child", edgeChild);
+      groupCell.children.push("edge-child");
+
+      // Should not throw; should only center vertex children
+      m.centerChildrenInGroup(group.id);
+    });
+
+    it("should return early when group has only edge children (no vertices)", () => {
+      const m = model as any;
+      const group: Cell = {
+        id: "edge-only-group",
+        type: "vertex",
+        value: "EdgeOnly",
+        x: 0,
+        y: 0,
+        width: 100,
+        height: 100,
+        style: "",
+        parent: "1",
+        isGroup: true,
+        children: ["only-edge-1"],
+      };
+      m.cells.set("edge-only-group", group);
+
+      const edgeChild: Cell = {
+        id: "only-edge-1",
+        type: "edge",
+        value: "",
+        style: "",
+        parent: "edge-only-group",
+      };
+      m.cells.set("only-edge-1", edgeChild);
+
+      // Should return early without modifying group dimensions
+      m.centerChildrenInGroup("edge-only-group");
+      assertEquals(group.width, 100);
+      assertEquals(group.height, 100);
+    });
+
+    it("should handle group with undefined width and height", () => {
+      const m = model as any;
+      const group: Cell = {
+        id: "undef-dims-group",
+        type: "vertex",
+        value: "NoWH",
+        x: 0,
+        y: 0,
+        style: "",
+        parent: "1",
+        isGroup: true,
+        children: ["undef-child"],
+      };
+      // Intentionally leave width and height undefined
+      m.cells.set("undef-dims-group", group);
+
+      const child: Cell = {
+        id: "undef-child",
+        type: "vertex",
+        value: "C",
+        x: 0,
+        y: 0,
+        width: 48,
+        height: 48,
+        style: "",
+        parent: "undef-dims-group",
+      };
+      m.cells.set("undef-child", child);
+
+      // group.width ?? 0 and group.height ?? 0 should trigger the ?? branches
+      m.centerChildrenInGroup("undef-dims-group");
+      // Group should have been expanded from undefined to fit child + padding
+      assertGreater(group.width!, 0);
+      assertGreater(group.height!, 0);
+    });
+  });
+
+  describe("validateGroupContainment error paths", () => {
+    it("should return GROUP_NOT_FOUND when group does not exist", () => {
+      const result = model.validateGroupContainment("nonexistent");
+      assert("error" in result);
+      if ("error" in result) {
+        assertEquals(result.error.code, "GROUP_NOT_FOUND");
+      }
+    });
+
+    it("should return NOT_A_GROUP when cell is not a group", () => {
+      const cell = model.addRectangle({ text: "Not a group" });
+      const result = model.validateGroupContainment(cell.id);
+      assert("error" in result);
+      if ("error" in result) {
+        assertEquals(result.error.code, "NOT_A_GROUP");
+      }
+    });
+
+    it("should handle group with undefined children array", () => {
+      const m = model as any;
+      const group: Cell = {
+        id: "no-children-group",
+        type: "vertex",
+        value: "NoChildren",
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 200,
+        style: "",
+        parent: "1",
+        isGroup: true,
+        // children is intentionally omitted (undefined)
+      };
+      m.cells.set("no-children-group", group);
+
+      const result = model.validateGroupContainment("no-children-group");
+      assert(!("error" in result));
+      if (!("error" in result)) {
+        assertEquals(result.totalChildren, 0);
+        assertEquals(result.warnings.length, 0);
+      }
+    });
+  });
+
+  describe("toXml transactional placeholder stripping", () => {
+    it("should strip image data and add placeholder marker in transactional mode", () => {
+      const m = model as any;
+      const cell: Cell = {
+        id: "txn-cell",
+        type: "vertex",
+        value: "Shape",
+        x: 100,
+        y: 100,
+        width: 48,
+        height: 48,
+        style: "fillColor=#E6F2FA;image=data:image/svg+xml,somesvgdata;strokeColor=#0078D4;",
+        parent: "1",
+      };
+      m.cells.set("txn-cell", cell);
+
+      const xml = model.toXml({ transactional: true });
+      // Should not contain the image data
+      assertEquals(xml.includes("somesvgdata"), false);
+      // Should contain placeholder marker (PLACEHOLDER_MARKER = "placeholder=1" without trailing semicolon)
+      assert(xml.includes("placeholder=1"));
+    });
+
+    it("should not strip image data in non-transactional mode", () => {
+      const m = model as any;
+      const cell: Cell = {
+        id: "nontxn-cell",
+        type: "vertex",
+        value: "Shape",
+        x: 100,
+        y: 100,
+        width: 48,
+        height: 48,
+        style: "fillColor=#E6F2FA;image=data:image/svg+xml,somesvgdata;strokeColor=#0078D4;",
+        parent: "1",
+      };
+      m.cells.set("nontxn-cell", cell);
+
+      const xml = model.toXml();
+      // Should contain the image data
+      assert(xml.includes("somesvgdata"));
+    });
+
+    it("should add placeholder marker to group cell with image style in transactional mode", () => {
+      const m = model as any;
+      const group: Cell = {
+        id: "txn-group-img",
+        type: "vertex",
+        value: "",
+        x: 0,
+        y: 0,
+        width: 200,
+        height: 200,
+        style: "rounded=1;image=data:image/svg+xml,groupsvg;fillColor=#f5f5f5",
+        parent: "1",
+        isGroup: true,
+        children: [],
+      };
+      m.cells.set("txn-group-img", group);
+
+      const xml = model.toXml({ transactional: true });
+      // Should strip image data and add placeholder marker
+      assertEquals(xml.includes("groupsvg"), false);
+      assert(xml.includes("placeholder=1"));
+      // container=1 should be appended since it's a group
+      assert(xml.includes("container=1"));
+    });
+  });
+
+  describe("batchAddCells placeholder tempId", () => {
+    it("should create cell with placeholder ID when tempId starts with 'placeholder-'", () => {
+      const results = model.batchAddCells([
+        { type: "vertex", text: "Placeholder Cell", tempId: "placeholder-front-doors-abc123" },
+      ]);
+      assertEquals(results.length, 1);
+      assertEquals(results[0].success, true);
+      assertExists(results[0].cell);
+      assertEquals(results[0].cell!.id, "placeholder-front-doors-abc123");
+      assertEquals(results[0].cell!.value, "Placeholder Cell");
+    });
+
+    it("should use defaults for placeholder cell when no properties specified", () => {
+      const results = model.batchAddCells([
+        { type: "vertex", tempId: "placeholder-test-abc123" },
+      ]);
+      assertEquals(results.length, 1);
+      assertEquals(results[0].success, true);
+      assertExists(results[0].cell);
+      // Should use default values
+      assertEquals(results[0].cell!.value, "New Cell");
+      assertEquals(results[0].cell!.x, 100);
+      assertEquals(results[0].cell!.y, 100);
+      assertEquals(results[0].cell!.width, 200);
+      assertEquals(results[0].cell!.height, 100);
+      assertMatch(results[0].cell!.style!, /whiteSpace=wrap/);
+    });
+
+    it("should clamp placeholder cell dimensions to minimum 1", () => {
+      const results = model.batchAddCells([
+        { type: "vertex", tempId: "placeholder-tiny-abc123", width: -5, height: 0 },
+      ]);
+      assertEquals(results.length, 1);
+      assertEquals(results[0].success, true);
+      assertExists(results[0].cell);
+      assertEquals(results[0].cell!.width, 1);
+      assertEquals(results[0].cell!.height, 1);
+    });
+  });
+
+  describe("validateEdgeConventions group targeting warning", () => {
+    it("should warn when external source targets child inside group", () => {
+      const group = model.createGroup({ x: 200, y: 100, width: 200, height: 200, text: "G" });
+      const child = model.addRectangle({ x: 10, y: 10, width: 48, height: 48, text: "Child" });
+      model.addCellToGroup(child.id, group.id);
+      const external = model.addRectangle({ x: 0, y: 0, width: 100, height: 60, text: "External" });
+      const edge = model.addEdge({ sourceId: external.id, targetId: child.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        // validateEdgeConventions takes an edge ID string
+        const warnings: string[] = model.validateEdgeConventions(edge.id);
+        assert(warnings.some((w: string) => w.includes("targets child") && w.includes("directly")));
+      }
+    });
+
+    it("should use cell id in warning when parent value is empty", () => {
+      const group = model.createGroup({ x: 200, y: 100, width: 200, height: 200, text: "" });
+      const child = model.addRectangle({ x: 10, y: 10, width: 48, height: 48, text: "" });
+      model.addCellToGroup(child.id, group.id);
+      const external = model.addRectangle({ x: 0, y: 0, width: 100, height: 60, text: "Ext" });
+      const edge = model.addEdge({ sourceId: external.id, targetId: child.id });
+      assertEquals("error" in edge, false);
+      if (!("error" in edge)) {
+        // validateEdgeConventions takes an edge ID string
+        const warnings: string[] = model.validateEdgeConventions(edge.id);
+        // When value is empty, should use the cell id instead
+        assert(warnings.some((w: string) => w.includes(group.id)));
+      }
     });
   });
 });

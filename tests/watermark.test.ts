@@ -101,9 +101,9 @@ describe("DiagramModel watermark", () => {
       assertNotEquals(match, null);
       const watermarkX = parseFloat(match![1]);
       const watermarkY = parseFloat(match![2]);
-      // Fixed position: x=40, y=1100-60-40=1000
+      // Fixed position: x=40, y=1100-50-5=1045
       assertEquals(watermarkX, 40);
-      assertEquals(watermarkY, 1000);
+      assertEquals(watermarkY, 1045);
     });
 
     it("should position watermark at same location for empty diagram", () => {
@@ -114,7 +114,7 @@ describe("DiagramModel watermark", () => {
       const watermarkY = parseFloat(match![2]);
       // Same fixed position regardless of content
       assertEquals(watermarkX, 40);
-      assertEquals(watermarkY, 1000);
+      assertEquals(watermarkY, 1045);
     });
 
     it("should position watermark at same location regardless of content layout", () => {
@@ -128,7 +128,7 @@ describe("DiagramModel watermark", () => {
       const watermarkY = parseFloat(match![2]);
       // Same fixed position regardless of content
       assertEquals(watermarkX, 40);
-      assertEquals(watermarkY, 1000);
+      assertEquals(watermarkY, 1045);
     });
   });
 

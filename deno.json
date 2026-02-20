@@ -13,7 +13,6 @@
   "tasks": {
     "start": "deno run -P src/index.ts --transport stdio,http",
     "start:http": "deno run -P src/index.ts --transport http",
-    "start:both": "deno run -P src/index.ts --transport stdio,http",
     "dev": "deno run -P --watch src/index.ts",
     "test": "deno test -P",
     "test:watch": "deno test -P --watch",
