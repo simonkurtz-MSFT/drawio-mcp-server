@@ -262,7 +262,7 @@ Use these standard positions as starting points. Adjust as needed for more or fe
 ### Edge Labels
 
 - Add labels for traffic paths (e.g., "HTTPS", "gRPC") on edges where they clarify the flow.
-- **Edge label placement**: Place labels **above** horizontal edges and **to the left** of vertical edges. Use `verticalAlign=bottom` in the edge style to position labels above horizontal segments.
+- **Edge label placement**: Place labels **above** horizontal edges and **to the left** of vertical edges. Use `verticalAlign=bottom;labelBackgroundColor=none;` in the edge style to position labels above horizontal segments.
 - Labels must never overlap shapes or other labels.
 
 ### External Endpoint Labels
