@@ -2,6 +2,7 @@
 node_modules/
 
 # Build output (rebuilt inside container)
+build/
 coverage/
 
 # Git
