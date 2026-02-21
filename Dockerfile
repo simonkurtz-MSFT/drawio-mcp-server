@@ -6,6 +6,11 @@ FROM denoland/deno:${DENO_VERSION} AS builder
 
 WORKDIR /app
 
+# Install binutils (provides strip) for post-compile binary size reduction.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends binutils && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy dependency manifest first for layer caching.
 # Deno downloads and caches deps on first use.
 COPY deno.json ./
@@ -17,13 +22,18 @@ COPY assets/ ./assets/
 # Cache dependencies, then compile to a single native binary.
 # --include flags embed the instructions markdown and Azure icon XML
 # into the binary so no external files are needed at runtime.
+# strip removes debug symbols (symbol tables, DWARF info) from the
+# binary to reduce image size. This is safe — executable code, embedded
+# assets, and V8 snapshots are untouched; only debugger metadata is
+# removed. JS-level stack traces remain fully functional.
 RUN deno cache src/index.ts && \
     deno compile \
       --allow-net --allow-read --allow-env \
       --include=src/instructions.md \
       --include=assets/ \
       --output=drawio-mcp-server \
-      src/index.ts
+      src/index.ts && \
+    strip drawio-mcp-server
 
 # ──────────────────────────────────────────────────────────────
 # Stage 2 — Minimal, secure production image
