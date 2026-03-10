@@ -8,7 +8,7 @@ applyTo: "**"
 
 This is a **TypeScript MCP (Model Context Protocol) server** for programmatic Draw.io diagram generation. It produces standard Draw.io XML directly — no browser extension or Draw.io instance required.
 
-- **Runtime**: Deno ≥ 2.6
+- **Runtime**: Deno ≥ 2.7
 - **Language**: TypeScript (strict mode)
 - **Key dependencies**: `@modelcontextprotocol/sdk`, `hono` (HTTP transport), `zod` (input validation), `fuzzy-search`, `fast-xml-parser`
 - **Deno standard libraries**: `@std/path`, `@std/cli`, `@std/assert`, `@std/testing`, `@std/encoding`

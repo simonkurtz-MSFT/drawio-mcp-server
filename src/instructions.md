@@ -489,6 +489,7 @@ Call `edit-cells`, `edit-edges`, or `set-cell-shape` exactly **ONE time** with a
 - **Prefer compressed export**: When calling `export-diagram`, pass `compress: true` to reduce payload size by 60-80%. The server uses **deflate-raw** compression with **base64** encoding — the same format used by the Draw.io desktop app. Compressed `.drawio` files are fully compatible with Draw.io and can be re-imported without any special handling.
 - The response from `export-diagram` includes a `compression` object indicating whether compression is enabled and, when enabled, the `algorithm` (`deflate-raw`) and `encoding` (`base64`) used.
 - `import-diagram` automatically detects and decompresses compressed content — no extra parameters needed.
+- For PNG/SVG/PDF conversion outside this server, see jgraph's Draw.io `skill-cli` README: `https://github.com/jgraph/drawio-mcp/blob/main/skill-cli/README.md`.
 
 ### Saving .drawio Files Efficiently
 
