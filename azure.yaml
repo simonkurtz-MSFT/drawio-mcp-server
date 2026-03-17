@@ -1,0 +1,25 @@
+# azure.yaml — Azure Developer CLI (azd) configuration
+# https://learn.microsoft.com/en-us/azure/developer/azure-developer-cli/reference
+#
+# Deploy:  azd up
+# Preview: azd provision --preview
+# Destroy: azd down
+
+name: drawio-mcp-server
+
+metadata:
+  template: drawio-mcp-server@0.0.1
+
+# No services section — the Container App pulls the public Docker Hub image
+# (docker.io/simonkurtzmsft/drawio-mcp-server) directly at provision time.
+# No local Docker build step is required.
+#
+# To switch to a private ACR image later:
+#   1. Add ACR + Managed Identity to infra/resources.bicep
+#   2. Restore the services block below and run: azd deploy
+#
+# services:
+#   api:
+#     project: .
+#     host: containerapp
+#     language: docker

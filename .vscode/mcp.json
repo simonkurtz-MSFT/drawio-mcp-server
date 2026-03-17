@@ -1,0 +1,8 @@
+{
+  "servers": {
+    "drawio": {
+      "type": "http",
+      "url": "https://<SERVICE_API_URI>/mcp"
+    }
+  }
+}
