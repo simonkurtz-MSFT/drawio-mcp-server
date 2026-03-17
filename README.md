@@ -340,6 +340,191 @@ The `.env` file supports:
 
 > **Note**: The distroless image has no shell, so in-container health checks (wget, curl) are not available. Use external health checks (e.g., Kubernetes liveness probes, load balancer health checks) to monitor the `/health` endpoint.
 
+### Azure Container Apps (azd)
+
+Deploy the server as a secure, scalable **Azure Container App** using the included Bicep infrastructure and [Azure Developer CLI (`azd`)](https://learn.microsoft.com/azure/developer/azure-developer-cli/). The image is pulled directly from Docker Hub — no local Docker build required.
+
+**What gets provisioned:**
+
+| Resource | Purpose |
+| --- | --- |
+| Resource Group | Logical container for all resources |
+| Log Analytics Workspace | Structured container logs (Entra ID auth only, no shared keys) |
+| Container Apps Environment | Shared hosting platform |
+| Container App | MCP server — HTTPS-only ingress, scales to zero when idle |
+
+**Security posture:**
+
+- HTTPS enforced — HTTP requests are rejected (`allowInsecure: false`)
+- Non-root distroless image ([`gcr.io/distroless/cc`](https://github.com/GoogleContainerTools/distroless)) — no shell, no package manager
+- Scales to zero when idle — no cost when not in use
+
+#### Deploy
+
+**Prerequisites:** [Azure Developer CLI](https://learn.microsoft.com/azure/developer/azure-developer-cli/install-azd), an Azure subscription.
+
+```sh
+# One-time setup
+azd auth login
+azd env new drawio-prod
+azd env set AZURE_LOCATION eastus2
+
+# Preview what will be created (no changes made)
+azd provision --preview
+
+# Provision all Azure resources (or use `azd up` to provision + deploy in one step)
+azd provision
+```
+
+At the end of `azd provision`, the public HTTPS URL is printed as `SERVICE_API_URI`. Retrieve it any time with:
+
+```sh
+azd env get-values | grep SERVICE_API_URI
+# Also check whether Entra ID auth is enabled:
+azd env get-values | grep AUTH_ENABLED
+```
+
+#### Optional: security configuration
+
+Three optional `azd env set` variables control access security. Set them **before** running `azd provision`:
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `DRAWIO_ALLOWED_IP` | Restrict the MCP endpoint to a single IP or CIDR block. Leave empty to allow all. | `''` (allow all) |
+| `DRAWIO_ENABLE_AUTH` | Enable Entra ID Easy Auth on the Container App endpoint. | `false` |
+| `DRAWIO_ENTRA_CLIENT_ID` | Entra ID App Registration client ID. Required when `DRAWIO_ENABLE_AUTH=true`. | `''` |
+| `DRAWIO_IMAGE_TAG` | Docker Hub image tag to deploy (e.g. `3.0.1`). | `latest` |
+
+**IP restriction** (simplest — no App Registration needed):
+
+```sh
+azd env set DRAWIO_ALLOWED_IP 203.0.113.42   # single IP
+# or a CIDR block:
+azd env set DRAWIO_ALLOWED_IP 203.0.113.0/24
+azd provision
+```
+
+**Entra ID Easy Auth** (recommended for shared/production deployments):
+
+```sh
+# 1. Create an App Registration
+az ad app create --display-name drawio-mcp-server
+# Note the appId from the output
+
+# 2. Add the API scope
+az ad app update --id <appId> --identifier-uris api://<appId>
+
+# 3. Set the azd env variables
+azd env set DRAWIO_ENABLE_AUTH true
+azd env set DRAWIO_ENTRA_CLIENT_ID <appId>
+
+# 4. Provision
+azd provision
+```
+
+#### Connect MCP clients to the Azure deployment
+
+Replace `<YOUR_URL>` with your `SERVICE_API_URI` value. The MCP endpoint is at `<YOUR_URL>/mcp`.
+
+<details>
+<summary><b>VS Code (this repo — automatic)</b></summary>
+
+The `.vscode/mcp.json` file in this repository is pre-configured with the deployed URL. Anyone who clones and opens this repo in VS Code will see **drawio** appear automatically in the MCP servers list. Click it and press **Start** to connect.
+
+To update the URL after a redeploy:
+
+```sh
+# Get the new URL
+azd env get-values | grep SERVICE_API_URI
+```
+
+Then edit [`.vscode/mcp.json`](.vscode/mcp.json) and update the `url` value.
+
+</details>
+
+<details>
+<summary><b>VS Code (other workspaces)</b></summary>
+
+Add to your workspace `.vscode/mcp.json` or User Settings (`settings.json`):
+
+```json
+{
+  "servers": {
+    "drawio": {
+      "type": "http",
+      "url": "https://<YOUR_URL>/mcp"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Claude Desktop</b></summary>
+
+Edit `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
+
+```json
+{
+  "mcpServers": {
+    "drawio": {
+      "url": "https://<YOUR_URL>/mcp"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Codex</b></summary>
+
+Edit `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.drawio]
+url = "https://<YOUR_URL>/mcp"
+```
+
+</details>
+
+> **Cold start note:** The Container App scales to zero when idle. The first request after a period of inactivity may take 5–10 seconds while the replica starts. Subsequent requests are instant. To eliminate cold starts, set `minReplicas: 1` in [`infra/resources.bicep`](infra/resources.bicep).
+
+#### Tear down
+
+```sh
+# Remove all provisioned Azure resources and the resource group
+azd down
+```
+
+This deletes all provisioned Azure resources and the resource group.
+
+#### Optional: switch to a private Azure Container Registry
+
+The default deployment pulls the public Docker Hub image. For production, you can mirror it into a private ACR:
+
+**1. Add ACR + Managed Identity to the Bicep** — See the commented migration guide at the top of [`infra/resources.bicep`](infra/resources.bicep).
+
+**2. Import the image** (no local Docker required):
+
+```sh
+az acr import \
+  --name <acr-name> \
+  --source docker.io/simonkurtzmsft/drawio-mcp-server:latest \
+  --image drawio-mcp-server:latest
+```
+
+**3. Build and push your own image** (requires local Docker):
+
+```sh
+# Tag and push to your ACR
+docker tag drawio-mcp-server:latest <acr-name>.azurecr.io/drawio-mcp-server:latest
+docker push <acr-name>.azurecr.io/drawio-mcp-server:latest
+```
+
+Then update the `image` reference in [`infra/resources.bicep`](infra/resources.bicep) to point at your ACR.
+
 ## Tools
 
 > **Performance tip**: All cell-manipulation tools accept arrays — pass ALL items in a single call rather than calling a tool repeatedly.
@@ -516,7 +701,7 @@ This project is a fork of [lgazo/drawio-mcp-server](https://github.com/lgazo/dra
 | **Group / container management** | ✅                                                     | ❌                                                     | ❌                                                  |
 | **Iterative editing**            | ✅ Stateful model, incremental calls                   | ✅ Live edits in Draw.io                               | ❌ Regenerate full XML each time                    |
 | **Interactive features**         | ❌ Stateless XML generation                            | ✅ `get-selected-cell`, `set-cell-data`                | ❌                                                  |
-| **Docker / cloud deployment**    | ✅ Distroless image (~20 MB)                           | ❌ npm package only                                    | ❌ Relies on hosted endpoint                        |
+| **Docker / cloud deployment**    | ✅ Distroless image + Azure Container Apps (azd) | ❌ npm package only                                    | ❌ Relies on hosted endpoint                        |
 | **Offline support**              | ✅ Fully offline                                       | ⚠️ Needs browser with Draw.io                          | ❌ Requires internet                                |
 | **Best for**                     | CI/CD, containers, headless / offline batch generation | Interactive diagramming with real-time visual feedback | Quick one-shot diagrams with zero install           |
 
