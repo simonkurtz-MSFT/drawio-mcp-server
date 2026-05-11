@@ -329,6 +329,38 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
     "02884-icon-service-worker-container-app",
   ]],
   ["aca", ["02989-icon-service-container-apps-environments", "02884-icon-service-worker-container-app"]],
+  ["container apps environment", [
+    "02989-icon-service-container-apps-environments",
+    "02884-icon-service-worker-container-app",
+  ]],
+  ["container apps environments", [
+    "02989-icon-service-container-apps-environments",
+    "02884-icon-service-worker-container-app",
+  ]],
+  ["azure container apps environment", [
+    "02989-icon-service-container-apps-environments",
+    "02884-icon-service-worker-container-app",
+  ]],
+  ["azure container apps environments", [
+    "02989-icon-service-container-apps-environments",
+    "02884-icon-service-worker-container-app",
+  ]],
+  ["container app environment", [
+    "02989-icon-service-container-apps-environments",
+    "02884-icon-service-worker-container-app",
+  ]],
+  ["worker container app", [
+    "02989-icon-service-container-apps-environments",
+    "02884-icon-service-worker-container-app",
+  ]],
+  ["worker container apps", [
+    "02989-icon-service-container-apps-environments",
+    "02884-icon-service-worker-container-app",
+  ]],
+  ["azure worker container app", [
+    "02989-icon-service-container-apps-environments",
+    "02884-icon-service-worker-container-app",
+  ]],
 
   // ── Container Registry ─────────────────────────────────────────────────
   // Icon is titled "Container-Registries" (plural); singular/abbreviation miss
@@ -532,6 +564,28 @@ export const AZURE_SHAPE_ALIASES: ReadonlyMap<string, readonly string[]> = new M
   // Extends existing "app insights" alias with additional name forms
   ["application insights", ["00012-icon-service-application-insights"]],
   ["azure application insights", ["00012-icon-service-application-insights"]],
+
+  // ── Azure AI Foundry / AI Studio ───────────────────────────────────────
+  // Foundry is the rebranded name for AI Studio; the icon library only ships
+  // the legacy "AI-Studio" title, so all Foundry name forms must alias to it.
+  ["ai studio", ["03513-icon-service-ai-studio"]],
+  ["azure ai studio", ["03513-icon-service-ai-studio"]],
+  ["foundry", ["03513-icon-service-ai-studio"]],
+  ["ai foundry", ["03513-icon-service-ai-studio"]],
+  ["azure ai foundry", ["03513-icon-service-ai-studio"]],
+  ["microsoft foundry", ["03513-icon-service-ai-studio"]],
+  ["azure foundry", ["03513-icon-service-ai-studio"]],
+
+  // ── Azure OpenAI ───────────────────────────────────────────────────────
+  // Common shorthands for the Azure OpenAI service / model deployments.
+  // The library has no dedicated "model" icon, so model-deployment names
+  // resolve to Azure OpenAI as the conventional choice.
+  ["openai", ["03438-icon-service-azure-openai"]],
+  ["azure openai", ["03438-icon-service-azure-openai"]],
+  ["aoai", ["03438-icon-service-azure-openai"]],
+  ["openai model", ["03438-icon-service-azure-openai"]],
+  ["foundry model", ["03438-icon-service-azure-openai"]],
+  ["model deployment", ["03438-icon-service-azure-openai"]],
 ]);
 
 /**
