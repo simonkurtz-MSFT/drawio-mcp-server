@@ -348,6 +348,54 @@ describe("searchAzureIcons", () => {
     assertEquals(workerResults.length, 1);
   });
 
+  it("Container Apps Environment alias returns both Container Apps icons", () => {
+    const results = searchAzureIcons("Container Apps Environment", 5);
+    assert(results.length >= 2);
+    assert(results[0].title.includes("Container-Apps-Environments"));
+    assertEquals(results[0].score, 1.0);
+    assert(results[1].title.includes("Worker-Container-App"));
+    assertEquals(results[1].score, 1.0);
+  });
+
+  it("Worker Container App alias returns both Container Apps icons", () => {
+    const results = searchAzureIcons("Worker Container App", 5);
+    assert(results.length >= 2);
+    assert(results[0].title.includes("Container-Apps-Environments"));
+    assertEquals(results[0].score, 1.0);
+    assert(results[1].title.includes("Worker-Container-App"));
+    assertEquals(results[1].score, 1.0);
+  });
+
+  it("all Container Apps variants return both icons with score 1.0", () => {
+    const queries = [
+      "container apps",
+      "container app",
+      "container apps environment",
+      "container apps environments",
+      "container app environment",
+      "worker container app",
+      "worker container apps",
+      "azure container apps",
+      "azure container app",
+      "azure container apps environment",
+      "azure worker container app",
+    ];
+    for (const query of queries) {
+      const results = searchAzureIcons(query, 5);
+      assert(results.length >= 2, `Expected 2+ results for "${query}"`);
+      assert(
+        results[0].title.includes("Container-Apps-Environments"),
+        `Expected Container-Apps-Environments for "${query}"`,
+      );
+      assertEquals(results[0].score, 1.0, `Expected score 1.0 for "${query}"`);
+      assert(
+        results[1].title.includes("Worker-Container-App"),
+        `Expected Worker-Container-App for "${query}"`,
+      );
+      assertEquals(results[1].score, 1.0, `Expected score 1.0 for "${query}"`);
+    }
+  });
+
   it("Entra ID alias returns Entra ID Protection as top result", () => {
     const results = searchAzureIcons("Entra ID", 5);
     assert(results.length > 0);
@@ -896,6 +944,21 @@ describe("resolveAzureAlias", () => {
     assertEquals(resolveAzureAlias("App Service"), "10035-icon-service-app-services");
   });
 
+  it("resolves Azure AI Foundry name forms to AI Studio icon", () => {
+    assertEquals(resolveAzureAlias("Foundry"), "03513-icon-service-ai-studio");
+    assertEquals(resolveAzureAlias("AI Foundry"), "03513-icon-service-ai-studio");
+    assertEquals(resolveAzureAlias("Azure AI Foundry"), "03513-icon-service-ai-studio");
+    assertEquals(resolveAzureAlias("Microsoft Foundry"), "03513-icon-service-ai-studio");
+    assertEquals(resolveAzureAlias("AI Studio"), "03513-icon-service-ai-studio");
+    assertEquals(resolveAzureAlias("Azure AI Studio"), "03513-icon-service-ai-studio");
+  });
+
+  it("resolves Azure OpenAI shorthands", () => {
+    assertEquals(resolveAzureAlias("OpenAI"), "03438-icon-service-azure-openai");
+    assertEquals(resolveAzureAlias("Azure OpenAI"), "03438-icon-service-azure-openai");
+    assertEquals(resolveAzureAlias("AOAI"), "03438-icon-service-azure-openai");
+  });
+
   it("resolves Static Web App variants", () => {
     assertEquals(resolveAzureAlias("Static Web App"), "01007-icon-service-static-apps");
     assertEquals(resolveAzureAlias("Static Web Apps"), "01007-icon-service-static-apps");
@@ -1029,6 +1092,22 @@ describe("resolveAllAzureAliases", () => {
     assertEquals(targets![1], "02884-icon-service-worker-container-app");
   });
 
+  it("returns both Container Apps icons for environment variant", () => {
+    const targets = resolveAllAzureAliases("Container Apps Environment");
+    assertExists(targets);
+    assertEquals(targets!.length, 2);
+    assertEquals(targets![0], "02989-icon-service-container-apps-environments");
+    assertEquals(targets![1], "02884-icon-service-worker-container-app");
+  });
+
+  it("returns both Container Apps icons for worker variant", () => {
+    const targets = resolveAllAzureAliases("Worker Container App");
+    assertExists(targets);
+    assertEquals(targets!.length, 2);
+    assertEquals(targets![0], "02989-icon-service-container-apps-environments");
+    assertEquals(targets![1], "02884-icon-service-worker-container-app");
+  });
+
   it("returns single-element array for single-target alias", () => {
     const targets = resolveAllAzureAliases("Entra ID");
     assertExists(targets);
@@ -1089,6 +1168,14 @@ describe("AZURE_SHAPE_ALIASES", () => {
     assertEquals(AZURE_SHAPE_ALIASES.has("container apps"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("azure container apps"), true);
     assertEquals(AZURE_SHAPE_ALIASES.has("container app"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("container apps environment"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("container apps environments"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure container apps environment"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure container apps environments"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("container app environment"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("worker container app"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("worker container apps"), true);
+    assertEquals(AZURE_SHAPE_ALIASES.has("azure worker container app"), true);
 
     // Container Registry
     assertEquals(AZURE_SHAPE_ALIASES.has("container registry"), true);
