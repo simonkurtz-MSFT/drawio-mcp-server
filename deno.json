@@ -60,7 +60,8 @@
     "lineWidth": 180,
     "indentWidth": 2,
     "singleQuote": false,
-    "proseWrap": "preserve"
+    "proseWrap": "preserve",
+    "exclude": ["assets/"]
   },
   "test": {
     "include": ["tests/"]
