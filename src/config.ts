@@ -24,6 +24,7 @@ export const VERSION: string = denoConfig.version;
  */
 export interface ServerConfig {
   readonly httpPort: number;
+  readonly httpHost: string;
   readonly transports: TransportType[];
   readonly loggerType: LoggerType;
   readonly azureIconLibraryPath: string | undefined;
@@ -37,6 +38,7 @@ export type LoggerType = "console" | "mcp_server";
  */
 const DEFAULT_CONFIG: ServerConfig = {
   httpPort: 8080,
+  httpHost: "127.0.0.1",
   transports: ["stdio"],
   loggerType: "console",
   azureIconLibraryPath: undefined,
@@ -71,9 +73,13 @@ export const parseHttpPortValue = (
     return new Error("--http-port flag requires a port number");
   }
 
-  const port = parseInt(value, 10);
+  if (!/^\d+$/.test(value)) {
+    return new Error(`Invalid port number "${value}". Port must be a whole number`);
+  }
 
-  if (isNaN(port)) {
+  const port = Number.parseInt(value, 10);
+
+  if (Number.isNaN(port)) {
     return new Error(`Invalid port number "${value}". Port must be a number`);
   }
 
@@ -136,6 +142,19 @@ export const parseTransports = (
   return Array.from(new Set(validTransports));
 };
 
+export const parseHttpHost = (value: string | undefined): string | Error => {
+  if (value === undefined) {
+    return DEFAULT_CONFIG.httpHost;
+  }
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return new Error("HTTP host must not be empty");
+  }
+
+  return trimmed;
+};
+
 /**
  * Check if help was requested - pure function
  */
@@ -159,20 +178,24 @@ export const parseConfig = (
   //  - Repeated `string` flags keep the last value; with `collect`, they
   //    accumulate into arrays.
   const parsed = denoParseArgs(args as string[], {
-    string: ["http-port", "transport"],
+    string: ["http-host", "http-port", "transport"],
     boolean: ["help"],
     alias: { h: "help" },
-    collect: ["http-port", "transport"],
+    collect: ["http-host", "http-port", "transport"],
   });
 
   // `collect` mode gathers repeated flags into arrays.
   // A bare `--flag` (no value) produces an empty string "" in the array.
   const httpPortArr = parsed["http-port"] as string[] | undefined;
+  const httpHostArr = parsed["http-host"] as string[] | undefined;
   const transportArr = parsed["transport"] as string[] | undefined;
 
   // Detect bare flags (--http-port with no value → empty string)
   if (httpPortArr?.some((v) => v === "")) {
     return new Error("--http-port flag requires a port number");
+  }
+  if (httpHostArr?.some((v) => v === "")) {
+    return new Error("--http-host flag requires a host name or IP address");
   }
   if (transportArr?.some((v) => v === "")) {
     return new Error("--transport flag requires a transport name");
@@ -191,6 +214,15 @@ export const parseConfig = (
       return httpPort;
     }
     parsedHttpPort = httpPort;
+  }
+
+  let httpHostValue = httpHostArr?.at(-1);
+  if (httpHostValue === undefined && env.HTTP_HOST) {
+    httpHostValue = env.HTTP_HOST;
+  }
+  const httpHost = parseHttpHost(httpHostValue);
+  if (httpHost instanceof Error) {
+    return httpHost;
   }
 
   // ── Transport: CLI > env > default ──
@@ -215,6 +247,7 @@ export const parseConfig = (
   return {
     ...DEFAULT_CONFIG,
     httpPort: parsedHttpPort !== undefined ? parsedHttpPort : DEFAULT_CONFIG.httpPort,
+    httpHost,
     transports,
     loggerType,
     azureIconLibraryPath,

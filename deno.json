@@ -5,7 +5,7 @@
   "permissions": {
     "default": {
       "read": true,
-      "write": true,
+      "write": false,
       "net": true,
       "env": true
     }
@@ -13,10 +13,11 @@
   "tasks": {
     "start": "deno run -P src/index.ts --transport stdio,http",
     "start:http": "deno run -P src/index.ts --transport http",
+    "start:save-diagrams": "deno run --allow-net --allow-read --allow-env --allow-write=./diagrams src/index.ts --transport stdio,http",
     "dev": "deno run -P --watch src/index.ts",
-    "test": "deno test -P",
-    "test:watch": "deno test -P --watch",
-    "test:coverage": "deno test -P --coverage=coverage/ && deno coverage coverage/ --exclude='index\\.ts' --html",
+    "test": "deno test -P --allow-write",
+    "test:watch": "deno test -P --allow-write --watch",
+    "test:coverage": "deno test -P --allow-write --coverage=coverage/ && deno coverage coverage/ --exclude='index\\.ts' --html",
     "bench": "deno bench -P tests/performance.bench.ts",
     "lint": "deno lint && deno check src/ tests/",
     "fmt": "deno fmt",
