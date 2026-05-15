@@ -366,6 +366,35 @@ describe("import-diagram handler", () => {
     assertEquals(parsed.error.code, "INVALID_XML");
   });
 
+  it("should reject XML entity declarations", async () => {
+    const xml = `<!DOCTYPE mxGraphModel [<!ENTITY injected "expanded">]>
+<mxGraphModel><root>
+  <mxCell id="0"/>
+  <mxCell id="1" parent="0"/>
+  <mxCell id="2" value="&injected;" style="" vertex="1" parent="1">
+    <mxGeometry x="0" y="0" width="100" height="50" as="geometry"/>
+  </mxCell>
+</root></mxGraphModel>`;
+    const result = await handlers["import-diagram"]({ xml });
+    assertEquals(result.isError, true);
+    const parsed = parseResult(result);
+    assertEquals(parsed.error.code, "UNSAFE_XML");
+  });
+
+  it("should continue importing ordinary escaped Draw.io values", async () => {
+    const xml = `<mxGraphModel><root>
+      <mxCell id="0"/>
+      <mxCell id="1" parent="0"/>
+      <mxCell id="2" value="A &amp; B &lt; C" style="" vertex="1" parent="1">
+        <mxGeometry x="0" y="0" width="100" height="50" as="geometry"/>
+      </mxCell>
+    </root></mxGraphModel>`;
+    const result = await handlers["import-diagram"]({ xml });
+    const parsed = parseResult(result);
+    assertEquals(parsed.success, true);
+    assert(parsed.data.diagram_xml.includes("A &amp; B &lt; C"));
+  });
+
   it("should import multi-page XML", async () => {
     const xml = `<mxfile host="test">
     <diagram id="p1" name="Overview">
