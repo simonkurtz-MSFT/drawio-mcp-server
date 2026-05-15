@@ -91,6 +91,13 @@ describe("placeholder", () => {
       assertEquals(result[0].shapeName, "front-doors");
     });
 
+    it("should find placeholders when style appears before id", () => {
+      const xml = `<mxCell style="fillColor=#E6F2FA;placeholder=1;" value="Front Doors" id="placeholder-front-doors-abc12345" vertex="1" parent="1">` +
+        `<mxGeometry x="100" y="100" width="48" height="48" as="geometry"/></mxCell>`;
+      const result = findPlaceholdersInXml(xml);
+      assertEquals(result, [{ id: "placeholder-front-doors-abc12345", shapeName: "front-doors" }]);
+    });
+
     it("should not match non-placeholder cells with placeholder=1 style", () => {
       const xml = `<mxCell id="cell-5" value="Test" style="fillColor=#E6F2FA;placeholder=1;" vertex="1" parent="1">` +
         `<mxGeometry x="100" y="100" width="48" height="48" as="geometry"/></mxCell>`;
@@ -112,6 +119,17 @@ describe("placeholder", () => {
       assert(result.xml.includes("image=data:image/svg+xml,realsvgdata"));
       // The value attribute should NOT change — resolution uses ID, not value
       assert(result.xml.includes('value="Custom Label"'));
+    });
+
+    it("should resolve placeholders when id follows style", () => {
+      const xml = `<mxCell style="fillColor=#d4d4d4;placeholder=1" id="placeholder-front-doors-abc12345" value="Custom Label" vertex="1" parent="1">` +
+        `<mxGeometry x="100" y="100" width="48" height="48" as="geometry"/></mxCell>`;
+
+      const result = resolvePlaceholdersInXml(xml, () => ({ style: "image=resolved;" }));
+
+      assert("xml" in result);
+      assert(result.xml.includes('style="image=resolved;"'));
+      assert(result.xml.includes('id="placeholder-front-doors-abc12345"'));
     });
 
     it("should preserve custom labels through resolution", () => {

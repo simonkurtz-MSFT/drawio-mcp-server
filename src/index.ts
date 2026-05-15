@@ -25,6 +25,7 @@ import { createToolHandlerFactory } from "./tool_handler.ts";
 import { initializeShapes, resetAzureIconLibrary } from "./shapes/azure_icon_library.ts";
 import { registerTools, TOOL_DEFINITIONS } from "./tool_registrations.ts";
 import { readRelativeFile } from "./utils.ts";
+import { requestBodyExceedsLimit } from "./http_request_guards.ts";
 
 /**
  * Display help message and exit.
@@ -37,11 +38,13 @@ Usage: drawio-mcp-server [options]
 
 Options:
   --http-port <number>     HTTP server port for MCP clients (default: 8080)
+  --http-host <host>       HTTP bind host (default: 127.0.0.1)
   --transport <type>       Transport type: stdio, http, or stdio,http (default: stdio)
   --help, -h              Show this help message
 
 Environment variables:
   HTTP_PORT                Same as --http-port (CLI takes precedence)
+  HTTP_HOST                Same as --http-host (CLI takes precedence)
   TRANSPORT                Same as --transport (CLI takes precedence)
   LOGGER_TYPE              Logger type: console or mcp_server (default: console)
   AZURE_ICON_LIBRARY_PATH  Path to Azure icon library XML file (auto-detected if unset)
@@ -121,7 +124,20 @@ function createMcpServer(): McpServer {
 }
 
 /** Track all server instances for shutdown */
-const servers: McpServer[] = [];
+const servers = new Set<McpServer>();
+
+function trackServer(server: McpServer): void {
+  servers.add(server);
+}
+
+async function closeTrackedServer(server: McpServer): Promise<void> {
+  servers.delete(server);
+  try {
+    await server.close();
+  } catch {
+    // best-effort — transport may already be gone
+  }
+}
 
 // ─── Shutdown Infrastructure ───────────────────────────────────
 
@@ -142,13 +158,9 @@ async function shutdown(reason: string): Promise<void> {
   log.debug(`Shutting down (reason: ${reason})`);
 
   // 1. Close all MCP server instances (flushes pending messages, disconnects transports)
-  log.debug(`Closing ${servers.length} MCP server instance(s)`);
-  for (const srv of servers) {
-    try {
-      await srv.close();
-    } catch {
-      // best-effort — transport may already be gone
-    }
+  log.debug(`Closing ${servers.size} MCP server instance(s)`);
+  for (const srv of Array.from(servers)) {
+    await closeTrackedServer(srv);
   }
   log.debug("MCP server(s) closed");
 
@@ -208,7 +220,7 @@ globalThis.addEventListener("unhandledrejection", (event) => {
 
 async function start_stdio_transport() {
   const srv = createMcpServer();
-  servers.push(srv);
+  trackServer(srv);
   const transport = new StdioServerTransport();
   transport.onerror = (error: Error) => {
     log.error(`STDIO transport error: ${error.message}`);
@@ -223,11 +235,11 @@ const httpSessions = new Map<string, {
   server: McpServer;
 }>();
 
-async function start_streamable_http_transport(http_port: number) {
+async function start_streamable_http_transport(http_port: number, http_host: string) {
   // Create the Hono app
   const app = new Hono();
 
-  // Enable CORS for all origins
+  // Allow browser clients from any origin.
   app.use(
     "*",
     cors({
@@ -244,10 +256,8 @@ async function start_streamable_http_transport(http_port: number) {
   );
 
   // ─── Request body size limit (10 MB) ────────────────────────
-  const MAX_BODY_SIZE = 10 * 1024 * 1024;
   app.use("*", async (c, next) => {
-    const contentLength = c.req.header("content-length");
-    if (contentLength && parseInt(contentLength, 10) > MAX_BODY_SIZE) {
+    if (await requestBodyExceedsLimit(c.req.raw)) {
       return c.json({ error: "Request body too large" }, 413);
     }
     await next();
@@ -290,7 +300,11 @@ async function start_streamable_http_transport(http_port: number) {
           // Session created — logging happens after first request is handled
         },
         onsessionclosed: (id: string) => {
+          const session = httpSessions.get(id);
           httpSessions.delete(id);
+          if (session) {
+            void closeTrackedServer(session.server);
+          }
           log.debug(`HTTP session closed : ${id.slice(-6)} (${httpSessions.size} active)`);
         },
       });
@@ -298,7 +312,7 @@ async function start_streamable_http_transport(http_port: number) {
         log.error(`HTTP transport error: ${error.message}`);
       };
       const srv = createMcpServer();
-      servers.push(srv);
+      trackServer(srv);
       await srv.connect(transport);
 
       // Handle request with error logging for network failures
@@ -328,10 +342,10 @@ async function start_streamable_http_transport(http_port: number) {
   });
 
   // Deno.serve replaces @hono/node-server — zero extra dependencies
-  httpServer = Deno.serve({ port: http_port, onListen: () => {} }, app.fetch);
+  httpServer = Deno.serve({ hostname: http_host, port: http_port, onListen: () => {} }, app.fetch);
   log.info(`Draw.io MCP Server Streamable HTTP transport active`);
-  log.debug(`Health check: http://localhost:${http_port}/health`);
-  log.info(`MCP endpoint: http://localhost:${http_port}/mcp`);
+  log.debug(`Health check: http://${http_host}:${http_port}/health`);
+  log.info(`MCP endpoint: http://${http_host}:${http_port}/mcp`);
 }
 
 async function main() {
@@ -362,6 +376,7 @@ async function main() {
   const envVars: [string, string | undefined][] = [
     ["AZURE_ICON_LIBRARY_PATH", Deno.env.get("AZURE_ICON_LIBRARY_PATH")],
     ["HTTP_PORT", Deno.env.get("HTTP_PORT")],
+    ["HTTP_HOST", Deno.env.get("HTTP_HOST")],
     ["LOGGER_TYPE", Deno.env.get("LOGGER_TYPE")],
     ["SAVE_DIAGRAMS", Deno.env.get("SAVE_DIAGRAMS")],
     ["TRANSPORT", Deno.env.get("TRANSPORT")],
@@ -372,6 +387,7 @@ async function main() {
   }
 
   log.debug(`  ${"Transports".padEnd(maxKeyLen)} : ${config.transports.join(", ")}`);
+  log.debug(`  ${"HTTP bind".padEnd(maxKeyLen)} : ${config.httpHost}:${config.httpPort}`);
   log.debug(`  ${"Tools".padEnd(maxKeyLen)} : ${TOOL_DEFINITIONS.length}`);
 
   // Eagerly load all shapes and build the fuzzy-search index at startup so
@@ -390,7 +406,7 @@ async function main() {
     await start_stdio_transport();
   }
   if (config.transports.indexOf("http") > -1) {
-    await start_streamable_http_transport(config.httpPort);
+    await start_streamable_http_transport(config.httpPort, config.httpHost);
   }
 
   log.info(`Draw.io MCP Server v${VERSION} is ready`);

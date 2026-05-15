@@ -29,7 +29,7 @@ This project would not exist in this manner if it weren't for the following repo
 - **Multiple Transports** — stdio (default) and streamable HTTP
 - **XML Export** — Standard Draw.io XML format compatible with Draw.io desktop and web
 
-For PNG/SVG/PDF conversion, use jgraph's Draw.io `skill-cli` workflow: `https://github.com/jgraph/drawio-mcp/blob/main/skill-cli/README.md`.
+For PNG/SVG/PDF conversion, use jgraph's Draw.io [`skill-cli` workflow](https://github.com/jgraph/drawio-mcp/blob/main/skill-cli/README.md).
 
 ## Documentation
 
@@ -37,7 +37,7 @@ For PNG/SVG/PDF conversion, use jgraph's Draw.io `skill-cli` workflow: `https://
 
 ## Requirements
 
-- **[Deno](https://deno.com/)** v2.3 or higher
+- **[Deno](https://deno.com/)** v2.7 or higher
 
 ## Quick Start
 
@@ -144,13 +144,14 @@ The `--transport` flag controls which transports to start. Default is `stdio`.
 
 ### Environment Variables
 
-| Variable                  | Description                                                                           | Default    |
-| ------------------------- | ------------------------------------------------------------------------------------- | ---------- |
-| `AZURE_ICON_LIBRARY_PATH` | Path to Azure icon library XML file (auto-detected from `assets/` if unset)           | (detected) |
-| `LOGGER_TYPE`             | Logger implementation: `console` or `mcp_server`                                      | `console`  |
-| `HTTP_PORT`               | HTTP server port (CLI `--http-port` takes precedence)                                 | `8080`     |
-| `TRANSPORT`               | Transport type: `stdio`, `http`, or `stdio,http` (CLI `--transport` takes precedence) | `stdio`    |
-| **`SAVE_DIAGRAMS`**       | **⚠️ DEV MODE ONLY** — Auto-save diagram XML to `./diagrams/` on export/finish        | (disabled) |
+| Variable                  | Description                                                                           | Default     |
+| ------------------------- | ------------------------------------------------------------------------------------- | ----------- |
+| `AZURE_ICON_LIBRARY_PATH` | Path to Azure icon library XML file (auto-detected from `assets/` if unset)           | (detected)  |
+| `LOGGER_TYPE`             | Logger implementation: `console` or `mcp_server`                                      | `console`   |
+| `HTTP_PORT`               | HTTP server port (CLI `--http-port` takes precedence)                                 | `8080`      |
+| `HTTP_HOST`               | HTTP bind host (CLI `--http-host` takes precedence)                                   | `127.0.0.1` |
+| `TRANSPORT`               | Transport type: `stdio`, `http`, or `stdio,http` (CLI `--transport` takes precedence) | `stdio`     |
+| **`SAVE_DIAGRAMS`**       | **⚠️ DEV MODE ONLY** — Auto-save diagram XML to `./diagrams/` on export/finish        | (disabled)  |
 
 > **Tip**: You can create a `.env` file from `.env.example` to configure environment variables locally:
 >
@@ -171,13 +172,13 @@ For local debugging and development, you can enable automatic saving of diagram 
 
 ```sh
 export SAVE_DIAGRAMS=true
-deno task start
+deno task start:save-diagrams
 ```
 
 or
 
 ```sh
-SAVE_DIAGRAMS=true deno task start
+SAVE_DIAGRAMS=true deno task start:save-diagrams
 ```
 
 **Behavior when enabled:**
@@ -205,12 +206,14 @@ export SAVE_DIAGRAMS=false
 
 ### HTTP Transport
 
-The HTTP transport exposes a streamable HTTP endpoint at `/mcp` (default port 8080).
+The HTTP transport exposes a streamable HTTP endpoint at `/mcp` (default host `127.0.0.1`, default port `8080`). Browser clients may call the transport from any origin.
 
 ```sh
 deno task start:http
 # or with a custom port:
 deno run --allow-net --allow-read --allow-env src/index.ts --transport http --http-port 4000
+# or with non-loopback binding for a trusted network/container environment:
+deno run --allow-net --allow-read --allow-env src/index.ts --transport http --http-host 0.0.0.0
 ```
 
 MCP client configuration for HTTP:
@@ -266,7 +269,7 @@ This starts the server in the background, exposing the HTTP transport on port 80
 curl http://localhost:8080/health
 ```
 
-You should receive an `OK` response, confirming the server is healthy and ready to accept connections.
+You should receive `{ "status": "ok" }`, confirming the server is healthy and ready to accept connections.
 
 **4. Point your MCP client to the running container.** For example, in VS Code (`.vscode/mcp.json`):
 
@@ -458,20 +461,21 @@ No install step needed — Deno resolves dependencies on first run.
 
 ### Common Commands
 
-| Command                   | Description                          |
-| ------------------------- | ------------------------------------ |
-| `deno task start`         | Start with stdio + HTTP transports   |
-| `deno task start:http`    | Start with HTTP transport only       |
-| `deno task dev`           | Watch mode — auto-restart on changes |
-| `deno task test`          | Run tests                            |
-| `deno task test:watch`    | Run tests in watch mode              |
-| `deno task test:coverage` | Run tests with coverage              |
-| `deno task bench`         | Run focused performance benchmarks   |
-| `deno task lint`          | Lint and type-check                  |
-| `deno task fmt`           | Format code                          |
-| `deno task fmt:check`     | Check formatting without writing     |
-| `deno task compile`       | Compile to a self-contained binary   |
-| `deno task update`        | Update dependencies and Docker Deno  |
+| Command                         | Description                               |
+| ------------------------------- | ----------------------------------------- |
+| `deno task start`               | Start with stdio + HTTP transports        |
+| `deno task start:http`          | Start with HTTP transport only            |
+| `deno task start:save-diagrams` | Start with diagram file saving permission |
+| `deno task dev`                 | Watch mode — auto-restart on changes      |
+| `deno task test`                | Run tests                                 |
+| `deno task test:watch`          | Run tests in watch mode                   |
+| `deno task test:coverage`       | Run tests with coverage                   |
+| `deno task bench`               | Run focused performance benchmarks        |
+| `deno task lint`                | Lint and type-check                       |
+| `deno task fmt`                 | Format code                               |
+| `deno task fmt:check`           | Check formatting without writing          |
+| `deno task compile`             | Compile to a self-contained binary        |
+| `deno task update`              | Update dependencies and Docker Deno       |
 
 `deno task update` refreshes `deno.json` dependency requirements and `deno.lock` via `deno outdated --update --latest`, then updates the Docker builder image's `DENO_VERSION` argument to the latest stable Deno GitHub release.
 

@@ -40,6 +40,9 @@ const SetLevelRequestSchema = z.object({
   }),
 });
 
+type SetLevelsRequest = z.infer<typeof SetLevelsRequestSchema>;
+type SetLevelRequest = z.infer<typeof SetLevelRequestSchema>;
+
 export function create_logger(server: McpServer): Logger {
   // Per-logger log levels scoped to this logger instance
   const logLevels: { [loggerName: string]: LogLevelValue } = {
@@ -73,7 +76,7 @@ export function create_logger(server: McpServer): Logger {
       });
     }
   };
-  server.server.setRequestHandler(SetLevelsRequestSchema, async (request) => {
+  server.server.setRequestHandler(SetLevelsRequestSchema, async (request: SetLevelsRequest) => {
     const newLevels = request.params.levels;
     for (const loggerName in newLevels) {
       if (Object.prototype.hasOwnProperty.call(newLevels, loggerName)) {
@@ -103,7 +106,7 @@ export function create_logger(server: McpServer): Logger {
     return {};
   });
 
-  server.server.setRequestHandler(SetLevelRequestSchema, async (request) => {
+  server.server.setRequestHandler(SetLevelRequestSchema, async (request: SetLevelRequest) => {
     const levelName = request.params.level;
     if (validLogLevels.includes(levelName as McpLogLevel)) {
       logLevels["."] = LogLevelMap[levelName as McpLogLevel];

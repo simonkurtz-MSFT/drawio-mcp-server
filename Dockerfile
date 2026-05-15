@@ -52,6 +52,7 @@ EXPOSE 8080
 
 # Environment variables with defaults (can be overridden at runtime).
 ENV HTTP_PORT=8080
+ENV HTTP_HOST=0.0.0.0
 ENV TRANSPORT=http
 ENV LOGGER_TYPE=console
 

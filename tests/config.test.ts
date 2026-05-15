@@ -1,6 +1,6 @@
 import { describe, it } from "@std/testing/bdd";
 import { assert, assertEquals, assertInstanceOf } from "@std/assert";
-import { buildConfig, parseConfig, parseHttpPortValue, parseLoggerType, parseTransports, type ServerConfig, shouldShowHelp } from "../src/config.ts";
+import { buildConfig, parseConfig, parseHttpHost, parseHttpPortValue, parseLoggerType, parseTransports, type ServerConfig, shouldShowHelp } from "../src/config.ts";
 
 describe("parseHttpPortValue", () => {
   it("valid port returns number", () => {
@@ -37,6 +37,18 @@ describe("parseTransports", () => {
   it("rejects unknown transport", () => {
     const result = parseTransports(["foo"]);
     assertInstanceOf(result, Error);
+  });
+});
+
+describe("parseHttpHost", () => {
+  it("returns the local default when undefined", () => {
+    assertEquals(parseHttpHost(undefined), "127.0.0.1");
+  });
+  it("trims a configured host", () => {
+    assertEquals(parseHttpHost("  0.0.0.0  "), "0.0.0.0");
+  });
+  it("rejects an empty configured host", () => {
+    assertInstanceOf(parseHttpHost("   "), Error);
   });
 });
 
@@ -87,6 +99,7 @@ describe("shouldShowHelp", () => {
 describe("parseConfig", () => {
   const DEFAULT_RESULT: ServerConfig = {
     httpPort: 8080,
+    httpHost: "127.0.0.1",
     transports: ["stdio"],
     loggerType: "console",
     azureIconLibraryPath: undefined,
@@ -150,6 +163,14 @@ describe("parseConfig", () => {
     const result = parseConfig(["--http-port", "5000"], { HTTP_PORT: "3000" });
     assertEquals(result, { ...DEFAULT_RESULT, httpPort: 5000 });
   });
+  it("reads HTTP_HOST from env when no CLI flag", () => {
+    const result = parseConfig([], { HTTP_HOST: "0.0.0.0" });
+    assertEquals(result, { ...DEFAULT_RESULT, httpHost: "0.0.0.0" });
+  });
+  it("CLI --http-host takes precedence over env HTTP_HOST", () => {
+    const result = parseConfig(["--http-host", "127.0.0.1"], { HTTP_HOST: "0.0.0.0" });
+    assertEquals(result, DEFAULT_RESULT);
+  });
   it("reads TRANSPORT from env when no CLI flag", () => {
     const result = parseConfig([], { TRANSPORT: "http" });
     assertEquals(result, { ...DEFAULT_RESULT, transports: ["http"] });
@@ -190,6 +211,7 @@ describe("parseConfig", () => {
     );
     assertEquals(result, {
       httpPort: 9000,
+      httpHost: "127.0.0.1",
       transports: ["http"],
       loggerType: "mcp_server",
       azureIconLibraryPath: "/icons.xml",
@@ -210,6 +232,7 @@ describe("buildConfig", () => {
     const result = buildConfig(["deno", "script.ts"]);
     assert(!(result instanceof Error));
     assertEquals(result.httpPort, 8080);
+    assertEquals(result.httpHost, "127.0.0.1");
     assertEquals(result.transports, ["stdio"]);
     assertEquals(result.loggerType, "console");
   });

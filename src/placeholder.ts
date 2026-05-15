@@ -88,12 +88,17 @@ export function extractShapeNameFromPlaceholderId(placeholderId: string): string
 export function findPlaceholdersInXml(diagramXml: string): Array<{ id: string; shapeName: string }> {
   const placeholders: Array<{ id: string; shapeName: string }> = [];
 
-  // Simple regex to find mxCell elements with placeholder marker
-  const cellRegex = /<mxCell\s+id="([^"]+)"[^>]*style="([^"]*placeholder=1[^"]*)"/g;
+  const cellRegex = /<mxCell\b[^>]*>/g;
   let match;
 
   while ((match = cellRegex.exec(diagramXml)) !== null) {
-    const cellId = match[1];
+    const cellTag = match[0];
+    const cellId = readXmlAttribute(cellTag, "id");
+    const style = readXmlAttribute(cellTag, "style");
+    if (!cellId || !style?.includes(PLACEHOLDER_MARKER)) {
+      continue;
+    }
+
     if (isPlaceholder(cellId)) {
       const shapeName = extractShapeNameFromPlaceholderId(cellId);
       if (shapeName) {
@@ -138,18 +143,15 @@ export function resolvePlaceholdersInXml(
       continue;
     }
 
-    // Find the cell element and update its style (remove placeholder marker, add real style).
-    // Escape the placeholder ID for safe regex interpolation.
-    const escapedId = placeholder.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const cellRegex = new RegExp(
-      `<mxCell\\s+id="${escapedId}"[^>]*style="([^"]*placeholder=1[^"]*)"`,
-      "g",
-    );
+    const cellRegex = /<mxCell\b[^>]*>/g;
+    updatedXml = updatedXml.replace(cellRegex, (cellTag) => {
+      const cellId = readXmlAttribute(cellTag, "id");
+      const style = readXmlAttribute(cellTag, "style");
+      if (cellId !== placeholder.id || !style?.includes(PLACEHOLDER_MARKER)) {
+        return cellTag;
+      }
 
-    updatedXml = updatedXml.replace(cellRegex, (match) => {
-      // Remove the placeholder marker from the style
-      const newStyle = resolved.style;
-      return match.replace(/style="[^"]*"/, `style="${escapeXml(newStyle)}"`);
+      return writeXmlAttribute(cellTag, "style", resolved.style);
     });
 
     // If there's SVG image data, inject it
@@ -180,6 +182,18 @@ function escapeXml(str: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+function readXmlAttribute(tag: string, attributeName: string): string | null {
+  const escapedAttributeName = attributeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const attributeRegex = new RegExp(`\\b${escapedAttributeName}="([^"]*)"`);
+  return attributeRegex.exec(tag)?.[1] ?? null;
+}
+
+function writeXmlAttribute(tag: string, attributeName: string, value: string): string {
+  const escapedAttributeName = attributeName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const attributeRegex = new RegExp(`\\b${escapedAttributeName}="[^"]*"`);
+  return tag.replace(attributeRegex, `${attributeName}="${escapeXml(value)}"`);
 }
 
 /**
