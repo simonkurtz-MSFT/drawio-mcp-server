@@ -14,9 +14,9 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server for pro
 
 This project would not exist in this manner if it weren't for the following repositories and their authors. Thank you!
 
-- **Original drawio-mcp-server** by **Ladislav (lgazo)**: https://github.com/lgazo/drawio-mcp-server
-- **Azure icons source** (`dwarfered`): https://github.com/dwarfered/azure-architecture-icons-for-drawio
-- **VS Code Drawio extension** by **hediet**: https://github.com/hediet/vscode-drawio
+- **Original drawio-mcp-server** by **Ladislav (lgazo)**: [lgazo/drawio-mcp-server](https://github.com/lgazo/drawio-mcp-server)
+- **Azure icons source** (`dwarfered`): [dwarfered/azure-architecture-icons-for-drawio](https://github.com/dwarfered/azure-architecture-icons-for-drawio)
+- **VS Code Drawio extension** by **hediet**: [hediet/vscode-drawio](https://github.com/hediet/vscode-drawio)
 
 ## Features
 
@@ -51,8 +51,7 @@ deno run --allow-net --allow-read --allow-env src/index.ts
 
 Configure your MCP client (Claude Desktop, VS Code, Codex, etc.) to use the server:
 
-<details>
-<summary><b>Claude Desktop</b></summary>
+#### Claude Desktop
 
 Edit `claude_desktop_config.json`:
 
@@ -70,10 +69,7 @@ Edit `claude_desktop_config.json`:
 }
 ```
 
-</details>
-
-<details>
-<summary><b>VS Code</b></summary>
+#### VS Code
 
 Add to your VS Code settings or `.vscode/mcp.json`:
 
@@ -88,10 +84,7 @@ Add to your VS Code settings or `.vscode/mcp.json`:
 }
 ```
 
-</details>
-
-<details>
-<summary><b>Zed</b></summary>
+#### Zed
 
 In the Assistant settings, add a Context Server:
 
@@ -105,10 +98,7 @@ In the Assistant settings, add a Context Server:
 }
 ```
 
-</details>
-
-<details>
-<summary><b>Codex</b></summary>
+#### Codex
 
 Edit `~/.codex/config.toml`:
 
@@ -125,10 +115,7 @@ For a locally running HTTP transport:
 url = "http://localhost:8080/mcp"
 ```
 
-</details>
-
-<details>
-<summary><b>oterm (Ollama)</b></summary>
+#### oterm (Ollama)
 
 Edit `~/.local/share/oterm/config.json`:
 
@@ -142,8 +129,6 @@ Edit `~/.local/share/oterm/config.json`:
   }
 }
 ```
-
-</details>
 
 ## Configuration
 
