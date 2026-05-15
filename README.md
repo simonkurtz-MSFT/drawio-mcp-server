@@ -486,6 +486,9 @@ No install step needed — Deno resolves dependencies on first run.
 | `deno task fmt`           | Format code                          |
 | `deno task fmt:check`     | Check formatting without writing     |
 | `deno task compile`       | Compile to a self-contained binary   |
+| `deno task update`        | Update dependencies and Docker Deno  |
+
+`deno task update` refreshes `deno.json` dependency requirements and `deno.lock` via `deno outdated --update --latest`, then updates the Docker builder image's `DENO_VERSION` argument to the latest stable Deno GitHub release.
 
 ### MCP Inspector
 

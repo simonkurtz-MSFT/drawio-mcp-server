@@ -83,6 +83,7 @@ Follow this 3-step pattern:
 | `deno task test:coverage` | Run tests with V8 coverage (HTML report)                     |
 | `deno task bench`         | Run performance benchmarks                                   |
 | `deno task inspect`       | Launch MCP Inspector for interactive debugging               |
+| `deno task update`        | Update dependencies, lockfile, and Docker Deno version       |
 | `deno task start`         | Start with stdio + HTTP transports                           |
 | `deno task start:http`    | Start with HTTP transport only                               |
 
