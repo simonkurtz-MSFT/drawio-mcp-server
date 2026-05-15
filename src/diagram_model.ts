@@ -29,6 +29,22 @@ const xmlParser = new XMLParser({
   processEntities: true,
 });
 
+const UNSAFE_XML_DECLARATION_PATTERN = /<!\s*(?:DOCTYPE|ENTITY)\b/i;
+
+function findUnsafeXmlDeclaration(xml: string): { error: StructuredError } | null {
+  if (!UNSAFE_XML_DECLARATION_PATTERN.test(xml)) {
+    return null;
+  }
+
+  return {
+    error: {
+      code: "UNSAFE_XML",
+      message: "Draw.io XML must not contain DOCTYPE or ENTITY declarations",
+      suggestion: "Remove DTD/entity declarations and provide ordinary Draw.io XML content",
+    },
+  };
+}
+
 /** Cell ID for the server watermark. Stripped on import and re-generated on every export. */
 export const WATERMARK_CELL_ID = "drawio-mcp-watermark";
 
@@ -1293,6 +1309,11 @@ export class DiagramModel {
       };
     }
 
+    const unsafeXml = findUnsafeXmlDeclaration(xml);
+    if (unsafeXml) {
+      return unsafeXml;
+    }
+
     const parsed = xmlParser.parse(xml) as Record<string, unknown>;
 
     // Extract diagram elements
@@ -1327,6 +1348,10 @@ export class DiagramModel {
       if (!diag.mxGraphModel && typeof diag["#text"] === "string") {
         try {
           const decompressedXml = DiagramModel.decompressXml(diag["#text"]);
+          const unsafeDecompressedXml = findUnsafeXmlDeclaration(decompressedXml);
+          if (unsafeDecompressedXml) {
+            return unsafeDecompressedXml;
+          }
           const innerParsed = xmlParser.parse(decompressedXml) as Record<string, unknown>;
           diag = { ...diag, mxGraphModel: innerParsed.mxGraphModel };
         } catch {

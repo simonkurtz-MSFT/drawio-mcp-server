@@ -67,6 +67,32 @@ describe("TOOL_DEFINITIONS", () => {
       }
     }
   });
+
+  it("should annotate destructive and read-only tools", () => {
+    const definitionsByName = new Map(TOOL_DEFINITIONS.map((definition) => [definition.name, definition]));
+
+    for (const name of ["delete-cell-by-id", "import-diagram", "clear-diagram"]) {
+      assertEquals(definitionsByName.get(name)?.annotations?.destructiveHint, true, `${name} should be marked destructive`);
+    }
+
+    for (
+      const name of [
+        "get-shape-categories",
+        "get-shapes-in-category",
+        "search-shapes",
+        "get-style-presets",
+        "list-paged-model",
+        "get-diagram-stats",
+        "list-layers",
+        "list-group-children",
+        "validate-group-containment",
+        "suggest-group-sizing",
+      ]
+    ) {
+      assertEquals(definitionsByName.get(name)?.annotations?.readOnlyHint, true, `${name} should be marked read-only`);
+      assertEquals(definitionsByName.get(name)?.annotations?.idempotentHint, true, `${name} should be marked idempotent`);
+    }
+  });
 });
 
 describe("registerTools", () => {
@@ -136,6 +162,21 @@ describe("registerTools", () => {
       assertExists(config.description, `tool "${toolName}" should have a description`);
       assert(config.description!.length > 0, `tool "${toolName}" description should be non-empty`);
     }
+    registerSpy.restore();
+  });
+
+  it("should pass tool annotations to MCP registration", () => {
+    const server = new McpServer({ name: "test", version: "0.0.1" });
+    const registerSpy = spy(server, "registerTool");
+    const createToolHandler = createMockToolHandler();
+
+    registerTools(server, createToolHandler);
+
+    const deleteRegistration = registerSpy.calls.find((call: any) => call.args[0] === "delete-cell-by-id");
+    assertEquals(deleteRegistration?.args[1]?.annotations, { destructiveHint: true });
+
+    const statsRegistration = registerSpy.calls.find((call: any) => call.args[0] === "get-diagram-stats");
+    assertEquals(statsRegistration?.args[1]?.annotations, { readOnlyHint: true, idempotentHint: true });
     registerSpy.restore();
   });
 });

@@ -218,6 +218,19 @@ describe("DiagramModel compression", () => {
       assert(cells.some((c) => c.value === "Page2"));
     });
 
+    it("should reject unsafe declarations inside compressed diagrams", () => {
+      const unsafeInnerXml =
+        '<!DOCTYPE mxGraphModel [<!ENTITY injected "expanded">]><mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/><mxCell id="2" value="&injected;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="50" as="geometry"/></mxCell></root></mxGraphModel>';
+      const xml = `<mxfile host="test"><diagram id="unsafe" name="Unsafe">${DiagramModel.compressXml(unsafeInnerXml)}</diagram></mxfile>`;
+
+      const model2 = new DiagramModel();
+      const result = model2.importXml(xml);
+      assertEquals("error" in result, true);
+      if ("error" in result) {
+        assertEquals(result.error.code, "UNSAFE_XML");
+      }
+    });
+
     it("should preserve edges through compressed roundtrip", () => {
       const a = model.addRectangle({ text: "A" });
       const b = model.addRectangle({ text: "B" });

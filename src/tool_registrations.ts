@@ -26,13 +26,13 @@ export function registerTools(server: McpServer, createToolHandler: CreateToolHa
     if (tool.hasArgs) {
       server.registerTool(
         tool.name,
-        { description: tool.description, inputSchema: tool.inputSchema },
+        { description: tool.description, inputSchema: tool.inputSchema, annotations: tool.annotations },
         createToolHandler(tool.name, true),
       );
     } else {
       server.registerTool(
         tool.name,
-        { description: tool.description },
+        { description: tool.description, annotations: tool.annotations },
         createToolHandler(tool.name),
       );
     }

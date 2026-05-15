@@ -125,17 +125,20 @@ describe("devSaveDiagram", () => {
     Deno.env.set("SAVE_DIAGRAMS", "true");
     // Stub writeTextFileSync to throw an error
     const originalWrite = Deno.writeTextFileSync;
-    const errorSpy = spy(console, "error");
+    const originalConsoleError = console.error;
+    const errorSpy = spy();
     try {
+      console.error = errorSpy;
       Deno.writeTextFileSync = () => {
         throw new Error("disk full");
       };
       const result = devSaveDiagram("<xml/>", "fail-tool");
       assertEquals(result, null);
-      // Verify the error was logged (via the console logger)
+      assertEquals(errorSpy.calls.length, 1);
+      assert(String(errorSpy.calls[0].args[0]).includes("Failed to save diagram: disk full"));
     } finally {
       Deno.writeTextFileSync = originalWrite;
-      errorSpy.restore();
+      console.error = originalConsoleError;
     }
   });
 

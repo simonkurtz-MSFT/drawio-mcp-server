@@ -4,7 +4,6 @@
  *
  * tool_registrations.ts loops over TOOL_DEFINITIONS to call server.registerTool().
  */
-
 import { z } from "zod";
 
 // ─── Tool Definition Types ───────────────────────────────────
@@ -16,6 +15,15 @@ interface ToolDefinitionBase {
   name: string;
   /** Human-readable description shown to MCP clients */
   description: string;
+  /** Advisory MCP metadata that clients may use when presenting tools. */
+  annotations?: ToolAnnotations;
+}
+
+export interface ToolAnnotations {
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
 }
 
 export interface ToolDefinitionWithArgs extends ToolDefinitionBase {
@@ -53,6 +61,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     name: "delete-cell-by-id",
     description:
       "Delete a cell (vertex or edge) by its ID. Prefer transactional: true for multi-step workflows; finalize with finish-diagram. When a vertex is deleted, all connected edges are automatically cascade-deleted and reported in the response.",
+    annotations: { destructiveHint: true },
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -167,12 +176,14 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "GET_SHAPE_CATEGORIES",
     name: "get-shape-categories",
     description: "Get available shape categories (General, Flowchart, Azure icons). For discovering specific shapes, prefer search-shapes.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: false,
   },
   {
     key: "GET_SHAPES_IN_CATEGORY",
     name: "get-shapes-in-category",
     description: "List all shapes in a category. Returns shape names and styles for use with add-cells.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: true,
     inputSchema: {
       category_id: z
@@ -209,6 +220,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     name: "search-shapes",
     description:
       "Search for any shape — basic shapes (rectangle, circle, diamond, start, end, process, cylinder, etc.) and 700+ Azure icons. This is the primary way to discover shapes for use with add-cells. Call this tool once with all shape names in the queries array — include cross-cutting services (Monitor, Entra ID, Key Vault, Azure Policy, Defender for Cloud, Container Registry) in the SAME call.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: true,
     inputSchema: {
       queries: z.array(z.string()).describe(
@@ -221,6 +233,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "GET_STYLE_PRESETS",
     name: "get-style-presets",
     description: "Get style presets (Azure colors, flowchart shapes, edges) for consistent styling.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: false,
   },
 
@@ -230,6 +243,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "LIST_PAGED_MODEL",
     name: "list-paged-model",
     description: "Get a paginated list of cells in the diagram. Returns layer context alongside results. Use this to inspect diagram structure or find cells by type.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -267,6 +281,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     name: "get-diagram-stats",
     description:
       "Get comprehensive statistics about the current diagram including cell counts, bounds, layer distribution, and more. Useful for understanding diagram state before making changes.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -280,6 +295,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "LIST_LAYERS",
     name: "list-layers",
     description: "List all layers in the diagram with IDs and names. Also returns the active layer ID.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -382,6 +398,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "LIST_GROUP_CHILDREN",
     name: "list-group-children",
     description: "List all cells that are children of a group/container. Prefer transactional: true for multi-step workflows; finalize with finish-diagram.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -393,6 +410,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "VALIDATE_GROUP_CONTAINMENT",
     name: "validate-group-containment",
     description: "Validate that all child cells of a group are visually inside the group's boundary. Returns out-of-bounds warnings and guidance for fixing placement.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -404,6 +422,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "SUGGEST_GROUP_SIZING",
     name: "suggest-group-sizing",
     description: "Suggest group/container width and height based on vertically stacked children, spacing, and padding. Use before create-groups to avoid overflow.",
+    annotations: { readOnlyHint: true, idempotentHint: true },
     hasArgs: true,
     inputSchema: {
       child_count: z.number().int().min(1).describe("Number of children that will be placed in the group"),
@@ -424,6 +443,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     name: "import-diagram",
     description:
       "Import a Draw.io XML string, replacing the current diagram. Prefer transactional: true for multi-step workflows; finalize with finish-diagram. Multi-page documents are supported — all pages are merged into a single flat model. Use this to load and modify existing .drawio files.",
+    annotations: { destructiveHint: true },
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
@@ -468,6 +488,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     key: "CLEAR_DIAGRAM",
     name: "clear-diagram",
     description: "Clear all cells and layers, resetting the diagram to its initial empty state. Prefer transactional: true for multi-step workflows; finalize with finish-diagram.",
+    annotations: { destructiveHint: true },
     hasArgs: true,
     inputSchema: {
       diagram_xml: diagramXmlSchema,
