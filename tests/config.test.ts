@@ -12,6 +12,12 @@ describe("parseHttpPortValue", () => {
   it("non-numeric string returns Error", () => {
     assertInstanceOf(parseHttpPortValue("abc"), Error);
   });
+  it("partially numeric string returns Error", () => {
+    assertInstanceOf(parseHttpPortValue("8080abc"), Error);
+  });
+  it("decimal string returns Error", () => {
+    assertInstanceOf(parseHttpPortValue("1.5"), Error);
+  });
   it("out of range returns Error", () => {
     assertInstanceOf(parseHttpPortValue("70000"), Error);
   });

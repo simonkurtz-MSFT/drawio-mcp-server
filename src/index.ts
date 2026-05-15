@@ -322,6 +322,7 @@ async function start_streamable_http_transport(http_port: number, http_host: str
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
         log.error(`HTTP request error: ${errorMsg}`);
+        await closeTrackedServer(srv);
         throw error; // Re-throw to let Hono handle the 500 response
       }
 

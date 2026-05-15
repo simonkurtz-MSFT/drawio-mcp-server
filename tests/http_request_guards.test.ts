@@ -13,7 +13,7 @@ describe("requestBodyExceedsLimit", () => {
     assertEquals(await requestBodyExceedsLimit(request, 10), true);
   });
 
-  it("rejects streamed bodies above the limit without a content length", async () => {
+  it("allows streamed bodies without a content length to preserve streaming", async () => {
     const request = new Request("http://localhost/mcp", {
       method: "POST",
       body: new ReadableStream<Uint8Array>({
@@ -25,7 +25,7 @@ describe("requestBodyExceedsLimit", () => {
       }),
     });
 
-    assertEquals(await requestBodyExceedsLimit(request, 10), true);
+    assertEquals(await requestBodyExceedsLimit(request, 10), false);
   });
 
   it("allows bodies that fit inside the limit", async () => {

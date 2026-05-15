@@ -73,9 +73,13 @@ export const parseHttpPortValue = (
     return new Error("--http-port flag requires a port number");
   }
 
-  const port = parseInt(value, 10);
+  if (!/^\d+$/.test(value)) {
+    return new Error(`Invalid port number "${value}". Port must be a whole number`);
+  }
 
-  if (isNaN(port)) {
+  const port = Number.parseInt(value, 10);
+
+  if (Number.isNaN(port)) {
     return new Error(`Invalid port number "${value}". Port must be a number`);
   }
 
